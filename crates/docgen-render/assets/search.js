@@ -62,8 +62,15 @@
     rs.forEach(function (e, i) {
       var li = document.createElement("li");
       li.className = "docgen-search-result" + (i === 0 ? " is-selected" : "");
-      li.innerHTML = '<a href="/' + e.slug + '"><span class="title"></span></a>';
-      li.querySelector(".title").textContent = e.title;
+      // Build the row with DOM APIs so a slug containing `"`, `<` or `>`
+      // (legal in file names) cannot break out of the attribute or inject markup.
+      var a = document.createElement("a");
+      a.setAttribute("href", "/" + e.slug);
+      var span = document.createElement("span");
+      span.className = "title";
+      span.textContent = e.title;
+      a.appendChild(span);
+      li.appendChild(a);
       li.addEventListener("mouseenter", function () { select(i); });
       list.appendChild(li);
     });

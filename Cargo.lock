@@ -290,6 +290,7 @@ dependencies = [
  "clap",
  "docgen-core",
  "docgen-render",
+ "serde_json",
 ]
 
 [[package]]

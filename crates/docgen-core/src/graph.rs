@@ -91,6 +91,20 @@ mod tests {
     }
 
     #[test]
+    fn backlink_title_falls_back_to_slug_when_meta_missing() {
+        // `from` slug "orphan" has no entry in `docs`, so the title-of lookup
+        // misses and the backlink title falls back to the slug itself.
+        let docs = vec![("index".to_string(), "Home".to_string())];
+        let mut outbound = BTreeMap::new();
+        outbound.insert("orphan".to_string(), vec!["index".to_string()]);
+        let g = build_link_graph(&docs, &outbound);
+        assert_eq!(
+            g.backlinks.get("index").unwrap(),
+            &vec![Backlink { slug: "orphan".into(), title: "orphan".into() }]
+        );
+    }
+
+    #[test]
     fn self_links_are_dropped() {
         let docs = vec![("a".to_string(), "A".to_string())];
         let mut outbound = BTreeMap::new();

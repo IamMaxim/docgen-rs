@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use comrak::nodes::AstNode;
 use comrak::options::Plugins;
 use comrak::plugins::syntect::SyntectAdapter;
@@ -5,6 +7,14 @@ use comrak::{format_html_with_plugins, markdown_to_html_with_plugins, Options};
 
 /// Default syntect theme. Single source of truth.
 pub const SYNTECT_THEME: &str = "InspiredGitHub";
+
+/// The syntect adapter loads/builds syntect's syntax + theme sets, which is the
+/// single most expensive object in the pipeline. It is immutable and reusable, so
+/// build it once and share `&adapter` across every document.
+fn syntect_adapter() -> &'static SyntectAdapter {
+    static ADAPTER: OnceLock<SyntectAdapter> = OnceLock::new();
+    ADAPTER.get_or_init(|| SyntectAdapter::new(Some(SYNTECT_THEME)))
+}
 
 /// The comrak options used across the whole pipeline (GFM + P0 extensions).
 /// Single source of truth so the AST pass (Cluster B) and the one-shot render agree.
@@ -25,17 +35,15 @@ pub fn comrak_options() -> Options<'static> {
 /// extensions and server-side syntect syntax highlighting of fenced code.
 pub fn render_markdown(body: &str) -> String {
     let options = comrak_options();
-    let adapter = SyntectAdapter::new(Some(SYNTECT_THEME));
     let mut plugins = Plugins::default();
-    plugins.render.codefence_syntax_highlighter = Some(&adapter);
+    plugins.render.codefence_syntax_highlighter = Some(syntect_adapter());
     markdown_to_html_with_plugins(body, &options, &plugins)
 }
 
 /// Format an already-parsed (and possibly transformed) AST to HTML with syntect.
 pub fn format_ast<'a>(root: &'a AstNode<'a>, options: &Options) -> String {
-    let adapter = SyntectAdapter::new(Some(SYNTECT_THEME));
     let mut plugins = Plugins::default();
-    plugins.render.codefence_syntax_highlighter = Some(&adapter);
+    plugins.render.codefence_syntax_highlighter = Some(syntect_adapter());
     let mut out = String::new();
     format_html_with_plugins(root, options, &mut out, &plugins).expect("format AST to HTML");
     out

@@ -64,16 +64,18 @@ pub fn render_docs(prepared: Vec<PreparedDoc>) -> SiteBuild {
     let mut search = Vec::with_capacity(prepared.len());
 
     for p in &prepared {
-        // Search plaintext from the raw body (independent arena).
+        // Parse the body once. Extract search plaintext from the pristine AST
+        // *before* the wikilink pass rewrites `[[...]]` Text nodes into anchors.
+        let arena = Arena::new();
+        let root = parse_document(&arena, &p.body_md, &options);
+
         search.push(SearchEntry {
             slug: p.slug.clone(),
             title: p.title.clone(),
-            text: plaintext(&p.body_md),
+            text: plaintext(root),
         });
 
-        // Wikilink AST pass + highlighted HTML.
-        let arena = Arena::new();
-        let root = parse_document(&arena, &p.body_md, &options);
+        // Wikilink AST pass (mutates `root`) + highlighted HTML.
         let pass = transform_wikilinks(root, &arena, &slugs);
         outbound.insert(p.slug.clone(), pass.resolved);
         let body_html = format_ast(root, &options);
@@ -141,5 +143,17 @@ mod tests {
         assert_eq!(home.title, "Home");
         assert!(home.text.contains("Go to"));
         assert!(!home.text.contains("[["));
+    }
+
+    #[test]
+    fn self_link_renders_anchor_but_no_self_backlink() {
+        // A doc that links to its own slug renders a resolved anchor, but the
+        // self-edge is dropped from the graph (no self-backlink).
+        let prepared = vec![prepare(raw("index.md", "# Home\nBack to [[index]].\n"))];
+        let site = render_docs(prepared);
+
+        assert!(site.docs[0].body_html.contains(r#"href="/index""#));
+        assert!(!site.graph.edges.iter().any(|e| e.from == "index" && e.to == "index"));
+        assert!(!site.graph.backlinks.contains_key("index"));
     }
 }

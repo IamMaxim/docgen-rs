@@ -14,6 +14,7 @@ fn builds_fixture_site() {
     fs::create_dir_all(tmp.join("docs/guide")).unwrap();
     fs::copy(fixture.join("docs/index.md"), tmp.join("docs/index.md")).unwrap();
     fs::copy(fixture.join("docs/guide/intro.md"), tmp.join("docs/guide/intro.md")).unwrap();
+    fs::copy(fixture.join("docs/markup.md"), tmp.join("docs/markup.md")).unwrap();
 
     let status = Command::new(env!("CARGO_BIN_EXE_docgen"))
         .arg("build")
@@ -54,7 +55,26 @@ fn builds_fixture_site() {
     assert!(idx.contains(r#""slug":"guide/intro""#));
     assert!(idx.contains(r#""title":"Home""#));
     assert!(!idx.contains("[[")); // wikilink brackets stripped from indexed text
-    assert!(!idx.contains("<")); // no HTML markup in indexed text
+
+    // Parse the index for real and exercise the markup-stripping path on a doc
+    // that actually contains `<`, `>`, `&`, raw inline HTML and an autolink.
+    let entries: serde_json::Value = serde_json::from_str(&idx).unwrap();
+    let markup = entries
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["slug"] == "markup")
+        .expect("markup entry present");
+    let text = markup["text"].as_str().unwrap();
+    // Human-readable words survive, including the literal `<` between a and b...
+    assert!(text.contains("Compare a < b"), "got: {text}");
+    // ...and the inner text of raw inline HTML, but never the tag itself.
+    assert!(text.contains("inline"));
+    assert!(!text.contains("<em>"));
+    assert!(!text.contains("</em>"));
+    // The broken wikilink's display word is preserved (brackets stripped).
+    assert!(text.contains("missing-page"));
+    assert!(!text.contains("[["));
 
     // Vendored client assets emitted.
     let js = fs::read_to_string(tmp.join("dist/search.js")).unwrap();

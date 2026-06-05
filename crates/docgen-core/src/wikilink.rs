@@ -46,23 +46,45 @@ pub struct WikilinkPass {
 }
 
 /// Minimal HTML-attribute / text escaper for the small strings we inject.
+/// Single-pass into one allocation (avoids the 4-string `replace` chain).
 fn esc(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// The display text for a wikilink: the label if present and non-blank, else the
+/// target. An empty/whitespace-only label is treated as absent so we never emit an
+/// anchor with invisible text. Mirrors `search::push_unwrapping_wikilinks`.
+fn display_text(target: &str, label: Option<String>) -> String {
+    label
+        .filter(|l| !l.trim().is_empty())
+        .unwrap_or_else(|| target.to_string())
 }
 
 /// Build the inline HTML for one wikilink occurrence and, if resolved, push its
-/// target slug into `resolved` (deduped).
-fn render_link(inner: &str, slugs: &SlugSet, resolved: &mut Vec<String>) -> String {
+/// target slug into `resolved` (deduped, first-seen order).
+fn render_link(
+    inner: &str,
+    slugs: &SlugSet,
+    resolved: &mut Vec<String>,
+    seen: &mut BTreeSet<String>,
+) -> String {
     let (target, label) = parse_wikilink(inner);
     match resolve_target(&target, slugs) {
         Some(slug) => {
-            if !resolved.contains(&slug) {
+            if seen.insert(slug.clone()) {
                 resolved.push(slug.clone());
             }
-            let text = label.unwrap_or_else(|| target.clone());
+            let text = display_text(&target, label);
             format!(
                 r#"<a class="docgen-wikilink" href="/{}">{}</a>"#,
                 esc(&slug),
@@ -70,7 +92,7 @@ fn render_link(inner: &str, slugs: &SlugSet, resolved: &mut Vec<String>) -> Stri
             )
         }
         None => {
-            let text = label.unwrap_or_else(|| target.clone());
+            let text = display_text(&target, label);
             format!(
                 r#"<span class="docgen-wikilink docgen-wikilink--broken" data-target="{}">{}</span>"#,
                 esc(&target),
@@ -100,6 +122,7 @@ pub fn transform_wikilinks<'a>(
     slugs: &SlugSet,
 ) -> WikilinkPass {
     let mut resolved: Vec<String> = Vec::new();
+    let mut seen: BTreeSet<String> = BTreeSet::new();
 
     // Collect every node that has children, so we can scan their direct child
     // runs. We snapshot the list first to avoid iterating while mutating.
@@ -151,7 +174,7 @@ pub fn transform_wikilinks<'a>(
                             arena.alloc(AstNode::from(NodeValue::Text(before.to_string().into())));
                         anchor.insert_before(n);
                     }
-                    let html = render_link(inner, slugs, &mut resolved);
+                    let html = render_link(inner, slugs, &mut resolved, &mut seen);
                     let n = arena.alloc(AstNode::from(NodeValue::HtmlInline(html)));
                     anchor.insert_before(n);
 
@@ -257,6 +280,30 @@ mod tests {
         let (_html, resolved) = render("[[guide/intro]] and [[index]] and [[intro]]\n", &slugs());
         // "intro" resolves to guide/intro (already present) -> deduped.
         assert_eq!(resolved, vec!["guide/intro".to_string(), "index".to_string()]);
+    }
+
+    #[test]
+    fn empty_or_whitespace_label_falls_back_to_target() {
+        // `[[index|]]` and `[[index|   ]]` must not render an empty clickable text;
+        // they fall back to the target, matching the search-index unwrap path.
+        let (html, _) = render("[[index|]]\n", &slugs());
+        assert!(html.contains(r#"href="/index">index</a>"#));
+        assert!(!html.contains(r#"href="/index"></a>"#));
+
+        let (html, _) = render("[[index|   ]]\n", &slugs());
+        assert!(html.contains(r#"href="/index">index</a>"#));
+
+        // Broken target with empty label also falls back to the target text.
+        let (html, _) = render("[[nope|]] x\n", &slugs());
+        assert!(html.contains(r#"data-target="nope">nope</span>"#));
+    }
+
+    #[test]
+    fn ambiguous_basename_resolves_deterministically() {
+        // Two slugs share the basename `dup`; resolution is first by BTreeSet order.
+        let amb: SlugSet =
+            ["a/dup", "b/dup"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(resolve_target("dup", &amb), Some("a/dup".to_string()));
     }
 
     #[test]
