@@ -34,3 +34,7 @@
 .docgen-diff-line--context { color: #444; }
 .docgen-diff-line--added { background: #e6ffec; color: #1a7f37; }
 .docgen-diff-line--removed { background: #ffebe9; color: #b00020; }
+
+/* KaTeX build-time math */
+.katex-display { margin: 1em 0; overflow-x: auto; overflow-y: hidden; }
+.docgen-math-error { color: #b00020; }

@@ -209,6 +209,19 @@ mod tests {
         assert!(s.contains("docgen-diff-line--removed"));
     }
 
+    #[test]
+    fn shared_css_has_katex_display_spacing() {
+        let s = std::str::from_utf8(
+            core_assets()
+                .iter()
+                .find(|a| a.path == "docgen.css")
+                .unwrap()
+                .bytes,
+        )
+        .unwrap();
+        assert!(s.contains(".katex-display"));
+    }
+
     // ---- A-5: bootstrap registry contract ----
 
     #[test]
