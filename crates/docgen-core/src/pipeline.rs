@@ -28,6 +28,20 @@ pub struct SiteBuild {
     pub any_mermaid: bool,
 }
 
+impl SiteBuild {
+    /// Build the deterministic `GraphData` for the `/graph/` page from this
+    /// site's docs (node order = doc order) and its already-built `LinkGraph`.
+    /// Never recomputes links.
+    pub fn graph_data(
+        &self,
+        params: crate::graphlayout::LayoutParams,
+    ) -> crate::graphlayout::GraphData {
+        let meta: Vec<(String, String)> =
+            self.docs.iter().map(|d| (d.slug.clone(), d.title.clone())).collect();
+        crate::graphlayout::layout_graph(&meta, &self.graph, params)
+    }
+}
+
 fn first_h1(body: &str) -> Option<String> {
     body.lines()
         .find_map(|line| line.strip_prefix("# ").map(|h| h.trim().to_string()))
@@ -174,6 +188,21 @@ mod tests {
         assert!(site.docs[0].has_mermaid && site.docs[0].body_html.contains("docgen-mermaid"));
         assert!(!site.docs[1].has_mermaid);
         assert!(site.any_mermaid);
+    }
+
+    #[test]
+    fn site_graph_data_matches_docs_and_links() {
+        let prepared = vec![
+            prepare(raw("index.md", "# Home\nGo to [[guide/intro]].\n")),
+            prepare(raw("guide/intro.md", "# Intro\nBack to [[index]].\n")),
+        ];
+        let site = render_docs(prepared);
+        let gd = site.graph_data(crate::graphlayout::LayoutParams::default());
+        assert_eq!(gd.nodes.len(), 2);
+        assert!(gd.nodes.iter().any(|n| n.slug == "index" && n.title == "Home"));
+        assert!(gd.nodes.iter().any(|n| n.slug == "guide/intro" && n.title == "Intro"));
+        assert!(gd.edges.iter().any(|e| e.from == "index" && e.to == "guide/intro"));
+        assert!(gd.edges.iter().any(|e| e.from == "guide/intro" && e.to == "index"));
     }
 
     #[test]
