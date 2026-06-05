@@ -121,3 +121,37 @@ highlight) all functional. Committed as a1e2c71.
 
 Launching P8-B focused fix workflow: 3 disjoint-file agents (A: graph/history templates; B: search.js + docgen.css
 search/graph/mermaid styles; C: docgen-core/components wikilink-in-directive + mermaid island theme sync).
+
+## 2026-06-05 22:00 MSK — P8-B GREEN (5eea117) + P8-C GREEN (825fe58); P8 COMPLETE
+
+P8-B workflow wf_1af2ee57-d31 GREEN; I verified all four fixes in Chrome:
+- graph + history pages now carry the full page.html topbar (centered search, diff/full-width/rail strip,
+  theme pill, brand). Added search_enabled to HistoryContext + build call site. (Editor flagged stale
+  missing-field diagnostics; a real `cargo build --workspace` finished clean — diagnostics were stale.)
+- Search modal: structured rows — bold title w/ accent-highlighted match, muted mono path, dimmed snippet,
+  under PAGES / FULL TEXT group labels. Matches original SearchModal layout.
+- Wikilinks inside directive/callout bodies now resolve to real <a> links (root cause: render_block_markdown
+  in docgen-core/pipeline.rs never ran the wikilink pass; threaded SlugSet+base through, added 2 tests).
+  Deliberately NOT folded into the link graph (directive-only targets create no backlink edge) — documented.
+- Mermaid theme-syncs to dark + 'diagram · mermaid' corner label; graph nodes larger/clearer (r:5).
+Committed 5eea117.
+
+P8-C (architect, direct edit — too small for a workflow): final chrome delta. The original's topbar btn-strip
+is [diff][maximize][menu]; docgen-rs exposed history as an inline link instead. Moved it into the strip as the
+first icon (original diff SVG, gated on has_history → {slug}/history) and removed the inline .docgen-history-link.
+Now the strip is pixel-identical to the baseline: diff · full-width · menu · theme pill. Full workspace tests
+pass (history-href assertions still satisfied), clippy clean. Committed 825fe58.
+
+**P8 RESULT — pixel-perfect parity achieved (validated side-by-side :8802 vs baseline :8801, both themes):**
+dark-default palette, Geist fonts, diamond brand, centered search pill, full control strip, segmented theme
+pill, 3-section right rail (TOC+scrollspy / Additional info Path·Layer·Commit·Built / Referenced by cards),
+doc-shell typography, 4-type nested callouts, broken-link styling, wikilink links, class-based syntect code
+(legible dark AND light — P7 light-only regression fixed), grouped structured search, dark mermaid. Topbar
+control strip now matches the original icon-for-icon. ALL pages (home/doc/markup/math/diagram/directives/
+graph/history/search) + interactions (full-width toggle, theme toggle, rail toggle, search) verified.
+
+**Known residual (cosmetic, non-blocking, honest):** (1) mermaid edge-labels ("yes"/"no") carry light pill
+backgrounds against the dark card — mermaid default-theme artifact, fixable via themeVariables; (2) resizable
+rail drag-handles (the original persists doc-left-rail-width / diff rail widths via drag) are NOT implemented —
+higher-effort, low visual-parity-impact nicety, deferred; (3) the dev-only edit icon (in-browser editor) is not
+shown in the static build's strip — by design (it's a dev-server affordance). PROJECT P1–P8 COMPLETE.

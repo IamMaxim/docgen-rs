@@ -1,12 +1,48 @@
-# Morning Report — docgen-rs P1–P7
+# Morning Report — docgen-rs P1–P8
 
 **Branch:** `overnight/p1-p6` (local only — NOT pushed, no PR)
-**Run started:** 2026-06-05 14:28 MSK · **Last updated:** 2026-06-05 20:05 MSK
-**Status:** ✅ COMPLETE — all 7 phases GREEN, tree builds + tests pass, validated live in Chrome.
+**Run started:** 2026-06-05 14:28 MSK · **Last updated:** 2026-06-05 22:00 MSK
+**Status:** ✅ COMPLETE — P1–P8 GREEN, tree builds + tests pass, **pixel-parity validated side-by-side
+in Chrome** vs the original (baseline served from `~/work/psychoville/docgen/build`).
 
 The Cargo-only static-doc-site generator is done: full feature parity with the original
-Svelte/SvelteKit `docgen`, **zero npm / Node / bundler**, and now a real theme. P0 (core SSG)
-existed before this run; P1–P7 were built tonight, milestone by milestone.
+Svelte/SvelteKit `docgen`, **zero npm / Node / bundler**, and now a **pixel-perfect re-skin** of the
+original's UI. P0 (core SSG) existed before this run; P1–P8 were built tonight, milestone by milestone.
+
+## P8 — Pixel-perfect parity (latest, this session)
+You ran docgen-rs side-by-side against the original and flagged "tons of regressions". Root cause: P7 shipped
+a *different* design (warm-paper LIGHT default, no right rail, no full-width switcher, syntect light-only code).
+P8 re-skinned docgen-rs to match the original (which is DARK-by-default) icon-for-icon, driven by two Workflows
+(`a1e2c71`, `5eea117`) + one direct chrome fix (`825fe58`), each validated by me against the live baseline.
+
+**Now matching the original (verified by screenshots, both themes, every page type + interactions):**
+- Dark-default token palette (`--bg:#0d0c0a`, oklch accent), Geist/Geist Mono fonts, diamond brand mark.
+- Topbar: **centered search pill** ("Search pages, headings, Rust refs… ⌘K"); control strip identical to the
+  original — **diff/history** · **full-width switcher** · **right-rail toggle** — then the **segmented theme pill**.
+- 3-section **right rail**: On this page (h2/h3 TOC + scroll-spy + h2 accent dots) · Additional info
+  (Path/Layer/Commit/Built — commit+build-time wired) · Referenced by (backlink cards). Backlinks moved out of
+  content into the rail.
+- doc-shell typography (15px/1.6, h1 38px, spacing rhythm, accent-underline links, broken-link styling).
+- 4-type nested callouts (note/todo/warn/info/discussion) with left-accent gradient; wikilinks resolve inside
+  callout bodies.
+- **Code blocks fixed**: switched syntect to CLASS-based output + shipped `code.css` (dark + light) ported from
+  the original Prism palette — code is now legible in BOTH themes (P7's light-only regression is gone).
+- Grouped, structured search (PAGES / FULL TEXT, bold title w/ highlighted match, mono path, snippet).
+- Mermaid theme-syncs to dark + "diagram · mermaid" corner label; graph nodes clearer.
+- Full-width switcher, theme toggle, right-rail toggle all persist via localStorage (doc-full-width,
+  doc-theme, doc-right-rail-collapsed).
+
+**Known residual (cosmetic / deliberately deferred, honest):**
+1. Mermaid edge labels ("yes"/"no") carry light pill backgrounds against the dark card — mermaid default-theme
+   artifact, fixable via `themeVariables`. Cosmetic.
+2. **Resizable rail drag-handles** (the original persists left-rail + diff-rail widths via drag) are NOT
+   implemented — higher-effort, low visual-parity value; deferred. Say the word and I'll add them.
+3. The dev-only **edit icon** (in-browser editor) isn't in the static build's strip — by design; it's a
+   dev-server affordance, shown when running `docgen dev`.
+
+---
+
+## (Earlier this run) P1–P7
 
 ---
 

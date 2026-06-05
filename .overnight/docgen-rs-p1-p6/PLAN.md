@@ -31,7 +31,7 @@ no push/PR/remote; quarantine irreversible decisions behind a seam and flag them
 | P5 | Dev server (`axum` + `notify` + live reload) + CodeMirror editor island | P3 | GREEN | 48b2701 |
 | P6 | `docgen init` scaffold + custom-component directive system + binary distribution | P3 | GREEN | d8716db |
 | P7 | **Design / theme** — real site CSS: layout/grid, typography, sidebar/topbar, dark-mode toggle, responsive. (User-requested follow-up — site was unstyled.) | P0–P6 | GREEN | 5aa0bfa |
-| P8 | **Pixel-perfect parity with original Svelte docgen** — match tokens (dark default), Geist fonts, topbar (centered search + full-width switcher + right-rail toggle + segmented theme pill + brand mark), 3-section right rail (On this page / Additional info / Referenced by), doc-shell typography, 4-type callouts, wikilink tooltips, rust-ref chips, class-based syntect code (dark+light), search grouping. Validated side-by-side vs baseline. | P0–P7 | IN-PROGRESS | — |
+| P8 | **Pixel-perfect parity with original Svelte docgen** — match tokens (dark default), Geist fonts, topbar (centered search + diff/full-width/right-rail strip + segmented theme pill + brand mark), 3-section right rail (On this page / Additional info / Referenced by), doc-shell typography, 4-type callouts, wikilink tooltips, class-based syntect code (dark+light), search grouping, mermaid dark-sync. Validated side-by-side vs baseline. | P0–P7 | GREEN | 825fe58 |
 
 Status legend: TODO / IN-PROGRESS / GREEN / BLOCKED.
 
