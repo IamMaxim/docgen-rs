@@ -244,6 +244,19 @@ mod tests {
         assert!(s.contains(".katex-display"));
     }
 
+    #[test]
+    fn shared_css_has_mermaid_container_styles() {
+        let s = std::str::from_utf8(
+            core_assets()
+                .iter()
+                .find(|a| a.path == "docgen.css")
+                .unwrap()
+                .bytes,
+        )
+        .unwrap();
+        assert!(s.contains(".docgen-mermaid"));
+    }
+
     // ---- A-5: bootstrap registry contract ----
 
     #[test]
