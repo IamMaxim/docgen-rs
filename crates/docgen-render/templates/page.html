@@ -80,7 +80,6 @@
   <div class="docgen-sidebar-backdrop" x-show="navOpen" @click="navOpen=false" x-cloak></div>
   <div class="docgen-layout">
     <nav class="docgen-sidebar" id="docgen-sidebar" :class="{ 'is-open': navOpen }">
-      <a class="docgen-sidebar__graph" href="{{ base | safe }}/graph">Graph</a>
       {{ render_nodes(tree, 0) }}
     </nav>
     <div class="docgen-rail-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="-1"></div>
@@ -88,6 +87,18 @@
       <article class="docgen-doc-content">
         {{ body | safe }}
       </article>
+      {% if is_home and graph_json %}
+      <section class="docgen-home-graph" aria-label="Documentation graph">
+        <div class="docgen-home-graph__head">
+          <h2>Doc graph</h2>
+          <span class="docgen-graph__meta">{{ graph_node_count }} nodes &middot; {{ graph_edge_count }} links</span>
+        </div>
+        <div class="docgen-graph" x-data="docgenGraph" x-init="init()">
+          <svg class="docgen-graph__svg" viewBox="0 0 1420 760" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Document link graph"></svg>
+        </div>
+        <script type="application/json" id="docgen-graph-data">{{ graph_json | safe }}</script>
+      </section>
+      {% endif %}
     </main>
     <aside class="docgen-rail" aria-label="Page navigation and information">
       {% if headings %}
@@ -148,6 +159,7 @@
   <script src="{{ base | safe }}/islands/scrollspy.js"></script>
   <script src="{{ base | safe }}/islands/wikilink.js"></script>
   {% if search_enabled %}<script src="{{ base | safe }}/search.js" defer></script>{% endif %}
+  {% if is_home and graph_json %}<script src="{{ base | safe }}/islands/graph.js"></script>{% endif %}
   {% if has_mermaid %}<script src="{{ base | safe }}/islands/mermaid.js"></script>{% endif %}
   {% if has_component_island %}<script src="{{ base | safe }}/components.js"></script>{% endif %}
   <script src="{{ base | safe }}/vendor/alpine/alpine.min.js" defer></script>

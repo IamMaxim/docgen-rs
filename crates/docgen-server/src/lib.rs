@@ -189,9 +189,12 @@ pub fn resolve_doc_path(docs_dir: &Path, rel: &str) -> Result<PathBuf, PathGuard
 }
 
 /// The dev-only HTML injected before `</body>` of every served page: the editor
-/// css + toggle button + editor island element, the vendored CodeMirror UMD
-/// scripts (loaded in dependency order: core -> xml mode -> overlay addon ->
-/// markdown mode), the editor island JS, and the live-reload client.
+/// css, a tiny inline script that inserts the dev-only edit icon into the
+/// topbar's `.docgen-btn-strip` (next to the diff/full-width controls — so the
+/// static `docgen build` output never contains it), the editor island panel
+/// element, the vendored CodeMirror UMD scripts (loaded in dependency order:
+/// core -> xml mode -> overlay addon -> markdown mode), the editor island JS,
+/// and the live-reload client.
 ///
 /// These non-`defer` scripts execute at parse time — before the page's deferred
 /// Alpine script fires `alpine:init` — so `editor.js`'s `docgen.island(...)`
@@ -200,7 +203,19 @@ pub fn resolve_doc_path(docs_dir: &Path, rel: &str) -> Result<PathBuf, PathGuard
 const DEV_HTML: &str = r#"
 <link rel="stylesheet" href="/__codemirror/codemirror.css" />
 <link rel="stylesheet" href="/__docgen/editor.css" />
-<button class="docgen-edit-toggle" data-docgen-edit>Edit</button>
+<script>(function(){
+  var strip=document.querySelector('.docgen-btn-strip');
+  if(!strip)return;
+  var b=document.createElement('button');
+  b.type='button';
+  b.className='icon-only docgen-ctl--edit';
+  b.setAttribute('data-docgen-edit','');
+  b.setAttribute('aria-label','Edit this page');
+  b.setAttribute('title','Edit this page (dev)');
+  b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+  var fw=strip.querySelector('.docgen-ctl--fullwidth');
+  if(fw)strip.insertBefore(b,fw);else strip.appendChild(b);
+})();</script>
 <div id="docgen-editor" x-data="docgenEditor" x-cloak></div>
 <script src="/__codemirror/codemirror.js"></script>
 <script src="/__codemirror/xml.js"></script>

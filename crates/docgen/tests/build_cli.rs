@@ -104,11 +104,20 @@ fn builds_fixture_site() {
     assert!(!tmp.join("dist/islands/mermaid.js").exists());
     assert!(!home.contains("islands/mermaid.js"));
 
-    // The /graph/ page + island always ship (P4 default-on).
+    // The standalone /graph/ page + island always ship (P4 default-on).
     assert!(tmp.join("dist/graph/index.html").is_file());
     assert!(tmp.join("dist/islands/graph.js").is_file());
-    // Every doc page links to /graph/.
-    assert!(home.contains(r#"href="/graph""#));
+    // The doc graph is surfaced ON the home page (not via a sidebar link, which
+    // was removed). The home page embeds the graph block + data + island script.
+    assert!(home.contains("docgen-home-graph"));
+    assert!(home.contains(r#"id="docgen-graph-data""#));
+    assert!(home.contains(r#"src="/islands/graph.js""#));
+    // The old sidebar graph link is gone everywhere.
+    assert!(!home.contains("docgen-sidebar__graph"));
+    // A non-home doc page does NOT embed the graph (home-only).
+    let intro = fs::read_to_string(tmp.join("dist/guide/intro/index.html")).unwrap();
+    assert!(!intro.contains("docgen-home-graph"));
+    assert!(!intro.contains(r#"src="/islands/graph.js""#));
 
     let _ = fs::remove_dir_all(&tmp);
 }
@@ -178,9 +187,11 @@ fn builds_graph_page_with_island_and_nav_link() {
     let island = fs::read_to_string(tmp.join("dist/islands/graph.js")).unwrap();
     assert!(!island.to_lowercase().contains("d3"));
 
-    // Every doc page links to /graph/.
+    // The graph is embedded on the home page (sidebar link removed): the home
+    // page carries the graph data payload + island script.
     let home = fs::read_to_string(tmp.join("dist/index/index.html")).unwrap();
-    assert!(home.contains(r#"href="/graph""#));
+    assert!(home.contains(r#"id="docgen-graph-data""#));
+    assert!(home.contains(r#"src="/islands/graph.js""#));
 
     let _ = fs::remove_dir_all(&tmp);
 }

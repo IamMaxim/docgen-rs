@@ -73,7 +73,6 @@
   <div class="docgen-sidebar-backdrop" x-show="navOpen" @click="navOpen=false" x-cloak></div>
   <div class="docgen-layout">
     <nav class="docgen-sidebar" id="docgen-sidebar" :class="{ 'is-open': navOpen }">
-      <a class="docgen-sidebar__graph" href="{{ base | safe }}/graph">Graph</a>
       {{ render_nodes(tree, 0) }}
     </nav>
     <div class="docgen-rail-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="-1"></div>

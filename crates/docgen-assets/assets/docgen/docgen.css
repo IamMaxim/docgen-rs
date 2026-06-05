@@ -460,7 +460,9 @@ kbd,
 	height: calc(100vh - var(--topbar-height));
 	overflow-y: auto;
 	padding: 16px 12px;
-	border-right: 1px solid var(--border);
+	/* No border-right: the single separator line is the `.docgen-rail-resizer`
+	   hairline in the adjacent 5px track (avoids a double vertical line). The
+	   mobile drawer (≤768px) re-adds its own border-right below. */
 }
 .docgen-sidebar__graph {
 	display: inline-flex;
@@ -1261,6 +1263,34 @@ kbd,
 	font-size: 13px;
 	margin: 0 0 12px;
 }
+
+/* home-page graph embed (the original surfaces the doc graph on the home page) */
+.docgen-home-graph {
+	max-width: 760px;
+	margin: 48px auto 0;
+	padding-top: 32px;
+	border-top: 1px solid var(--hairline);
+}
+.docgen-home-graph__head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 4px;
+}
+.docgen-home-graph__head h2 {
+	margin: 0;
+	font-size: 18px;
+	font-weight: 500;
+	letter-spacing: -0.01em;
+}
+.docgen-home-graph__head .docgen-graph__meta {
+	margin: 0;
+}
+/* the home graph follows the content measure unless full-width is on */
+.docgen-app.is-full-width .docgen-home-graph {
+	max-width: none;
+}
 .docgen-graph__links line {
 	stroke: var(--hairline);
 	stroke-width: 1;
@@ -1291,17 +1321,17 @@ kbd,
 
 /* ============================== responsive ============================== */
 @media (max-width: 1100px) {
+	/* the right rail reflows to a card under the content; the sidebar + drag
+	   handle stay (matches the original, which keeps the resizer on narrow
+	   viewports). Keep the 5px resizer track so the handle stays aligned. */
 	.docgen-layout {
-		grid-template-columns: var(--left-rail-width) minmax(0, 1fr);
-	}
-	/* below this width the rail reflows to a card; the drag handle is dropped
-	   (matches the original, which also hides the resizer on narrow viewports) */
-	.docgen-rail-resizer {
-		display: none;
+		grid-template-columns: var(--left-rail-width) 5px minmax(0, 1fr);
 	}
 	.docgen-rail {
+		grid-column: 3;
 		position: static;
 		max-height: none;
+		margin: 0 32px 32px;
 		padding: 16px;
 		border: 1px solid var(--border);
 		border-radius: var(--r-md);
@@ -1335,6 +1365,11 @@ kbd,
 	}
 	.docgen-layout {
 		grid-template-columns: 1fr;
+	}
+	/* sidebar collapses to an off-canvas drawer here, so the inline resize
+	   handle no longer applies */
+	.docgen-rail-resizer {
+		display: none;
 	}
 	.docgen-content {
 		padding: 24px 18px 64px;

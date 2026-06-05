@@ -233,11 +233,30 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
         }
     }
 
+    // Force-layout graph data, computed once when the graph feature is on, and
+    // reused by both the home-page embed (Phase 2) and the standalone /graph
+    // page (Phase 3). The original docgen surfaces the graph ON the home page
+    // (not in the sidebar), so the home doc gets the graph block.
+    let graph_payload: Option<(String, usize, usize)> = if config.features.graph {
+        let graph_data = site.graph_data(docgen_core::graphlayout::LayoutParams::default());
+        let graph_json = docgen_core::graphlayout::graph_data_json(&graph_data);
+        Some((graph_json, graph_data.nodes.len(), graph_data.edges.len()))
+    } else {
+        None
+    };
+
     // Phase 2: render the doc pages, linking to history where one was emitted.
     let empty: Vec<docgen_core::model::Backlink> = Vec::new();
     let mut home_html: Option<String> = None;
     for doc in &site.docs {
         let backlinks = site.graph.backlinks.get(&doc.slug).unwrap_or(&empty);
+        let is_home = doc.slug == HOME_SLUG;
+        // Only the home doc carries the graph payload (empty graph_json → the
+        // template skips the block + the graph island script).
+        let (graph_json, graph_node_count, graph_edge_count) = match (is_home, &graph_payload) {
+            (true, Some((json, nodes, edges))) => (json.as_str(), *nodes, *edges),
+            _ => ("", 0, 0),
+        };
         let html = renderer.render_page(&PageContext {
             title: &doc.title,
             slug: &doc.slug,
@@ -258,6 +277,10 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
                 .components_used
                 .iter()
                 .any(|c| island_components.contains(c)),
+            is_home,
+            graph_json,
+            graph_node_count,
+            graph_edge_count,
         })?;
 
         // `guide/intro` -> `dist/guide/intro/index.html` (clean URLs).
@@ -276,17 +299,14 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
         fs::write(dist_dir.join("index.html"), html)?;
     }
 
-    // Phase 3: the /graph/ page (default-on, gated off by `[features] graph =
-    // false`). Deterministic force layout from the already-built link graph —
-    // never recomputes links.
-    if config.features.graph {
-        let graph_data = site.graph_data(docgen_core::graphlayout::LayoutParams::default());
-        let graph_json = docgen_core::graphlayout::graph_data_json(&graph_data);
+    // Phase 3: the standalone /graph/ page (default-on, gated off by `[features]
+    // graph = false`). Reuses the force layout computed above — never recomputes.
+    if let Some((graph_json, node_count, edge_count)) = &graph_payload {
         let graph_html = renderer.render_graph(&GraphContext {
             tree: &tree,
-            graph_json: &graph_json,
-            node_count: graph_data.nodes.len(),
-            edge_count: graph_data.edges.len(),
+            graph_json,
+            node_count: *node_count,
+            edge_count: *edge_count,
             base: &config.base,
             site_title: config.title.as_deref().unwrap_or(""),
             search_enabled: config.features.search,

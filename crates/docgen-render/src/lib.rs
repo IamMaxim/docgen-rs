@@ -136,6 +136,16 @@ pub struct PageContext<'a> {
     /// Whether this page used ≥1 component with an `island.js` (links
     /// `/components.js`, gated per-page like the mermaid island).
     pub has_component_island: bool,
+    /// Whether this page is the site home. Drives the home-only graph embed
+    /// (the original surfaces the doc graph on the home page, not the sidebar).
+    pub is_home: bool,
+    /// Force-layout graph JSON for the home embed (raw — `render_page` applies
+    /// the `</` → `<\/` escaping for the inline `<script>`). `""` → no graph
+    /// block (not home, or the graph feature is off).
+    pub graph_json: &'a str,
+    /// Node/edge counts for the home graph caption (ignored when `graph_json` is empty).
+    pub graph_node_count: usize,
+    pub graph_edge_count: usize,
 }
 
 /// Owns a configured minijinja environment with the `page` template registered.
@@ -159,6 +169,10 @@ impl Renderer {
     /// Render one page to a full HTML document.
     pub fn render_page(&self, ctx: &PageContext) -> Result<String, minijinja::Error> {
         let tmpl = self.env.get_template("page.html")?;
+        // Escape `</` so a literal `</script>` inside a doc title can't break out
+        // of the inline `<script type="application/json">` graph payload (same
+        // guard as `render_graph`). Empty → still empty, so the block is skipped.
+        let safe_graph_json = ctx.graph_json.replace("</", "<\\/");
         tmpl.render(context! {
             title => ctx.title,
             body => ctx.body_html,
@@ -176,6 +190,10 @@ impl Renderer {
             search_enabled => ctx.search_enabled,
             has_components_css => ctx.has_components_css,
             has_component_island => ctx.has_component_island,
+            is_home => ctx.is_home,
+            graph_json => safe_graph_json,
+            graph_node_count => ctx.graph_node_count,
+            graph_edge_count => ctx.graph_edge_count,
         })
     }
 
@@ -244,6 +262,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: false,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
             })
             .unwrap();
         assert!(html.contains("<title>My Page</title>"));
@@ -270,6 +292,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: false,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
             })
             .unwrap();
         // Skip link targets a labelled, focusable <main>.
@@ -304,6 +330,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: false,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
             })
             .unwrap();
         assert!(!off.contains("/components.css"));
@@ -327,6 +357,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: true,
                 has_component_island: true,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
             })
             .unwrap();
         assert!(on.contains(r#"<link rel="stylesheet" href="/components.css" />"#));
@@ -342,6 +376,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: false,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
                 base: "",
                 slug: "x",
                 body_html: "",
@@ -367,6 +405,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: false,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
                 base: "",
                 slug: "x",
                 body_html: "",
@@ -393,6 +435,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: false,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
                 base: "",
                 slug: "x",
                 body_html: "",
@@ -415,6 +461,10 @@ mod tests {
                 search_enabled: false,
                 has_components_css: false,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
                 base: "",
                 slug: "x",
                 body_html: "",
@@ -445,6 +495,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: true,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
                 base: "/docs",
                 slug: "x",
                 body_html: "",
@@ -465,8 +519,8 @@ mod tests {
         assert!(html.contains(r#"href="/docs/components.css""#));
         assert!(html.contains(r#"src="/docs/bootstrap.js""#));
         assert!(html.contains(r#"src="/docs/search.js""#));
-        // Nav + history links under base.
-        assert!(html.contains(r#"href="/docs/graph""#));
+        // Nav + history links under base. (The sidebar graph link was removed;
+        // the graph now lives on the home page, covered by its own test.)
         assert!(html.contains(r#"href="/docs/guide""#));
         assert!(html.contains(r#"href="/docs/x/history""#));
         // Nothing left at the bare root.
@@ -499,6 +553,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: false,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
             })
             .unwrap();
         assert!(html.contains(r#"href="/guide/intro""#));
@@ -530,6 +588,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: false,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
             })
             .unwrap();
         // Title is HTML-escaped.
@@ -567,6 +629,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: false,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
             })
             .unwrap();
         // Backlinks now live in the right rail's "Referenced by" section as cards.
@@ -598,6 +664,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: false,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
             })
             .unwrap();
         // No backlinks → the "Referenced by" rail section is omitted entirely.
@@ -625,6 +695,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: false,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
             })
             .unwrap();
         assert!(with.contains(r#"href="/guide/intro/history""#));
@@ -647,6 +721,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: false,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
             })
             .unwrap();
         assert!(!without.contains(r#"href="/guide/intro/history""#));
@@ -672,6 +750,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: false,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
             })
             .unwrap();
         assert!(html.contains(r#"src="/bootstrap.js""#));
@@ -696,6 +778,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: false,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
             })
             .unwrap();
         assert!(withm.contains(r#"src="/islands/mermaid.js""#));
@@ -721,6 +807,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: false,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
             })
             .unwrap();
         assert!(!no_math.contains("katex.min.css"));
@@ -743,6 +833,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: false,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
             })
             .unwrap();
         assert!(with_math.contains(r#"href="/vendor/katex/katex.min.css""#));
@@ -867,7 +961,7 @@ mod tests {
     }
 
     #[test]
-    fn graph_page_has_graph_nav_link() {
+    fn graph_page_renders_graph_canvas_without_sidebar_link() {
         let r = Renderer::new(DEFAULT_PAGE_TEMPLATE).unwrap();
         let html = r
             .render_graph(&GraphContext {
@@ -880,32 +974,52 @@ mod tests {
                 search_enabled: true,
             })
             .unwrap();
-        assert!(html.contains(r#"href="/graph""#));
+        // The standalone /graph page still renders its graph canvas + island.
+        assert!(html.contains(r#"x-data="docgenGraph""#));
+        assert!(html.contains("docgen-graph__svg"));
+        // The sidebar graph link was removed (the graph lives on the home page).
+        assert!(!html.contains("docgen-sidebar__graph"));
     }
 
     #[test]
-    fn page_has_graph_nav_link() {
-        let html = renderer()
-            .render_page(&PageContext {
-                title: "X",
-                slug: "x",
-                body_html: "",
-                tree: &[],
-                backlinks: &[],
-                headings: &[],
-                commit: "",
-                built: "",
-                has_history: false,
-                has_mermaid: false,
-                has_math: false,
-                base: "",
-                site_title: "",
-                search_enabled: true,
-                has_components_css: false,
-                has_component_island: false,
-            })
+    fn home_page_embeds_graph_and_non_home_does_not() {
+        let r = renderer();
+        let ctx = |is_home: bool, graph_json: &'static str| PageContext {
+            title: "X",
+            slug: if is_home { "index" } else { "x" },
+            body_html: "",
+            tree: &[],
+            backlinks: &[],
+            headings: &[],
+            commit: "",
+            built: "",
+            has_history: false,
+            has_mermaid: false,
+            has_math: false,
+            base: "",
+            site_title: "",
+            search_enabled: true,
+            has_components_css: false,
+            has_component_island: false,
+            is_home,
+            graph_json,
+            graph_node_count: 2,
+            graph_edge_count: 1,
+        };
+        // Home page with graph data: embeds the graph block + data + island script.
+        let home = r
+            .render_page(&ctx(true, r#"{"nodes":[],"edges":[]}"#))
             .unwrap();
-        assert!(html.contains(r#"href="/graph""#));
+        assert!(home.contains("docgen-home-graph"));
+        assert!(home.contains(r#"id="docgen-graph-data""#));
+        assert!(home.contains(r#"x-data="docgenGraph""#));
+        assert!(home.contains("islands/graph.js"));
+        // The sidebar graph link is gone.
+        assert!(!home.contains("docgen-sidebar__graph"));
+        // A non-home page (even if a graph_json were passed) embeds nothing.
+        let other = r.render_page(&ctx(false, "")).unwrap();
+        assert!(!other.contains("docgen-home-graph"));
+        assert!(!other.contains("islands/graph.js"));
     }
 
     #[test]
@@ -993,6 +1107,10 @@ mod tests {
                 search_enabled: true,
                 has_components_css: false,
                 has_component_island: false,
+                is_home: false,
+                graph_json: "",
+                graph_node_count: 0,
+                graph_edge_count: 0,
             })
             .unwrap()
     }
