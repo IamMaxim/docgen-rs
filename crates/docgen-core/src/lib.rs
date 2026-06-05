@@ -4,6 +4,7 @@ pub mod frontmatter;
 pub mod graph;
 pub mod markdown;
 pub mod math;
+pub mod mathpass;
 pub mod model;
 pub mod pipeline;
 pub mod search;
