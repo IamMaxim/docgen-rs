@@ -119,6 +119,18 @@ pub fn mermaid_assets() -> Vec<Asset> {
     ]
 }
 
+/// Graph island JS. Emitted only on builds that render the `/graph/` page
+/// (gated by [`EmitOptions::include_graph`]). The graph styles live in the
+/// shared `docgen.css`, so this slice is JS-only. No vendored graph lib — the
+/// island reads build-time `GraphData` JSON and draws SVG by hand.
+pub fn graph_assets() -> Vec<Asset> {
+    vec![embed(
+        "docgen/islands/graph.js",
+        "islands/graph.js",
+        AssetKind::Js,
+    )]
+}
+
 /// Flags driving which conditional asset slices a build emits.
 ///
 /// Both fields default to `false`: the default build takes the build-time KaTeX
@@ -129,6 +141,9 @@ pub struct EmitOptions {
     pub include_katex_runtime: bool,
     /// Ship `mermaid.min.js` + the mermaid island (only when a page used a diagram).
     pub include_mermaid: bool,
+    /// Ship the graph island (`islands/graph.js`) — emitted when the `/graph/`
+    /// page is rendered. Default false.
+    pub include_graph: bool,
 }
 
 /// The full asset set to emit for this build: core + katex css (always, for math
@@ -141,6 +156,9 @@ pub fn assets_for(opts: &EmitOptions) -> Vec<Asset> {
     }
     if opts.include_mermaid {
         out.extend(mermaid_assets());
+    }
+    if opts.include_graph {
+        out.extend(graph_assets());
     }
     out
 }
@@ -278,6 +296,76 @@ mod tests {
         assert!(!js.contains("import ")); // no ESM / npm
     }
 
+    // ---- B-1: graph island contract ----
+
+    #[test]
+    fn graph_island_registers_and_renders_without_esm_or_d3() {
+        let js = std::str::from_utf8(
+            ASSETS
+                .get_file("docgen/islands/graph.js")
+                .unwrap()
+                .contents(),
+        )
+        .unwrap();
+        assert!(js.contains("docgen.island"));
+        assert!(js.contains("docgenGraph"));
+        assert!(js.contains("docgen-graph-data")); // reads the embedded JSON
+        assert!(js.contains("http://www.w3.org/2000/svg")); // builds SVG via createElementNS
+        assert!(!js.contains("import ")); // no ESM / npm
+        assert!(!js.to_lowercase().contains("d3")); // no vendored graph lib
+    }
+
+    // ---- B-2: graph_assets() slice + include_graph gate ----
+
+    #[test]
+    fn graph_slice_has_island_and_is_gated() {
+        let g = graph_assets();
+        assert!(g.iter().any(|a| a.path == "islands/graph.js"));
+        for a in &g {
+            assert!(!a.bytes.is_empty(), "{} empty", a.path);
+        }
+
+        // off by default
+        assert!(!assets_for(&EmitOptions::default())
+            .iter()
+            .any(|a| a.path == "islands/graph.js"));
+        // on when flag set
+        let full = assets_for(&EmitOptions {
+            include_graph: true,
+            ..Default::default()
+        });
+        assert!(full.iter().any(|a| a.path == "islands/graph.js"));
+    }
+
+    #[test]
+    fn graph_island_is_js_kinded() {
+        assert_eq!(
+            graph_assets()
+                .iter()
+                .find(|a| a.path == "islands/graph.js")
+                .unwrap()
+                .kind,
+            AssetKind::Js
+        );
+    }
+
+    // ---- B-3: graph styles in shared css ----
+
+    #[test]
+    fn shared_css_has_graph_styles() {
+        let s = std::str::from_utf8(
+            core_assets()
+                .iter()
+                .find(|a| a.path == "docgen.css")
+                .unwrap()
+                .bytes,
+        )
+        .unwrap();
+        assert!(s.contains(".docgen-graph"));
+        assert!(s.contains(".docgen-graph__nodes circle"));
+        assert!(s.contains(".docgen-graph__links line"));
+    }
+
     // ---- A-6: emit() + assets_for() planner ----
 
     #[test]
@@ -383,6 +471,7 @@ mod tests {
         let _full = assets_for(&EmitOptions {
             include_katex_runtime: true,
             include_mermaid: true,
+            include_graph: true,
         });
     }
 }

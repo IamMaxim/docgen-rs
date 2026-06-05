@@ -43,3 +43,15 @@
 .docgen-mermaid { margin: 1em 0; }
 .docgen-mermaid__out svg { max-width: 100%; height: auto; }
 .docgen-mermaid__error { color: #b00020; white-space: pre-wrap; }
+
+/* Graph view (P4): doc-link force graph rendered as SVG. */
+.docgen-graph { margin: 1em 0; border: 1px solid #e5e5e5; border-radius: 6px; background: #fafafa; overflow: hidden; }
+.docgen-graph__svg { display: block; width: 100%; height: auto; cursor: grab; touch-action: none; }
+.docgen-graph__svg.docgen-graph--grabbing { cursor: grabbing; }
+.docgen-graph__meta { color: #555; font-size: .9rem; margin: .25rem 0 .75rem; }
+.docgen-graph__links line { stroke: #c4c4c4; stroke-width: 1; transition: stroke .12s, stroke-width .12s; }
+.docgen-graph__links line.active { stroke: #1a7f37; stroke-width: 2; }
+.docgen-graph__nodes circle { fill: #4063d8; stroke: #fff; stroke-width: 1.5; cursor: pointer; transition: fill .12s, opacity .12s; }
+.docgen-graph__nodes circle.active { fill: #1a7f37; }
+.docgen-graph__nodes circle.dimmed { opacity: .25; }
+.docgen-graph__nodes a { text-decoration: none; }
