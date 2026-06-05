@@ -53,6 +53,7 @@ mod tests {
             slug: slug.into(),
             title: title.into(),
             body_html: String::new(),
+            has_math: false,
         }
     }
 

@@ -78,6 +78,8 @@ pub fn render_docs(prepared: Vec<PreparedDoc>) -> SiteBuild {
         // Wikilink AST pass (mutates `root`) + highlighted HTML.
         let pass = transform_wikilinks(root, &arena, &slugs);
         outbound.insert(p.slug.clone(), pass.resolved);
+        // Build-time math: replace math nodes with KaTeX HTML before formatting.
+        let math_count = crate::mathpass::transform_math(root);
         let body_html = format_ast(root, &options);
 
         docs.push(Doc {
@@ -85,6 +87,7 @@ pub fn render_docs(prepared: Vec<PreparedDoc>) -> SiteBuild {
             slug: p.slug.clone(),
             title: p.title.clone(),
             body_html,
+            has_math: math_count > 0,
         });
     }
 
@@ -143,6 +146,15 @@ mod tests {
         assert_eq!(home.title, "Home");
         assert!(home.text.contains("Go to"));
         assert!(!home.text.contains("[["));
+    }
+
+    #[test]
+    fn render_docs_renders_math_at_build_time() {
+        let prepared = vec![prepare(raw("m.md", "# M\nmass: $E=mc^2$\n"))];
+        let site = render_docs(prepared);
+        assert!(site.docs[0].body_html.contains("katex"));
+        assert!(site.docs[0].has_math);
+        assert!(!site.docs[0].body_html.contains("$E=mc^2$"));
     }
 
     #[test]

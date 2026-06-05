@@ -20,6 +20,8 @@ pub struct Doc {
     pub title: String,
     /// Rendered body HTML.
     pub body_html: String,
+    /// Whether this doc contains math (drives the conditional KaTeX `<head>` link).
+    pub has_math: bool,
 }
 
 /// A node in the sidebar tree.
