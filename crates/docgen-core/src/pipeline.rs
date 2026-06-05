@@ -132,7 +132,7 @@ pub fn render_docs(
         });
 
         // Wikilink AST pass (mutates `root`) + highlighted HTML.
-        let pass = transform_wikilinks(root, &arena, &slugs);
+        let pass = transform_wikilinks(root, &arena, &slugs, &config.base);
         outbound.insert(p.slug.clone(), pass.resolved);
         // Build-time math: replace math nodes with KaTeX HTML before formatting.
         let math_count = if config.features.math {

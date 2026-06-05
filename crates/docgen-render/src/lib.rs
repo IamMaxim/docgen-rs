@@ -363,25 +363,42 @@ mod tests {
     }
 
     #[test]
-    fn base_emits_base_tag() {
+    fn base_prefixes_every_asset_and_nav_link_and_emits_no_base_tag() {
+        // A sub-path deployment must rewrite every root-absolute URL to live under
+        // `base`; <base> alone cannot do this (it only affects relative URLs).
+        let tree =
+            vec![TreeNode::Doc { name: "guide".into(), slug: "guide".into(), title: "Guide".into() }];
         let html = renderer()
             .render_page(&PageContext {
                 title: "X",
                 site_title: "",
                 search_enabled: true,
-                has_components_css: false,
+                has_components_css: true,
                 has_component_island: false,
                 base: "/docs",
                 slug: "x",
                 body_html: "",
-                tree: &[],
+                tree: &tree,
                 backlinks: &[],
-                has_history: false,
+                has_history: true,
                 has_mermaid: false,
                 has_math: false,
             })
             .unwrap();
-        assert!(html.contains(r#"<base href="/docs/" />"#));
+        // No <base> tag — links are prefixed directly so they actually resolve.
+        assert!(!html.contains("<base"));
+        // Assets under base.
+        assert!(html.contains(r#"href="/docs/docgen.css""#));
+        assert!(html.contains(r#"href="/docs/components.css""#));
+        assert!(html.contains(r#"src="/docs/bootstrap.js""#));
+        assert!(html.contains(r#"src="/docs/search.js""#));
+        // Nav + history links under base.
+        assert!(html.contains(r#"href="/docs/graph""#));
+        assert!(html.contains(r#"href="/docs/guide""#));
+        assert!(html.contains(r#"href="/docs/x/history""#));
+        // Nothing left at the bare root.
+        assert!(!html.contains(r#"href="/docgen.css""#));
+        assert!(!html.contains(r#"src="/bootstrap.js""#));
     }
 
     #[test]

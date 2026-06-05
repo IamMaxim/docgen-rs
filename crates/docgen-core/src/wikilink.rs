@@ -75,6 +75,7 @@ fn display_text(target: &str, label: Option<String>) -> String {
 fn render_link(
     inner: &str,
     slugs: &SlugSet,
+    base: &str,
     resolved: &mut Vec<String>,
     seen: &mut BTreeSet<String>,
 ) -> String {
@@ -86,7 +87,8 @@ fn render_link(
             }
             let text = display_text(&target, label);
             format!(
-                r#"<a class="docgen-wikilink" href="/{}">{}</a>"#,
+                r#"<a class="docgen-wikilink" href="{}/{}">{}</a>"#,
+                base,
                 esc(&slug),
                 esc(&text)
             )
@@ -116,10 +118,13 @@ fn flat_source(node: &AstNode<'_>) -> Option<String> {
     }
 }
 
+/// `base` is the deployed sub-path prefix (e.g. `/docs`); `""` for root
+/// deployment. Resolved-wikilink hrefs are emitted as `{base}/{slug}`.
 pub fn transform_wikilinks<'a>(
     root: &'a AstNode<'a>,
     arena: &'a Arena<'a>,
     slugs: &SlugSet,
+    base: &str,
 ) -> WikilinkPass {
     let mut resolved: Vec<String> = Vec::new();
     let mut seen: BTreeSet<String> = BTreeSet::new();
@@ -174,7 +179,7 @@ pub fn transform_wikilinks<'a>(
                             arena.alloc(AstNode::from(NodeValue::Text(before.to_string().into())));
                         anchor.insert_before(n);
                     }
-                    let html = render_link(inner, slugs, &mut resolved, &mut seen);
+                    let html = render_link(inner, slugs, base, &mut resolved, &mut seen);
                     let n = arena.alloc(AstNode::from(NodeValue::HtmlInline(html)));
                     anchor.insert_before(n);
 
@@ -245,12 +250,23 @@ mod tests {
     }
 
     fn render(md: &str, slugs: &SlugSet) -> (String, Vec<String>) {
+        render_with_base(md, slugs, "")
+    }
+
+    fn render_with_base(md: &str, slugs: &SlugSet, base: &str) -> (String, Vec<String>) {
         let arena = Arena::new();
         let options = comrak_options();
         let root = parse_document(&arena, md, &options);
-        let pass = transform_wikilinks(root, &arena, slugs);
+        let pass = transform_wikilinks(root, &arena, slugs, base);
         let html = crate::markdown::format_ast(root, &options);
         (html, pass.resolved)
+    }
+
+    #[test]
+    fn resolved_wikilink_href_is_prefixed_with_base() {
+        let (html, _) = render_with_base("[[guide/intro]]\n", &slugs(), "/docs");
+        assert!(html.contains(r#"href="/docs/guide/intro""#));
+        assert!(!html.contains(r#"href="/guide/intro""#));
     }
 
     #[test]

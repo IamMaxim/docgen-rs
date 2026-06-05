@@ -3,9 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  {% if base %}<base href="{{ base | safe }}/" />{% endif %}
   <title>{% if site_title %}History: {{ title }} — {{ site_title }}{% else %}History: {{ title }}{% endif %}</title>
-  <link rel="stylesheet" href="/docgen.css" />
+  <link rel="stylesheet" href="{{ base | safe }}/docgen.css" />
 </head>
 <body>
   <nav class="docgen-sidebar">
@@ -15,7 +14,7 @@
         {% if node.kind == "dir" %}
           <li class="docgen-dir"><span>{{ node.name }}</span>{{ render_nodes(node.children) }}</li>
         {% else %}
-          <li class="docgen-doc"><a href="/{{ node.slug | safe }}">{{ node.title }}</a></li>
+          <li class="docgen-doc"><a href="{{ base | safe }}/{{ node.slug | safe }}">{{ node.title }}</a></li>
         {% endif %}
       {% endfor %}
     </ul>
@@ -23,7 +22,7 @@
     {{ render_nodes(tree) }}
   </nav>
   <main class="docgen-content docgen-history">
-    <p><a href="/{{ slug | safe }}">&larr; Back to {{ title }}</a></p>
+    <p><a href="{{ base | safe }}/{{ slug | safe }}">&larr; Back to {{ title }}</a></p>
     <h1>History: {{ title }}</h1>
     {% for bucket in buckets %}
       <section class="docgen-timeline-bucket">

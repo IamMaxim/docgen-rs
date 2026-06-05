@@ -67,6 +67,47 @@ fn build_site_writes_pages_to_custom_out_dir() {
 }
 
 #[test]
+fn base_subpath_prefixes_assets_and_wikilinks_end_to_end() {
+    // A site deployed under `/docs` must emit every asset and link under that
+    // prefix; <base> alone does not rewrite root-absolute URLs, so we assert the
+    // rendered HTML actually points under /docs (and never at the bare root).
+    let root = tempfile::tempdir().unwrap();
+    fs::create_dir_all(root.path().join("docs")).unwrap();
+    fs::write(
+        root.path().join("docgen.toml"),
+        "title = \"My Docs\"\nbase = \"/docs\"\n",
+    )
+    .unwrap();
+    fs::write(root.path().join("docs/index.md"), "# Home\n\nSee [[guide]] now.\n").unwrap();
+    fs::write(root.path().join("docs/guide.md"), "# Guide\n\nBody.\n").unwrap();
+    let out = tempfile::tempdir().unwrap();
+
+    build_site(&BuildOptions {
+        project_root: root.path(),
+        out_dir: out.path(),
+        mode: BuildMode::Production,
+    })
+    .unwrap();
+
+    let html = fs::read_to_string(out.path().join("index/index.html")).unwrap();
+    // No <base> tag — links are prefixed directly so they resolve.
+    assert!(!html.contains("<base"), "should not emit a <base> tag");
+    // Asset under base.
+    assert!(html.contains(r#"href="/docs/docgen.css""#), "asset href: {html}");
+    assert!(html.contains(r#"src="/docs/bootstrap.js""#));
+    // Resolved wikilink under base.
+    assert!(
+        html.contains(r#"href="/docs/guide""#),
+        "wikilink should resolve under /docs: {html}"
+    );
+    // Nothing left at the bare root.
+    assert!(!html.contains(r#"href="/docgen.css""#));
+    assert!(!html.contains(r#"href="/guide""#));
+    // The client (search.js etc.) learns the base via a JS global.
+    assert!(html.contains(r#"window.DOCGEN_BASE = "/docs";"#), "DOCGEN_BASE: {html}");
+}
+
+#[test]
 fn build_compat_wrapper_writes_dist() {
     let root = tempfile::tempdir().unwrap();
     setup_fixture(root.path());

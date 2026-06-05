@@ -48,7 +48,9 @@ pub struct SiteConfig {
     /// (home page uses just `title`). When `None`, per-page titles are unchanged.
     pub title: Option<String>,
     /// Base path for the deployed site (e.g. `/docs`). Empty = served at root
-    /// (unchanged behaviour). Emitted as `<base href>` only in P6.
+    /// (unchanged behaviour). Prefixed onto every emitted asset/nav/wikilink URL
+    /// so a sub-path deployment resolves correctly (no `<base>` tag is used —
+    /// `<base>` only affects relative URLs, but our links are root-absolute).
     pub base: String,
     pub features: Features,
     pub components: ComponentsConfig,

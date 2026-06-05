@@ -3,11 +3,13 @@
   "use strict";
   var index = null;
   var loading = null;
+  // Deployed sub-path prefix (e.g. "/docs"); "" when served at the origin root.
+  var BASE = (typeof window !== "undefined" && window.DOCGEN_BASE) || "";
 
   function loadIndex() {
     if (index) return Promise.resolve(index);
     if (loading) return loading;
-    loading = fetch("/search-index.json")
+    loading = fetch(BASE + "/search-index.json")
       .then(function (r) { return r.json(); })
       .then(function (data) { index = data; return index; });
     return loading;
@@ -65,7 +67,7 @@
       // Build the row with DOM APIs so a slug containing `"`, `<` or `>`
       // (legal in file names) cannot break out of the attribute or inject markup.
       var a = document.createElement("a");
-      a.setAttribute("href", "/" + e.slug);
+      a.setAttribute("href", BASE + "/" + e.slug);
       var span = document.createElement("span");
       span.className = "title";
       span.textContent = e.title;
@@ -84,7 +86,7 @@
   }
 
   function go() {
-    if (results[selected]) window.location.href = "/" + results[selected].slug;
+    if (results[selected]) window.location.href = BASE + "/" + results[selected].slug;
   }
 
   function onKey(ev) {
