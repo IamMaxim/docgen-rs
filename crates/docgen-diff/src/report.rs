@@ -25,6 +25,26 @@ pub fn build_doc_diff_report(
     doc_rel_path: &str,
     limit: usize,
 ) -> Result<Option<DocDiffReport>, DiffError> {
+    build_doc_diff_report_inner(repo, doc_rel_path, limit, false)
+}
+
+/// Like [`build_doc_diff_report`] but attaching the rendered block diff to each
+/// file. Used by consumers that actually render blocks; the CLI build/history
+/// path does not (it projects only hunks), so it uses the cheaper default.
+pub fn build_doc_diff_report_with_blocks(
+    repo: &git2::Repository,
+    doc_rel_path: &str,
+    limit: usize,
+) -> Result<Option<DocDiffReport>, DiffError> {
+    build_doc_diff_report_inner(repo, doc_rel_path, limit, true)
+}
+
+fn build_doc_diff_report_inner(
+    repo: &git2::Repository,
+    doc_rel_path: &str,
+    limit: usize,
+    with_blocks: bool,
+) -> Result<Option<DocDiffReport>, DiffError> {
     let revs = history::doc_revisions(repo, doc_rel_path, limit)?;
     if revs.is_empty() {
         return Ok(None);
@@ -35,14 +55,23 @@ pub fn build_doc_diff_report(
     for rev in revs {
         let hunks = line_diff::build_line_hunks_default(&rev.old_text, &rev.new_text);
 
+        // Build the block grouping (cheap text grouping) to reproduce the TS
+        // "no visible change -> return null" skip decision. Rendering each
+        // block to HTML is only done when a consumer wants the blocks — it is
+        // pure waste in the build/history path, which projects only hunks.
         let mut blocks = block_diff::build_block_diff(&rev.old_text, &rev.new_text);
-        for block in &mut blocks {
-            block.html = render_markdown(&block.raw);
-        }
+        let all_context = blocks.iter().all(|b| b.kind == DocDiffBlockKind::Context);
+        let blocks = if with_blocks {
+            for block in &mut blocks {
+                block.html = render_markdown(&block.raw);
+            }
+            Some(blocks)
+        } else {
+            None
+        };
 
         // Skip the file when there is no visible change (parity with the TS
         // `return null`). In build-history each point is a single doc file.
-        let all_context = blocks.iter().all(|b| b.kind == DocDiffBlockKind::Context);
         let files: Vec<DocDiffFile> = if hunks.is_empty() && all_context {
             vec![]
         } else {
@@ -55,15 +84,14 @@ pub fn build_doc_diff_report(
                 added_lines,
                 removed_lines,
                 hunks,
-                blocks: Some(blocks),
+                blocks,
             }]
         };
 
         let file_tree = file_tree::build_file_tree(&files);
         let total_added_lines = files.iter().map(|f| f.added_lines).sum();
         let total_removed_lines = files.iter().map(|f| f.removed_lines).sum();
-        let base_ref =
-            git_refs::base_ref_for_commit_parents(&rev.meta.hash, &rev.meta.parents.join(" "));
+        let base_ref = git_refs::base_ref_for_parents(&rev.meta.parents);
         let head_ref = rev.meta.hash.clone();
 
         timeline.push(DocDiffTimelinePoint {
@@ -138,7 +166,7 @@ mod tests {
         r.commit_file("docs/a.md", "# A\n\nfirst paragraph.\n", "add a");
         r.commit_file("docs/a.md", "# A\n\nsecond paragraph.\n", "edit a");
 
-        let report = build_doc_diff_report(&r.repo, "docs/a.md", 50)
+        let report = build_doc_diff_report_with_blocks(&r.repo, "docs/a.md", 50)
             .unwrap()
             .unwrap();
         assert_eq!(report.mode, "build-history");
@@ -171,6 +199,24 @@ mod tests {
         // Report head selection.
         assert_eq!(report.selected_point_id.as_deref(), Some(head.id.as_str()));
         assert_eq!(report.selected_file_path.as_deref(), Some("docs/a.md"));
+    }
+
+    #[test]
+    fn report_without_blocks_skips_block_rendering() {
+        let r = TempRepo::init();
+        r.commit_file("docs/a.md", "# A\n\nfirst paragraph.\n", "add a");
+        r.commit_file("docs/a.md", "# A\n\nsecond paragraph.\n", "edit a");
+
+        let report = build_doc_diff_report(&r.repo, "docs/a.md", 50)
+            .unwrap()
+            .unwrap();
+        // Hunks/line stats are still computed and the change is not skipped.
+        let head = &report.timeline[0];
+        let file = &head.files[0];
+        assert!(!file.hunks.is_empty());
+        assert!(head.total_added_lines >= 1 && head.total_removed_lines >= 1);
+        // Blocks are not built/rendered in the build path — nothing consumes them.
+        assert!(file.blocks.is_none());
     }
 
     #[test]
