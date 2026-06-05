@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Graph</title>
+  {% if base %}<base href="{{ base | safe }}/" />{% endif %}
+  <title>{% if site_title %}Graph — {{ site_title }}{% else %}Graph{% endif %}</title>
   <link rel="stylesheet" href="/docgen.css" />
 </head>
 <body>

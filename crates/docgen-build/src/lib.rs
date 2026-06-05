@@ -155,6 +155,8 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
                     slug: &doc.slug,
                     tree: &tree,
                     buckets: &buckets,
+                    base: &config.base,
+                    site_title: config.title.as_deref().unwrap_or(""),
                 })?;
                 let out_dir = dist_dir.join(&doc.slug).join("history");
                 fs::create_dir_all(&out_dir)?;
@@ -178,6 +180,8 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
             has_history: docs_with_history.contains(&doc.slug),
             has_mermaid: doc.has_mermaid,
             has_math: doc.has_math,
+            base: &config.base,
+            site_title: config.title.as_deref().unwrap_or(""),
         })?;
 
         // `guide/intro` -> `dist/guide/intro/index.html` (clean URLs).
@@ -205,6 +209,8 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
         graph_json: &graph_json,
         node_count: graph_data.nodes.len(),
         edge_count: graph_data.edges.len(),
+        base: &config.base,
+        site_title: config.title.as_deref().unwrap_or(""),
     })?;
     let graph_dir = dist_dir.join("graph");
     fs::create_dir_all(&graph_dir)?;

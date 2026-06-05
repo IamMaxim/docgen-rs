@@ -77,6 +77,10 @@ pub struct HistoryContext<'a> {
     pub slug: &'a str,
     pub tree: &'a [TreeNode],
     pub buckets: &'a [TimelineBucketView],
+    /// Deployed base path (e.g. `/docs`); `""` → no `<base>` tag (default).
+    pub base: &'a str,
+    /// Site title; `""` → no `"page — site"` suffix (default).
+    pub site_title: &'a str,
 }
 
 /// Everything the `/graph/` page render needs. `graph_json` is the serialized
@@ -87,6 +91,10 @@ pub struct GraphContext<'a> {
     pub graph_json: &'a str,
     pub node_count: usize,
     pub edge_count: usize,
+    /// Deployed base path (e.g. `/docs`); `""` → no `<base>` tag (default).
+    pub base: &'a str,
+    /// Site title; `""` → no `"page — site"` suffix (default).
+    pub site_title: &'a str,
 }
 
 /// Everything a single page render needs.
@@ -103,6 +111,10 @@ pub struct PageContext<'a> {
     pub has_mermaid: bool,
     /// Whether this page contains math (gates the KaTeX stylesheet `<head>` link).
     pub has_math: bool,
+    /// Deployed base path (e.g. `/docs`); `""` → no `<base>` tag (default).
+    pub base: &'a str,
+    /// Site title; `""` → no `"page — site"` suffix (default).
+    pub site_title: &'a str,
 }
 
 /// Owns a configured minijinja environment with the `page` template registered.
@@ -135,6 +147,8 @@ impl Renderer {
             has_history => ctx.has_history,
             has_mermaid => ctx.has_mermaid,
             has_math => ctx.has_math,
+            base => ctx.base,
+            site_title => ctx.site_title,
             search_enabled => true,
         })
     }
@@ -153,6 +167,8 @@ impl Renderer {
             graph_json => safe_json,
             node_count => ctx.node_count,
             edge_count => ctx.edge_count,
+            base => ctx.base,
+            site_title => ctx.site_title,
             search_enabled => true,
         })
     }
@@ -165,6 +181,8 @@ impl Renderer {
             slug => ctx.slug,
             tree => ctx.tree,
             buckets => ctx.buckets,
+            base => ctx.base,
+            site_title => ctx.site_title,
         })
     }
 }
@@ -190,10 +208,70 @@ mod tests {
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
+                base: "",
+                site_title: "",
             })
             .unwrap();
         assert!(html.contains("<title>My Page</title>"));
         assert!(html.contains("<p>hello</p>"));
+    }
+
+    #[test]
+    fn page_title_gets_site_suffix_when_configured() {
+        let html = renderer()
+            .render_page(&PageContext {
+                title: "Intro",
+                site_title: "My Docs",
+                base: "",
+                slug: "x",
+                body_html: "",
+                tree: &[],
+                backlinks: &[],
+                has_history: false,
+                has_mermaid: false,
+                has_math: false,
+            })
+            .unwrap();
+        assert!(html.contains("<title>Intro — My Docs</title>"));
+    }
+
+    #[test]
+    fn no_site_title_leaves_plain_title_and_no_base() {
+        let html = renderer()
+            .render_page(&PageContext {
+                title: "Intro",
+                site_title: "",
+                base: "",
+                slug: "x",
+                body_html: "",
+                tree: &[],
+                backlinks: &[],
+                has_history: false,
+                has_mermaid: false,
+                has_math: false,
+            })
+            .unwrap();
+        assert!(html.contains("<title>Intro</title>"));
+        assert!(!html.contains("<base"));
+    }
+
+    #[test]
+    fn base_emits_base_tag() {
+        let html = renderer()
+            .render_page(&PageContext {
+                title: "X",
+                site_title: "",
+                base: "/docs",
+                slug: "x",
+                body_html: "",
+                tree: &[],
+                backlinks: &[],
+                has_history: false,
+                has_mermaid: false,
+                has_math: false,
+            })
+            .unwrap();
+        assert!(html.contains(r#"<base href="/docs/" />"#));
     }
 
     #[test]
@@ -213,6 +291,8 @@ mod tests {
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
+                base: "",
+                site_title: "",
             })
             .unwrap();
         assert!(html.contains(r#"href="/guide/intro""#));
@@ -236,6 +316,8 @@ mod tests {
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
+                base: "",
+                site_title: "",
             })
             .unwrap();
         // Title is HTML-escaped.
@@ -264,6 +346,8 @@ mod tests {
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
+                base: "",
+                site_title: "",
             })
             .unwrap();
         assert!(html.contains("Backlinks"));
@@ -283,6 +367,8 @@ mod tests {
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
+                base: "",
+                site_title: "",
             })
             .unwrap();
         assert!(!html.contains("Backlinks"));
@@ -300,6 +386,8 @@ mod tests {
                 has_history: true,
                 has_mermaid: false,
                 has_math: false,
+                base: "",
+                site_title: "",
             })
             .unwrap();
         assert!(with.contains(r#"href="/guide/intro/history""#));
@@ -314,6 +402,8 @@ mod tests {
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
+                base: "",
+                site_title: "",
             })
             .unwrap();
         assert!(!without.contains(r#"href="/guide/intro/history""#));
@@ -331,6 +421,8 @@ mod tests {
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
+                base: "",
+                site_title: "",
             })
             .unwrap();
         assert!(html.contains(r#"src="/bootstrap.js""#));
@@ -347,6 +439,8 @@ mod tests {
                 has_history: false,
                 has_mermaid: true,
                 has_math: false,
+                base: "",
+                site_title: "",
             })
             .unwrap();
         assert!(withm.contains(r#"src="/islands/mermaid.js""#));
@@ -364,6 +458,8 @@ mod tests {
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
+                base: "",
+                site_title: "",
             })
             .unwrap();
         assert!(!no_math.contains("katex.min.css"));
@@ -378,6 +474,8 @@ mod tests {
                 has_history: false,
                 has_mermaid: false,
                 has_math: true,
+                base: "",
+                site_title: "",
             })
             .unwrap();
         assert!(with_math.contains(r#"href="/vendor/katex/katex.min.css""#));
@@ -451,6 +549,8 @@ mod tests {
                 graph_json: json,
                 node_count: 1,
                 edge_count: 0,
+                base: "",
+                site_title: "",
             })
             .unwrap();
         assert!(html.contains("<title>Graph</title>"));
@@ -478,6 +578,8 @@ mod tests {
                 graph_json: r#"{"nodes":[],"edges":[]}"#,
                 node_count: 0,
                 edge_count: 0,
+                base: "",
+                site_title: "",
             })
             .unwrap();
         assert!(html.contains(r#"href="/guide/intro""#));
@@ -494,6 +596,8 @@ mod tests {
                 graph_json: json,
                 node_count: 1,
                 edge_count: 0,
+                base: "",
+                site_title: "",
             })
             .unwrap();
         assert!(!html.contains("a</script>b")); // raw close-tag must not survive
@@ -509,6 +613,8 @@ mod tests {
                 graph_json: r#"{"nodes":[],"edges":[]}"#,
                 node_count: 0,
                 edge_count: 0,
+                base: "",
+                site_title: "",
             })
             .unwrap();
         assert!(html.contains(r#"href="/graph""#));
@@ -526,6 +632,8 @@ mod tests {
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
+                base: "",
+                site_title: "",
             })
             .unwrap();
         assert!(html.contains(r#"href="/graph""#));
@@ -540,6 +648,8 @@ mod tests {
                 slug: "a",
                 tree: &[],
                 buckets: &buckets,
+                base: "",
+                site_title: "",
             })
             .unwrap();
         assert!(html.contains("<title>History: A</title>"));
@@ -583,6 +693,8 @@ mod tests {
                 slug: "a",
                 tree: &[],
                 buckets: &buckets,
+                base: "",
+                site_title: "",
             })
             .unwrap();
         assert!(html.contains("&lt;script&gt;alert(1)&lt;&#x2f;script&gt;"));
