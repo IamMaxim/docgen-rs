@@ -70,9 +70,12 @@ pub struct HistoryContext<'a> {
 #[derive(Serialize)]
 pub struct PageContext<'a> {
     pub title: &'a str,
+    pub slug: &'a str,
     pub body_html: &'a str,
     pub tree: &'a [TreeNode],
     pub backlinks: &'a [Backlink],
+    /// Whether this doc has an emitted `/<slug>/history/` page (drives the nav link).
+    pub has_history: bool,
 }
 
 /// Owns a configured minijinja environment with the `page` template registered.
@@ -98,8 +101,10 @@ impl Renderer {
         tmpl.render(context! {
             title => ctx.title,
             body => ctx.body_html,
+            slug => ctx.slug,
             tree => ctx.tree,
             backlinks => ctx.backlinks,
+            has_history => ctx.has_history,
             search_enabled => true,
         })
     }
@@ -130,9 +135,11 @@ mod tests {
         let html = renderer()
             .render_page(&PageContext {
                 title: "My Page",
+                slug: "my-page",
                 body_html: "<p>hello</p>",
                 tree: &[],
                 backlinks: &[],
+                has_history: false,
             })
             .unwrap();
         assert!(html.contains("<title>My Page</title>"));
@@ -147,7 +154,14 @@ mod tests {
             title: "Intro".into(),
         }];
         let html = renderer()
-            .render_page(&PageContext { title: "X", body_html: "", tree: &tree, backlinks: &[] })
+            .render_page(&PageContext {
+                title: "X",
+                slug: "x",
+                body_html: "",
+                tree: &tree,
+                backlinks: &[],
+                has_history: false,
+            })
             .unwrap();
         assert!(html.contains(r#"href="/guide/intro""#));
         assert!(html.contains(">Intro</a>"));
@@ -163,9 +177,11 @@ mod tests {
         let html = renderer()
             .render_page(&PageContext {
                 title: "Tom & Jerry <script>",
+                slug: "tj",
                 body_html: "<p>raw & ok</p>",
                 tree: &tree,
                 backlinks: &[],
+                has_history: false,
             })
             .unwrap();
         // Title is HTML-escaped.
@@ -180,13 +196,18 @@ mod tests {
     #[test]
     fn renders_backlinks_section() {
         use docgen_core::model::Backlink;
-        let backlinks = vec![Backlink { slug: "a".into(), title: "Page A".into() }];
+        let backlinks = vec![Backlink {
+            slug: "a".into(),
+            title: "Page A".into(),
+        }];
         let html = renderer()
             .render_page(&PageContext {
                 title: "X",
+                slug: "x",
                 body_html: "",
                 tree: &[],
                 backlinks: &backlinks,
+                has_history: false,
             })
             .unwrap();
         assert!(html.contains("Backlinks"));
@@ -197,9 +218,43 @@ mod tests {
     #[test]
     fn omits_backlinks_section_when_empty() {
         let html = renderer()
-            .render_page(&PageContext { title: "X", body_html: "", tree: &[], backlinks: &[] })
+            .render_page(&PageContext {
+                title: "X",
+                slug: "x",
+                body_html: "",
+                tree: &[],
+                backlinks: &[],
+                has_history: false,
+            })
             .unwrap();
         assert!(!html.contains("Backlinks"));
+    }
+
+    #[test]
+    fn renders_history_link_only_when_has_history() {
+        let with = renderer()
+            .render_page(&PageContext {
+                title: "X",
+                slug: "guide/intro",
+                body_html: "",
+                tree: &[],
+                backlinks: &[],
+                has_history: true,
+            })
+            .unwrap();
+        assert!(with.contains(r#"href="/guide/intro/history""#));
+
+        let without = renderer()
+            .render_page(&PageContext {
+                title: "X",
+                slug: "guide/intro",
+                body_html: "",
+                tree: &[],
+                backlinks: &[],
+                has_history: false,
+            })
+            .unwrap();
+        assert!(!without.contains(r#"href="/guide/intro/history""#));
     }
 
     #[test]

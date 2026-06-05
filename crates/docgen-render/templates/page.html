@@ -22,6 +22,9 @@
     {{ render_nodes(tree) }}
   </nav>
   <main class="docgen-content">
+    {% if has_history %}
+    <p class="docgen-history-link"><a href="/{{ slug | safe }}/history">History</a></p>
+    {% endif %}
     {{ body | safe }}
     {% if backlinks %}
     <section class="docgen-backlinks">

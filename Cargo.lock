@@ -338,9 +338,12 @@ name = "docgen"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "docgen-core",
+ "docgen-diff",
  "docgen-render",
+ "git2",
  "serde_json",
 ]
 

@@ -1,4 +1,5 @@
 mod build;
+mod history;
 
 use std::path::PathBuf;
 
@@ -6,7 +7,11 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "docgen", version, about = "Static documentation-site generator")]
+#[command(
+    name = "docgen",
+    version,
+    about = "Static documentation-site generator"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
