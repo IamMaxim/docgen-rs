@@ -29,9 +29,21 @@ no push/PR/remote; quarantine irreversible decisions behind a seam and flag them
 | P3 | Build-time KaTeX + Mermaid + **`docgen-assets`** crate (Alpine + island embedding infra) | P1 | GREEN | 43248f3 |
 | P4 | Graph view (Rust precomputes nodes/edges; JS renders SVG/canvas island) | P1, P3 | GREEN | e4414f6 |
 | P5 | Dev server (`axum` + `notify` + live reload) + CodeMirror editor island | P3 | GREEN | 48b2701 |
-| P6 | `docgen init` scaffold + custom-component directive system + binary distribution | P3 | TODO | — |
+| P6 | `docgen init` scaffold + custom-component directive system + binary distribution | P3 | IN-PROGRESS | — |
+| P7 | **Design / theme** — real site CSS: layout/grid, typography, sidebar/topbar, dark-mode toggle, responsive. (User-requested follow-up — site is currently unstyled.) | P0–P6 | TODO | — |
 
 Status legend: TODO / IN-PROGRESS / GREEN / BLOCKED.
+
+## P7 — Design/theme (user-requested follow-up, added 2026-06-05 ~18:50 MSK)
+**Why:** user observed (correctly, confirmed via screenshots) the built site has essentially ZERO theme CSS —
+P0 shipped none by design, P1–P6 only added component-scoped styles (search modal, diff, graph, math). No
+global layout/typography/sidebar/topbar/dark-mode. Functionally complete, visually broken.
+**Scope:** a real `docgen.css` theme — reset/tokens, page layout (sidebar + content + right rail), type scale,
+code/callout/table styling, working light/dark ThemeToggle, responsive/mobile. Reference the original Svelte
+`src/lib/styles/` for intended look.
+**Validation bar (explicit user requirement):** drive by ACTUAL SCREENSHOTS in Chrome — every page type (home,
+doc, history, graph, math, diagram, custom-component, search-open, dark mode) must look polished, not merely
+"has CSS". Use frontend-design skill principles; iterate on screenshots.
 
 ## Notes / open seams
 - **Island infrastructure lands in P3** (the `docgen-assets` crate + Alpine bootstrap + glue-JS emission).
