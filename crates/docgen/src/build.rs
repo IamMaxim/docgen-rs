@@ -109,7 +109,7 @@ pub fn build(project_root: &Path) -> Result<()> {
             tree: &tree,
             backlinks,
             has_history: docs_with_history.contains(&doc.slug),
-            has_mermaid: false,
+            has_mermaid: doc.has_mermaid,
             has_math: doc.has_math,
         })?;
 
@@ -125,13 +125,12 @@ pub fn build(project_root: &Path) -> Result<()> {
         docgen_core::search::index_json(&site.search),
     )?;
 
-    // All vendored + authored client assets flow through docgen-assets. The
-    // mermaid signal is wired in Cluster C (C-6); for now the build-time KaTeX
-    // path and no-mermaid defaults apply.
-    let include_mermaid = false;
+    // All vendored + authored client assets flow through docgen-assets. Mermaid
+    // (lib + island) ships only when a page used a diagram; math renders at build
+    // time (the default), so no runtime KaTeX JS ships.
     let emit_opts = docgen_assets::EmitOptions {
         include_katex_runtime: false,
-        include_mermaid,
+        include_mermaid: site.any_mermaid,
     };
     docgen_assets::emit(&docgen_assets::assets_for(&emit_opts), &dist_dir)?;
 

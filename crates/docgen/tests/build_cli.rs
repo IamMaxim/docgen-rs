@@ -93,6 +93,55 @@ fn builds_fixture_site() {
     assert!(home.contains(r#"src="/bootstrap.js""#));
     assert!(home.contains(r#"src="/vendor/alpine/alpine.min.js""#));
 
+    // No page in this fixture uses a diagram, so the mermaid lib + island are
+    // NOT emitted, and no page links the island script.
+    assert!(!tmp.join("dist/vendor/mermaid/mermaid.min.js").exists());
+    assert!(!tmp.join("dist/islands/mermaid.js").exists());
+    assert!(!home.contains("islands/mermaid.js"));
+
+    let _ = fs::remove_dir_all(&tmp);
+}
+
+/// Mermaid island: a doc with a ```mermaid fence builds an inert island
+/// container, the page links the island script, and the lazy lib + island JS are
+/// emitted. A page-level gate keeps both off pages without diagrams.
+#[test]
+fn builds_mermaid_page_with_lazy_island() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let workspace = manifest.parent().unwrap().parent().unwrap();
+    let fixture = workspace.join("fixtures/site-basic");
+
+    let tmp = std::env::temp_dir()
+        .join(format!("docgen_build_cli_mermaid_test_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&tmp);
+    fs::create_dir_all(tmp.join("docs")).unwrap();
+    fs::copy(fixture.join("docs/diagram.md"), tmp.join("docs/diagram.md")).unwrap();
+    // A plain page alongside it to prove per-page gating of the island script.
+    fs::copy(fixture.join("docs/index.md"), tmp.join("docs/index.md")).unwrap();
+
+    let status = Command::new(env!("CARGO_BIN_EXE_docgen"))
+        .arg("build")
+        .arg(&tmp)
+        .status()
+        .unwrap();
+    assert!(status.success());
+
+    let diag = fs::read_to_string(tmp.join("dist/diagram/index.html")).unwrap();
+    // Inert island container with the diagram source preserved.
+    assert!(diag.contains("docgen-mermaid"), "no container: {diag}");
+    assert!(diag.contains(r#"x-data="docgenMermaid""#));
+    assert!(diag.contains("graph TD")); // source preserved
+    // The diagram page links the lazy island script.
+    assert!(diag.contains(r#"src="/islands/mermaid.js""#));
+
+    // Lazy lib + island JS emitted (the island fetches the lib at runtime).
+    assert!(tmp.join("dist/vendor/mermaid/mermaid.min.js").is_file());
+    assert!(tmp.join("dist/islands/mermaid.js").is_file());
+
+    // Per-page gate: the plain page does NOT link the island script.
+    let home = fs::read_to_string(tmp.join("dist/index/index.html")).unwrap();
+    assert!(!home.contains("islands/mermaid.js"));
+
     let _ = fs::remove_dir_all(&tmp);
 }
 
