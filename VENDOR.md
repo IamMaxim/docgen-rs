@@ -29,6 +29,11 @@ backend), verified to compile + render on this machine (~8s). `katex.min.js` and
 The default build ships **zero runtime JS for math**; it does ship the KaTeX **css + fonts**,
 which the build-time-rendered HTML requires for display.
 
+`render_math` uses `throw_on_error = true` (not the plan's draft `false`): with `false`, KaTeX
+silently emits its own red error markup and returns `Ok`, which would never reach our graceful
+fallback. With `true`, a genuine parse failure returns `Err`, letting us substitute a clean
+escaped `<code class="docgen-math-error">…</code>` (the behaviour the B-2 test asserts).
+
 ## Search trigger (non-migration note)
 
 The P1 search modal (`search.js`) stays a standalone `defer`-loaded classic script, not an Alpine
