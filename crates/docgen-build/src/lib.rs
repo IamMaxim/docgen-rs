@@ -2,6 +2,12 @@
 //! `docs/` tree into an output dir. Both `docgen build` and the dev server
 //! (`docgen-server`) call [`build_site`], so the pipeline lives here once
 //! rather than inline in the bin.
+//!
+//! [`build_site`] loads an optional `docgen.toml` (`docgen-config`) and builds a
+//! custom-component registry (`docgen-components`: embedded built-ins overridden
+//! by a project `components/` dir). Config gates the graph/search/math/mermaid
+//! features and supplies the site title/`base`; the registry drives directive
+//! rendering and per-page component asset emission.
 
 mod history;
 use history::report_to_buckets;
