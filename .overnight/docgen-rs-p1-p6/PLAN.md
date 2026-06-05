@@ -28,7 +28,7 @@ no push/PR/remote; quarantine irreversible decisions behind a seam and flag them
 | P2 | Git diff timeline (`git2` + port of diff algorithms) | P0 | GREEN | f779ec8 |
 | P3 | Build-time KaTeX + Mermaid + **`docgen-assets`** crate (Alpine + island embedding infra) | P1 | GREEN | 43248f3 |
 | P4 | Graph view (Rust precomputes nodes/edges; JS renders SVG/canvas island) | P1, P3 | GREEN | e4414f6 |
-| P5 | Dev server (`axum` + `notify` + live reload) + CodeMirror editor island | P3 | TODO | — |
+| P5 | Dev server (`axum` + `notify` + live reload) + CodeMirror editor island | P3 | GREEN | 48b2701 |
 | P6 | `docgen init` scaffold + custom-component directive system + binary distribution | P3 | TODO | — |
 
 Status legend: TODO / IN-PROGRESS / GREEN / BLOCKED.
@@ -42,7 +42,7 @@ Status legend: TODO / IN-PROGRESS / GREEN / BLOCKED.
 - Interactive phases to validate live in Chrome: P3 (mermaid/katex render), P4 (graph), P5 (editor + live reload).
 
 ## Current position
-P4 GREEN (e4414f6), validated live (/graph/ page: Rust force-layout, SVG island, hover-highlights node+edges green, click-navigates). Next: launch P5 (dev server + CodeMirror editor).
+P5 GREEN (48b2701), validated live (docgen dev: SSE live-reload auto-reloaded on disk edit; CodeMirror in-browser editor opened with md highlighting + Save). New crates docgen-build (reusable build_site) + docgen-server (axum dev server). Next: launch P6 (init + custom-component directives + distribution) — the FINAL phase.
 
 **P1 API surface now in place** (later phases depend on these):
 - `docgen-core`: `pipeline::{prepare, render_docs, PreparedDoc, SiteBuild{docs,graph,search}}` (two-pass render), `graph::{LinkGraph{edges,backlinks}, build_link_graph}`, `model::{LinkEdge, Backlink, SearchEntry}`, `wikilink::{parse_wikilink, resolve_target, transform_wikilinks}`, `markdown::{comrak_options, format_ast, syntect_adapter (OnceLock), SYNTECT_THEME}`, `search::{plaintext(&AstNode), index_json}`.
