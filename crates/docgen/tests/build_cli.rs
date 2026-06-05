@@ -48,5 +48,22 @@ fn builds_fixture_site() {
     assert!(home.contains("Backlinks"));
     assert!(home.contains(r#"href="/guide/intro""#));
 
+    // Search index emitted with one entry per doc, plaintext, no markup.
+    let idx = fs::read_to_string(tmp.join("dist/search-index.json")).unwrap();
+    assert!(idx.contains(r#""slug":"index""#));
+    assert!(idx.contains(r#""slug":"guide/intro""#));
+    assert!(idx.contains(r#""title":"Home""#));
+    assert!(!idx.contains("[[")); // wikilink brackets stripped from indexed text
+    assert!(!idx.contains("<")); // no HTML markup in indexed text
+
+    // Vendored client assets emitted.
+    let js = fs::read_to_string(tmp.join("dist/search.js")).unwrap();
+    assert!(js.contains("search-index.json"));
+    assert!(tmp.join("dist/docgen.css").exists());
+
+    // Template wires the search trigger + script.
+    assert!(home.contains("data-docgen-search"));
+    assert!(home.contains(r#"src="/search.js""#));
+
     let _ = fs::remove_dir_all(&tmp);
 }
