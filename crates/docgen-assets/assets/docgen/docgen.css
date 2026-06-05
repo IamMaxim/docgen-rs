@@ -200,7 +200,6 @@ kbd,
 	gap: 10px;
 	height: var(--topbar-height);
 	padding: 0 18px;
-	border-right: 1px solid var(--border);
 	color: var(--text);
 	text-decoration: none;
 }
@@ -405,6 +404,7 @@ kbd,
 .docgen-rail-resizer {
 	position: sticky;
 	top: var(--topbar-height);
+  margin-left: -3px;
 	height: calc(100vh - var(--topbar-height));
 	width: 5px;
 	cursor: col-resize;
@@ -583,7 +583,8 @@ kbd,
 	gap: 26px;
 	max-height: calc(100vh - var(--topbar-height) - 48px);
 	overflow-y: auto;
-	padding-left: 18px;
+	padding-left: 16px;
+	padding-right: 16px;
 	border-left: 1px solid var(--hairline);
 	font-size: 12.5px;
 }
@@ -803,9 +804,15 @@ kbd,
 	line-height: 1.5;
 	box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
 	pointer-events: none;
+	opacity: 0;
+	transform: translateY(-2px);
+	transition:
+		opacity 90ms ease,
+		transform 90ms ease;
 }
-.docgen-wikilink-tooltip[hidden] {
-	display: none;
+.docgen-wikilink-tooltip.is-visible {
+	opacity: 1;
+	transform: translateY(0);
 }
 
 /* inline code — theme-aware */
