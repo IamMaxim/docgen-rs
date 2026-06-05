@@ -148,7 +148,7 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
     // registry component's style (small + cacheable, linked on every page that
     // has any style); `components.js` carries only the island.js of components
     // actually *used* across the site (per-page link gating below decides which
-    // pages reference it). Name-sorted for deterministic output.
+    // pages reference it). Emitted in BTreeMap name-key order (deterministic).
     let has_components_css = !registry.styles().is_empty();
     let used_components: std::collections::BTreeSet<&str> = site
         .docs

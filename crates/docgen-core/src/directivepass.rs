@@ -125,17 +125,79 @@ fn parse_block_open(trimmed: &str) -> Option<(String, String)> {
     Some((name.to_string(), attrs))
 }
 
+/// A fenced-code-block delimiter parsed from a line: the fence char (`` ` `` or
+/// `~`), its run length, and the line's leading indentation width. A closing
+/// fence must use the same char with a run length >= the opener's and carry no
+/// info string. Returned for any line that *could* open or close a fence.
+struct Fence {
+    ch: char,
+    len: usize,
+    has_info: bool,
+}
+
+/// If `line` is a fenced-code delimiter (`` ``` ``/`~~~`, possibly indented up to
+/// three spaces, with an optional info string), return its `Fence`. Mirrors
+/// CommonMark fence recognition closely enough to guard directive content.
+fn parse_fence(line: &str) -> Option<Fence> {
+    let indent = line.len() - line.trim_start().len();
+    if indent > 3 {
+        return None; // 4+ spaces is an indented code block, not a fence
+    }
+    let rest = &line[indent..];
+    let ch = rest.chars().next()?;
+    if ch != '`' && ch != '~' {
+        return None;
+    }
+    let len = rest.chars().take_while(|&c| c == ch).count();
+    if len < 3 {
+        return None;
+    }
+    let info = rest.chars().skip(len).collect::<String>();
+    let info = info.trim();
+    // A backtick info string may not itself contain a backtick (CommonMark).
+    if ch == '`' && info.contains('`') {
+        return None;
+    }
+    Some(Fence { ch, len, has_info: !info.is_empty() })
+}
+
 /// Pass 1: scan `body_md`, replace directives with sentinels, return instances
 /// (index-aligned with the sentinels). Unknown-vs-known is NOT decided here —
 /// every syntactic directive is extracted; resolution happens in `substitute`.
+///
+/// Code-aware: lines inside a fenced code block (and inline-code spans within a
+/// line) are emitted verbatim and never scanned for directives, so a doc that
+/// *documents* the directive syntax in a code sample keeps it literal.
 pub fn extract(body_md: &str) -> (String, Vec<DirectiveInstance>) {
     let mut instances: Vec<DirectiveInstance> = Vec::new();
     let mut out_lines: Vec<String> = Vec::new();
 
     let lines: Vec<&str> = body_md.split('\n').collect();
     let mut i = 0;
+    // Open fence we are currently inside, if any.
+    let mut open_fence: Option<Fence> = None;
     while i < lines.len() {
         let line = lines[i];
+
+        // Inside a fenced code block: emit verbatim, only watching for the close.
+        if let Some(open) = &open_fence {
+            if let Some(f) = parse_fence(line) {
+                if f.ch == open.ch && f.len >= open.len && !f.has_info {
+                    open_fence = None;
+                }
+            }
+            out_lines.push(line.to_string());
+            i += 1;
+            continue;
+        }
+        // A fence opener starts a code block; skip directive scanning until close.
+        if let Some(f) = parse_fence(line) {
+            open_fence = Some(f);
+            out_lines.push(line.to_string());
+            i += 1;
+            continue;
+        }
+
         let trimmed = line.trim();
 
         // Escaped directive opener: `\:::name...` → emit literal, drop backslash.
@@ -163,13 +225,10 @@ pub fn extract(body_md: &str) -> (String, Vec<DirectiveInstance>) {
                         closed = true;
                         break;
                     }
-                    inner.push(lines[j]);
                 } else if parse_block_open(t).is_some() {
                     depth += 1;
-                    inner.push(lines[j]);
-                } else {
-                    inner.push(lines[j]);
                 }
+                inner.push(lines[j]);
                 j += 1;
             }
             if closed {
@@ -226,6 +285,21 @@ fn scan_leaf_line(line: &str, instances: &mut Vec<DirectiveInstance>) -> String 
     let mut out = String::with_capacity(line.len());
     let mut i = 0;
     while i < chars.len() {
+        // Inline code span: a run of N backticks is closed by the next run of
+        // exactly N backticks. Everything between is emitted verbatim and never
+        // scanned for directives (so `` `:note[x]{}` `` stays literal source).
+        if chars[i] == '`' {
+            let run = (i..chars.len()).take_while(|&k| chars[k] == '`').count();
+            if let Some(end) = find_inline_code_close(&chars, i + run, run) {
+                out.extend(&chars[i..end]); // open + content + close, verbatim
+                i = end;
+            } else {
+                // Unterminated run: emit the backticks literally and continue.
+                out.extend(&chars[i..i + run]);
+                i += run;
+            }
+            continue;
+        }
         if chars[i] == ':' {
             // Not a leaf if preceded or followed by another colon (`::`).
             let prev_colon = i > 0 && chars[i - 1] == ':';
@@ -244,6 +318,25 @@ fn scan_leaf_line(line: &str, instances: &mut Vec<DirectiveInstance>) -> String 
         i += 1;
     }
     out
+}
+
+/// Given a backtick run of length `run` opened just before `from`, return the
+/// index *past* the matching closing run (a run of exactly `run` backticks), or
+/// `None` if the span is unterminated on this line.
+fn find_inline_code_close(chars: &[char], from: usize, run: usize) -> Option<usize> {
+    let mut j = from;
+    while j < chars.len() {
+        if chars[j] == '`' {
+            let close = (j..chars.len()).take_while(|&k| chars[k] == '`').count();
+            if close == run {
+                return Some(j + close);
+            }
+            j += close;
+        } else {
+            j += 1;
+        }
+    }
+    None
 }
 
 /// Try to parse a leaf directive starting at `chars[start] == ':'`. Returns the
@@ -279,7 +372,13 @@ fn try_parse_leaf(chars: &[char], start: usize) -> Option<(DirectiveInstance, us
     if i < chars.len() && chars[i] == '{' {
         i += 1; // skip '{'
         let a_start = i;
-        while i < chars.len() && chars[i] != '}' {
+        // Scan to the closing `}`, but skip any `}` inside a double-quoted value
+        // (mirrors parse_attrs' quote handling) so `{title="a } b"}` parses whole.
+        let mut in_quote = false;
+        while i < chars.len() && (in_quote || chars[i] != '}') {
+            if chars[i] == '"' {
+                in_quote = !in_quote;
+            }
             i += 1;
         }
         if i >= chars.len() {
@@ -491,5 +590,62 @@ mod extract_tests {
         let (out, inst) = extract(src);
         assert!(inst.is_empty());
         assert_eq!(out, src);
+    }
+
+    #[test]
+    fn block_directive_inside_fenced_code_is_left_literal() {
+        // A docs author showing the directive syntax in a ``` fence must keep it
+        // verbatim — comrak then renders the fence as a literal code block.
+        let src = "```\n:::callout{type=note}\nhello\n:::\n```\n";
+        let (out, inst) = extract(src);
+        assert!(inst.is_empty(), "directive inside a code fence must not be extracted");
+        assert!(out.contains(":::callout{type=note}"));
+        assert!(out.contains("hello"));
+        assert!(!out.contains("docgen-directive"));
+    }
+
+    #[test]
+    fn block_directive_inside_tilde_fence_with_info_is_left_literal() {
+        let src = "~~~markdown\n:::callout{type=warning}\nBe careful.\n:::\n~~~\n";
+        let (out, inst) = extract(src);
+        assert!(inst.is_empty());
+        assert!(out.contains(":::callout{type=warning}"));
+        assert!(out.contains("Be careful."));
+    }
+
+    #[test]
+    fn leaf_directive_inside_inline_code_is_left_literal() {
+        let src = "Use `:youtube[x]{id=1}` syntax.\n";
+        let (out, inst) = extract(src);
+        assert!(inst.is_empty(), "directive inside inline code must not be extracted");
+        assert!(out.contains("`:youtube[x]{id=1}`"));
+        assert!(!out.contains("docgen-directive"));
+    }
+
+    #[test]
+    fn leaf_directive_outside_inline_code_on_same_line_still_parses() {
+        // Inline code is skipped, but a real directive elsewhere on the line works.
+        let src = "code `:a[x]{}` then :note[real]{} here\n";
+        let (_out, inst) = extract(src);
+        assert_eq!(inst.len(), 1);
+        assert_eq!(inst[0].name, "note");
+        assert_eq!(inst[0].label, "real");
+    }
+
+    #[test]
+    fn indented_code_fence_is_respected() {
+        // A fence indented under a list item still guards its body.
+        let src = "- item\n\n  ```\n  :::callout{}\n  body\n  ```\n";
+        let (_out, inst) = extract(src);
+        assert!(inst.is_empty());
+    }
+
+    #[test]
+    fn leaf_attrs_with_brace_inside_quoted_value() {
+        // The closing `}` scan must respect quotes so `}` inside a value is kept.
+        let src = ":note[hi]{title=\"a } b\"}\n";
+        let (_out, inst) = extract(src);
+        assert_eq!(inst.len(), 1);
+        assert_eq!(inst[0].attrs.get("title").unwrap(), "a } b");
     }
 }

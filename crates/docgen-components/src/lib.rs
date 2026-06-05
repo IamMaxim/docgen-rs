@@ -112,13 +112,13 @@ impl Registry {
         self.map.contains_key(name)
     }
 
-    /// All components with an `island.js`, name-sorted — the concatenation order
-    /// for the emitted `components.js`.
+    /// All components with an `island.js`, in BTreeMap name-key order — the
+    /// concatenation order for the emitted `components.js` (deterministic).
     pub fn islands(&self) -> Vec<&Component> {
         self.map.values().filter(|c| c.island_js.is_some()).collect()
     }
 
-    /// All components with a `style.css`, name-sorted.
+    /// All components with a `style.css`, in BTreeMap name-key order (deterministic).
     pub fn styles(&self) -> Vec<&Component> {
         self.map.values().filter(|c| c.style_css.is_some()).collect()
     }
