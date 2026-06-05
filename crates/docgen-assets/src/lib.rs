@@ -116,11 +116,22 @@ pub fn katex_runtime_assets() -> Vec<Asset> {
     ]
 }
 
-/// Mermaid library + island glue. Emitted only when a page used a diagram.
-///
-/// Stub for Cluster A; filled in Cluster C (C-4).
+/// Mermaid library + island glue. Emitted only when a page used a diagram
+/// (gated by [`EmitOptions::include_mermaid`]). The island lazy-loads
+/// `mermaid.min.js` at runtime, so it ships only on pages with a diagram.
 pub fn mermaid_assets() -> Vec<Asset> {
-    vec![]
+    vec![
+        embed(
+            "vendor/mermaid/mermaid.min.js",
+            "vendor/mermaid/mermaid.min.js",
+            AssetKind::Js,
+        ),
+        embed(
+            "docgen/islands/mermaid.js",
+            "islands/mermaid.js",
+            AssetKind::Js,
+        ),
+    ]
 }
 
 /// Flags driving which conditional asset slices a build emits.
@@ -343,6 +354,25 @@ mod tests {
         });
         assert!(full.iter().any(|a| a.path.ends_with("katex.min.js")));
         assert!(full.iter().any(|a| a.path.ends_with("auto-render.min.js")));
+    }
+
+    #[test]
+    fn mermaid_slice_has_lib_and_island_and_is_gated() {
+        let m = mermaid_assets();
+        assert!(m.iter().any(|a| a.path.ends_with("mermaid.min.js")));
+        assert!(m.iter().any(|a| a.path == "islands/mermaid.js"));
+        for a in &m {
+            assert!(!a.bytes.is_empty(), "{} empty", a.path);
+        }
+        let full = assets_for(&EmitOptions {
+            include_mermaid: true,
+            ..Default::default()
+        });
+        assert!(full.iter().any(|a| a.path == "islands/mermaid.js"));
+        assert!(full.iter().any(|a| a.path.ends_with("mermaid.min.js")));
+        assert!(!assets_for(&EmitOptions::default())
+            .iter()
+            .any(|a| a.path.contains("mermaid")));
     }
 
     #[test]
