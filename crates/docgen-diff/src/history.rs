@@ -3,9 +3,18 @@
 //! Given a repo and a doc path (relative to repo root), list every commit that
 //! touched it — newest-first — paired with the file content at that revision and
 //! at its first parent. Rename-aware via diff `find_similar`, first-commit-safe,
-//! no-history-safe. This reproduces `git log --follow -- <path>` semantics:
-//! only first-parent rename chains are followed; copy detection is off (parity
-//! with the original, which relied on `git log`'s default rename following).
+//! no-history-safe.
+//!
+//! History selection mirrors `git log -- <path>`: the walk is over all
+//! reachable commits but a merge commit that is TREESAME (same blob at the
+//! tracked path) to one of its parents is simplified out, so a side-branch
+//! change is not duplicated under the merge subject. Rename following uses
+//! git2's `find_similar` with an explicit 50% similarity threshold (git's
+//! default); a rename that also rewrites the body below that threshold is seen
+//! as add+delete rather than a rename, so — like git without `--follow` — the
+//! pre-rename history is not stitched across in that case. Copy detection is
+//! off (parity with the original, which relied on `git log`'s default rename
+//! following).
 
 use std::path::Path;
 
@@ -82,11 +91,26 @@ pub fn doc_revisions(
             None => None,
         };
 
+        // History simplification (parity with `git log -- <path>`): a merge
+        // commit whose blob at the tracked path is identical (TREESAME) to one
+        // of its parents brought no change of its own on this path — the real
+        // authoring commit lives on that parent's history and is walked
+        // separately. Emitting the merge too would duplicate that change.
+        // Skip it (but still follow the rest of the walk).
+        if commit.parent_count() > 1
+            && merge_is_treesame_to_a_parent(&commit, &commit_tree, &current_path)?
+        {
+            continue;
+        }
+
         // Full tree diff with rename detection — we cannot pre-restrict the
         // pathspec because a rename changes the path.
         let mut diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&commit_tree), None)?;
         let mut find_opts = DiffFindOptions::new();
         find_opts.renames(true);
+        // Pin git's default 50% similarity threshold so rename detection does
+        // not drift with git2's internal default (documented behavior above).
+        find_opts.rename_threshold(50);
         diff.find_similar(Some(&mut find_opts))?;
 
         // Find a delta touching the currently-tracked path (as new or old side).
@@ -95,8 +119,7 @@ pub fn doc_revisions(
             let new_path = delta.new_file().path().and_then(|p| p.to_str());
             let old_path = delta.old_file().path().and_then(|p| p.to_str());
 
-            let touches = new_path == Some(current_path.as_str())
-                || (delta.status() == Delta::Renamed && new_path == Some(current_path.as_str()));
+            let touches = new_path == Some(current_path.as_str());
             // For deletions the path lives on the old side.
             let touches_deleted =
                 delta.status() == Delta::Deleted && old_path == Some(current_path.as_str());
@@ -140,7 +163,7 @@ pub fn doc_revisions(
         };
 
         out.push(RevisionContent {
-            meta: commit_meta(repo, &commit)?,
+            meta: commit_meta(&commit)?,
             old_text,
             new_text,
             status,
@@ -157,6 +180,30 @@ pub fn doc_revisions(
     }
 
     Ok(out)
+}
+
+/// True when the merge `commit`'s blob at `path` is identical to that path's
+/// blob in at least one parent (TREESAME). Mirrors git-log's merge history
+/// simplification: such a merge contributed no change of its own on `path`.
+fn merge_is_treesame_to_a_parent(
+    commit: &git2::Commit,
+    commit_tree: &Tree,
+    path: &str,
+) -> Result<bool, DiffError> {
+    let merge_oid = blob_oid_at(commit_tree, path);
+    for parent in commit.parents() {
+        let parent_tree = parent.tree()?;
+        if blob_oid_at(&parent_tree, path) == merge_oid {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// The blob oid at `path` within `tree`, or `None` when the path is absent or
+/// is not a blob. Two trees are TREESAME on `path` iff these match.
+fn blob_oid_at(tree: &Tree, path: &str) -> Option<git2::Oid> {
+    tree.get_path(Path::new(path)).ok().map(|e| e.id())
 }
 
 fn classify(delta: Delta) -> DocDiffFileStatus {
@@ -186,7 +233,7 @@ fn blob_text(repo: &Repository, tree: &Tree, path: &str) -> String {
     }
 }
 
-fn commit_meta(repo: &Repository, commit: &git2::Commit) -> Result<CommitMeta, DiffError> {
+fn commit_meta(commit: &git2::Commit) -> Result<CommitMeta, DiffError> {
     let hash = commit.id().to_string();
     let short_hash = commit
         .as_object()
@@ -210,7 +257,6 @@ fn commit_meta(repo: &Repository, commit: &git2::Commit) -> Result<CommitMeta, D
         .next()
         .unwrap_or("")
         .to_string();
-    let _ = repo;
     Ok(CommitMeta {
         hash,
         short_hash,
@@ -299,11 +345,96 @@ mod tests {
     }
 
     #[test]
+    fn doc_revisions_rename_with_heavy_edit_is_add_delete_not_followed() {
+        // A rename that also rewrites the body below the 50% threshold is seen
+        // as Added(new) rather than Renamed; the pre-rename history is not
+        // stitched across (documented non-`--follow` behavior). This pins the
+        // explicit threshold so the classification cannot silently drift.
+        let r = TempRepo::init();
+        r.commit_file(
+            "docs/old.md",
+            "alpha beta gamma\ndelta epsilon zeta\neta theta iota\n",
+            "create old",
+        );
+        r.rename_file("docs/old.md", "docs/new.md");
+        // Replace the body entirely so similarity is far below 50%.
+        std::fs::write(
+            r.dir.join("docs/new.md"),
+            "completely different content here\nnothing in common at all\nbrand new words only\n",
+        )
+        .unwrap();
+        r.commit_all("rename and rewrite");
+
+        let revs = doc_revisions(&r.repo, "docs/new.md", 50).unwrap();
+        // Not classified as a rename, so old.md history is not followed.
+        assert_eq!(revs.len(), 1);
+        assert_eq!(revs[0].status, DocDiffFileStatus::Added);
+        assert_eq!(revs[0].old_path, None);
+        assert_eq!(revs[0].old_text, "");
+    }
+
+    #[test]
     fn doc_revisions_empty_for_untouched_path() {
         let r = TempRepo::init();
         r.commit_file("docs/a.md", "x\n", "a");
         assert!(doc_revisions(&r.repo, "docs/ghost.md", 50)
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn doc_revisions_empty_for_initialized_repo_with_no_commits() {
+        // Initialized but no HEAD: exercises the push_head().is_err() branch.
+        let r = TempRepo::init();
+        assert!(doc_revisions(&r.repo, "docs/a.md", 50).unwrap().is_empty());
+    }
+
+    #[test]
+    fn doc_revisions_records_deletion() {
+        let r = TempRepo::init();
+        r.commit_file("docs/a.md", "# A\nbody\n", "add a");
+        r.delete_file("docs/a.md");
+        r.commit_all("remove a");
+
+        let revs = doc_revisions(&r.repo, "docs/a.md", 50).unwrap();
+        // Newest revision is the deletion.
+        assert_eq!(revs[0].meta.subject, "remove a");
+        assert_eq!(revs[0].status, DocDiffFileStatus::Deleted);
+        assert_eq!(revs[0].new_text, "");
+        assert_eq!(revs[0].old_text, "# A\nbody\n");
+    }
+
+    #[test]
+    fn doc_revisions_respects_limit() {
+        let r = TempRepo::init();
+        r.commit_file("docs/a.md", "1\n", "edit 1");
+        r.commit_file("docs/a.md", "2\n", "edit 2");
+        r.commit_file("docs/a.md", "3\n", "edit 3");
+
+        let revs = doc_revisions(&r.repo, "docs/a.md", 2).unwrap();
+        assert_eq!(revs.len(), 2);
+        assert_eq!(revs[0].meta.subject, "edit 3");
+        assert_eq!(revs[1].meta.subject, "edit 2");
+    }
+
+    #[test]
+    fn doc_revisions_skips_merge_commit_treesame_to_a_parent() {
+        // Reproduces `git log -- docs/a.md` history simplification: a merge that
+        // brings a side-branch change in (TREESAME to the side parent) must NOT
+        // appear as a duplicate revision alongside the real authoring commit.
+        let r = TempRepo::init();
+        r.commit_file("docs/a.md", "# A\nl1\n", "base");
+
+        r.checkout_new_branch("feature");
+        r.commit_file("docs/a.md", "# A\nl1\nfeatureline\n", "feature edit");
+
+        r.checkout_branch("master");
+        r.commit_file("docs/b.txt", "b\n", "unrelated b");
+        r.merge_no_ff("feature", "merge feature");
+
+        let revs = doc_revisions(&r.repo, "docs/a.md", 50).unwrap();
+        let subjects: Vec<&str> = revs.iter().map(|x| x.meta.subject.as_str()).collect();
+        // Only the real authoring commit + base — the merge is simplified out.
+        assert_eq!(subjects, vec!["feature edit", "base"]);
     }
 }

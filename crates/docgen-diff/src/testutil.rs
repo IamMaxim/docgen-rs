@@ -72,9 +72,65 @@ impl TempRepo {
         std::fs::rename(self.dir.join(from), to_abs).unwrap();
     }
 
-    #[allow(dead_code)]
     pub fn delete_file(&self, rel: &str) {
         std::fs::remove_file(self.dir.join(rel)).unwrap();
+    }
+
+    /// Create a branch at HEAD and check it out (working tree follows HEAD).
+    pub fn checkout_new_branch(&self, name: &str) {
+        let head = self.repo.head().unwrap().target().unwrap();
+        let commit = self.repo.find_commit(head).unwrap();
+        self.repo.branch(name, &commit, false).unwrap();
+        self.checkout_branch(name);
+    }
+
+    /// Check out an existing branch, updating HEAD and the working tree.
+    pub fn checkout_branch(&self, name: &str) {
+        let refname = format!("refs/heads/{name}");
+        let obj = self.repo.revparse_single(&refname).unwrap();
+        let mut opts = git2::build::CheckoutBuilder::new();
+        opts.force();
+        self.repo.checkout_tree(&obj, Some(&mut opts)).unwrap();
+        self.repo.set_head(&refname).unwrap();
+    }
+
+    /// Merge `branch` into the current HEAD with a `--no-ff` style merge commit
+    /// (two parents: current HEAD then `branch`). Assumes a clean, conflict-free
+    /// merge of trees; uses the branch tip's tree as the merge result, which is
+    /// sufficient for hermetic doc-history tests.
+    pub fn merge_no_ff(&self, branch: &str, subject: &str) -> String {
+        let head_oid = self.repo.head().unwrap().target().unwrap();
+        let head_commit = self.repo.find_commit(head_oid).unwrap();
+        let branch_obj = self
+            .repo
+            .revparse_single(&format!("refs/heads/{branch}"))
+            .unwrap();
+        let branch_commit = branch_obj.peel_to_commit().unwrap();
+
+        let mut idx = self
+            .repo
+            .merge_commits(&head_commit, &branch_commit, None)
+            .unwrap();
+        let tree_oid = idx.write_tree_to(&self.repo).unwrap();
+        let tree = self.repo.find_tree(tree_oid).unwrap();
+        let sig = Signature::now("docgen test", "test@example.com").unwrap();
+        let oid = self
+            .repo
+            .commit(
+                Some("HEAD"),
+                &sig,
+                &sig,
+                subject,
+                &tree,
+                &[&head_commit, &branch_commit],
+            )
+            .unwrap();
+        // Sync the working tree/index to the new HEAD.
+        let obj = self.repo.find_object(oid, None).unwrap();
+        let mut opts = git2::build::CheckoutBuilder::new();
+        opts.force();
+        self.repo.checkout_tree(&obj, Some(&mut opts)).unwrap();
+        oid.to_string()
     }
 }
 
