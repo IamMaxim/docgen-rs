@@ -478,6 +478,57 @@ mod tests {
     }
 
     #[test]
+    fn shared_css_styles_search_modal_and_results() {
+        let s = shared_css();
+        for sel in [".docgen-search-box", ".docgen-search-result", ".is-selected"] {
+            assert!(s.contains(sel), "search css missing {sel}");
+        }
+    }
+
+    #[test]
+    fn shared_css_responsive_has_mobile_drawer() {
+        let s = shared_css();
+        assert!(s.contains("@media"));
+        assert!(s.contains("max-width: 768px"));
+        // the off-canvas drawer + open state
+        assert!(s.contains(".docgen-sidebar.is-open"));
+    }
+
+    #[test]
+    fn callout_css_uses_tokens_not_hardcoded_dark() {
+        let c = builtin_components()
+            .into_iter()
+            .find(|c| c.name == "callout")
+            .expect("callout builtin");
+        let css = c.style_css.expect("callout has style.css");
+        assert!(css.contains("var(--"), "callout css must use design tokens");
+        assert!(
+            !css.contains("#0b1220"),
+            "callout css must not keep hardcoded dark surface"
+        );
+        // semantic variants stay tokenized
+        for v in [".docgen-callout--note", ".docgen-callout--warning"] {
+            assert!(css.contains(v), "callout css missing {v}");
+        }
+    }
+
+    #[test]
+    fn dev_editor_css_is_tokenized() {
+        let css = std::str::from_utf8(
+            ASSETS
+                .get_file("docgen/dev/editor.css")
+                .expect("editor.css embedded")
+                .contents(),
+        )
+        .unwrap();
+        assert!(css.contains("var(--"), "dev editor css must use tokens");
+        // the production toggle/editor/save surfaces stay themed
+        for sel in [".docgen-edit-toggle", "#docgen-editor", ".docgen-edit-save"] {
+            assert!(css.contains(sel), "editor css missing {sel}");
+        }
+    }
+
+    #[test]
     fn shared_css_has_katex_display_spacing() {
         let s = std::str::from_utf8(
             core_assets()

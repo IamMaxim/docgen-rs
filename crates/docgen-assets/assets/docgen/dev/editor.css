@@ -1,6 +1,8 @@
 /* Dev-only editor styling. Emitted ONLY by `docgen dev` (via dev_assets()), never
  * by `docgen build` — kept out of the production docgen.css so production stays
- * editor-free. */
+ * editor-free. Tokenized so the overlay looks right on both light and dark themed
+ * pages (docgen.css, which defines the tokens, always loads first). Hard fallbacks
+ * keep it usable even if a custom page template omits the token sheet. */
 [x-cloak] {
   display: none !important;
 }
@@ -11,11 +13,16 @@
   bottom: 1rem;
   z-index: 1000;
   padding: 0.5rem 1rem;
-  border: 1px solid #888;
-  border-radius: 6px;
-  background: #fff;
+  border: 1px solid var(--border, #888);
+  border-radius: var(--r-md, 8px);
+  background: var(--bg-elev, #fff);
+  color: var(--text, #181712);
+  box-shadow: var(--shadow-md, 0 4px 16px rgba(0, 0, 0, 0.1));
   cursor: pointer;
   font: inherit;
+}
+.docgen-edit-toggle:hover {
+  border-color: var(--border-strong, #777);
 }
 
 #docgen-editor {
@@ -26,26 +33,32 @@
   width: min(42rem, 90vw);
   max-height: 70vh;
   overflow: auto;
-  padding: 0.5rem;
-  border: 1px solid #888;
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  padding: 0.75rem;
+  border: 1px solid var(--border-strong, #888);
+  border-radius: var(--r-lg, 12px);
+  background: var(--bg-elev, #fff);
+  color: var(--text, #181712);
+  box-shadow: var(--shadow-lg, 0 16px 48px rgba(0, 0, 0, 0.2));
 }
 
 #docgen-editor .CodeMirror {
   height: auto;
   min-height: 20rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border, #ddd);
+  border-radius: var(--r-sm, 5px);
 }
 
 .docgen-edit-save {
   margin-top: 0.5rem;
   padding: 0.4rem 0.9rem;
-  border: 1px solid #888;
-  border-radius: 6px;
-  background: #2d6cdf;
-  color: #fff;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm, 6px);
+  background: var(--accent, #2d6cdf);
+  color: var(--bg-elev, #fff);
   cursor: pointer;
   font: inherit;
+  font-weight: 600;
+}
+.docgen-edit-save:hover {
+  filter: brightness(1.05);
 }
