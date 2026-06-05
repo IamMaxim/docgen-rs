@@ -179,3 +179,35 @@ User asked to add the two deferred P8 residuals. Both done + Chrome-validated; f
 - Gate: `cargo build --workspace` clean; `cargo test --workspace` all ok (0 failed); `cargo clippy
   --all-targets` clean. Fixture rebuilt (6 pages); resizer + width-script + token-driven mermaid vars present
   in emitted assets. Commit `4936cb3` (local only, not pushed).
+
+## 2026-06-05 ~23:30 MSK — dev edit icon + two side-by-side quirks (commit d1cf9b7)
+User asked to add the dev-only edit icon and flagged two quirks from the live comparison. All three done +
+Chrome-validated; full gate green (cargo test --workspace ok / clippy clean / fixture rebuilds 6 pages).
+- **Dev edit icon → strip.** Replaced the dev server's floating `<button class="docgen-edit-toggle">` with an
+  inline injected script (in `DEV_HTML`, docgen-server/src/lib.rs) that builds an `.icon-only.docgen-ctl--edit`
+  pencil with `data-docgen-edit` and inserts it before `.docgen-ctl--fullwidth` in the topbar
+  `.docgen-btn-strip` — original order diff/edit/full-width/menu. `editor.js` already wires any
+  `[data-docgen-edit]`, so the click opens CodeMirror. The static `docgen build` output still never contains
+  the icon (dev-server injection only). `inject_dev_html` test still green (asserts `data-docgen-edit` +
+  CodeMirror load order, all still present).
+- **Double vertical line.** `.docgen-sidebar` had `border-right` AND the `.docgen-rail-resizer::before`
+  hairline sat ~2px to its right → two lines. Removed the sidebar `border-right`; the resizer hairline is now
+  the sole separator. To keep a separator across the 768–1100 range (where the resizer used to hide at 1100),
+  moved the resizer's `display:none` from the 1100 breakpoint to 768, set the 1100 grid back to
+  `var(--left-rail-width) 5px minmax(0,1fr)`, and pinned `.docgen-rail { grid-column: 3 }` so the reflowed
+  card sits under the content (port of the original's 1100 behavior). The ≤768 drawer keeps its own
+  border-right.
+- **Graph → home page.** Removed `.docgen-sidebar__graph` from page/graph/history templates. The home doc now
+  embeds the graph: page.html renders a `.docgen-home-graph` section (heading + `.docgen-graph` canvas +
+  `#docgen-graph-data` + the graph island script) gated on `is_home and graph_json`. `PageContext` gained
+  `is_home` + `graph_json` (raw; render_page applies the `</`→`<\/` escaping) + node/edge counts.
+  docgen-build computes the force layout ONCE up front and reuses it for the home embed AND the standalone
+  `/graph` page (no double compute). The `/graph` page still ships (reachable by URL); only the nav entry
+  point moved. Tests updated to the new design: `build_cli` asserts the home embeds the graph + island and
+  non-home pages don't + no `docgen-sidebar__graph`; render tests `graph_page_renders_graph_canvas_without_
+  sidebar_link` and `home_page_embeds_graph_and_non_home_does_not` replace the old nav-link tests; the
+  base-prefix test dropped its obsolete `/docs/graph` nav assertion. 21 PageContext test constructors got the
+  4 new default fields.
+- Chrome validation: home page shows "Doc graph · 6 nodes · 1 links" embedded below content with NO sidebar
+  Graph link; sidebar/content boundary shows a single line; `docgen dev` strip shows the edit pencil and
+  clicking it opens the CodeMirror source editor. Commit `d1cf9b7` (local only, not pushed).

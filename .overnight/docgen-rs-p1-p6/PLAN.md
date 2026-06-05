@@ -85,6 +85,13 @@ iterate with focused fix passes until pixel-close. Workflow gets it structurally
 `themeVariables` (blend into card, both themes); (2) resizable left sidebar → `.docgen-rail-resizer` drag in a
 5px grid track, `--left-rail-width` persisted to `doc-left-rail-width` + pre-paint applied. Both Chrome-verified,
 gate green. (The original's two diff-pane resizers don't apply: our history page is single-column, not two-pane.)
+**Follow-up polish (`d1cf9b7`, 2026-06-05 ~23:30 MSK):** (a) dev-only edit icon now injected INTO the topbar
+strip (pencil, `data-docgen-edit`, before full-width) by the dev server — opens CodeMirror, never in static
+build; (b) double sidebar/content line fixed (dropped sidebar `border-right`; resizer hairline is the sole
+separator, now visible to 768px, rail pinned `grid-column:3` ≤1100px); (c) graph moved OUT of the sidebar ONTO
+the home page (embedded force-layout graph gated on `is_home && graph_json`; `PageContext` gained
+`is_home`/`graph_json`/counts; layout computed once, reused by home embed + standalone `/graph`). All
+Chrome-verified, tests updated, gate green.
 
 ## Notes / open seams
 - **Island infrastructure lands in P3** (the `docgen-assets` crate + Alpine bootstrap + glue-JS emission).

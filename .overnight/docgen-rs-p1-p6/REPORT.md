@@ -45,8 +45,22 @@ P8 re-skinned docgen-rs to match the original (which is DARK-by-default) icon-fo
      original ALSO has two diff-pane resizers (`doc-diff-rail-w` / `doc-diff-files-w`) inside its two-pane
      diff route. docgen-rs's history page is a single-column timeline (not a two-pane diff), so those two
      handles have no surface to attach to here — not applicable, not a gap.
-3. The dev-only **edit icon** (in-browser editor) isn't in the static build's strip — by design; it's a
-   dev-server affordance, shown when running `docgen dev`.
+3. ~~The dev-only **edit icon** isn't in the strip~~ — **DONE (`d1cf9b7`).** The dev server now injects the
+   edit control INTO the topbar `.docgen-btn-strip` (a pencil `.icon-only` with `data-docgen-edit`, placed
+   before the full-width control — original order diff/edit/full-width/menu) instead of a floating button.
+   `editor.js` wires it; the static `docgen build` output still never contains it. Verified in Chrome: the
+   pencil appears under `docgen dev` and opens the CodeMirror editor.
+
+**Two quirks fixed in the same pass (`d1cf9b7`):**
+- **Double vertical line** between sidebar and content — the sidebar's `border-right` duplicated the resize
+  handle's hairline. Removed `border-right`; the `.docgen-rail-resizer` hairline is now the sole separator.
+  Kept the resizer visible down to 768px (was 1100) and pinned the reflowed right-rail card to `grid-column:3`
+  at ≤1100px so it sits under the content. Verified: single clean line.
+- **Graph moved to the home page (out of the sidebar)** — matching the original (which surfaces the doc graph
+  on home, never in the sidebar). Removed the `.docgen-sidebar__graph` link from all shell templates; the home
+  doc now embeds the force-layout graph (heading + canvas + island), gated on `is_home && graph_json`.
+  `PageContext` gained `is_home`/`graph_json`/`graph_node_count`/`graph_edge_count`; the build computes the
+  layout once and reuses it for both the home embed and the standalone `/graph` page. Verified in Chrome.
 
 ---
 
