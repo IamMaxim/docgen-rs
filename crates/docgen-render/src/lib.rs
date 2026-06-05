@@ -146,6 +146,43 @@ pub struct PreviewContext<'a> {
     pub has_component_island: bool,
 }
 
+/// One section card on the home dashboard: a top-level folder ("section"), the
+/// number of docs in it, and a link to its first page. Mirrors the original
+/// home's `sectionCards`.
+#[derive(Serialize)]
+pub struct HomeSection<'a> {
+    pub label: &'a str,
+    /// Slug of the section's first doc (template prefixes `base`). Folders have no
+    /// index doc, so this points at a real page.
+    pub slug: &'a str,
+    pub count: usize,
+}
+
+/// One row in the home dashboard's "Recent" list.
+#[derive(Serialize)]
+pub struct HomeRecent<'a> {
+    pub title: &'a str,
+    pub slug: &'a str,
+    /// The doc's top-level section label (or `""` for a root-level doc).
+    pub section: &'a str,
+}
+
+/// The home dashboard payload. `PageContext.home` is `Some` only for the index
+/// doc; every other page passes `None` (and the template skips the dashboard).
+#[derive(Serialize)]
+pub struct HomeData<'a> {
+    /// Hero subtitle (the index doc's frontmatter `description`). `""` → omitted.
+    pub description: &'a str,
+    /// Total published doc count — the "pages" stat tile.
+    pub pages: usize,
+    /// Total resolved wikilink count — the "links" stat tile.
+    pub links: usize,
+    /// Section cards (top-level folders). Empty → the Sections column is omitted.
+    pub sections: &'a [HomeSection<'a>],
+    /// The most-recent docs (build order, home excluded), capped for the panel.
+    pub recent: &'a [HomeRecent<'a>],
+}
+
 /// Everything a single page render needs.
 #[derive(Serialize)]
 pub struct PageContext<'a> {
@@ -194,6 +231,9 @@ pub struct PageContext<'a> {
     /// Node/edge counts for the home graph caption (ignored when `graph_json` is empty).
     pub graph_node_count: usize,
     pub graph_edge_count: usize,
+    /// Home dashboard payload (hero/stats/sections/recent). `Some` only for the
+    /// index doc; `None` everywhere else.
+    pub home: Option<HomeData<'a>>,
 }
 
 /// Owns a configured minijinja environment with the `page` template registered.
@@ -245,6 +285,7 @@ impl Renderer {
             graph_json => safe_graph_json,
             graph_node_count => ctx.graph_node_count,
             graph_edge_count => ctx.graph_edge_count,
+            home => ctx.home,
         })
     }
 
@@ -345,6 +386,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
             })
             .unwrap();
         assert!(html.contains("<title>My Page</title>"));
@@ -376,6 +418,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
             })
             .unwrap();
         // Skip link targets a labelled, focusable <main>.
@@ -415,6 +458,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
             })
             .unwrap();
         assert!(!off.contains("/components.css"));
@@ -443,6 +487,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
             })
             .unwrap();
         assert!(on.contains(r#"<link rel="stylesheet" href="/components.css" />"#));
@@ -463,6 +508,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
                 base: "",
                 slug: "x",
                 body_html: "",
@@ -493,6 +539,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
                 base: "",
                 slug: "x",
                 body_html: "",
@@ -524,6 +571,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
                 base: "",
                 slug: "x",
                 body_html: "",
@@ -551,6 +599,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
                 base: "",
                 slug: "x",
                 body_html: "",
@@ -586,6 +635,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
                 base: "/docs",
                 slug: "x",
                 body_html: "",
@@ -645,6 +695,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
             })
             .unwrap();
         assert!(html.contains(r#"href="/guide/intro""#));
@@ -681,6 +732,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
             })
             .unwrap();
         // Title is HTML-escaped.
@@ -723,6 +775,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
             })
             .unwrap();
         // Backlinks now live in the right rail's "Referenced by" section as cards.
@@ -759,6 +812,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
             })
             .unwrap();
         // No backlinks → the "Referenced by" rail section is omitted entirely.
@@ -791,6 +845,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
             })
             .unwrap();
         assert!(with.contains(r#"href="/diff""#));
@@ -818,6 +873,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
             })
             .unwrap();
         assert!(!without.contains(r#"href="/diff""#));
@@ -848,6 +904,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
             })
             .unwrap();
         assert!(html.contains(r#"src="/bootstrap.js""#));
@@ -877,6 +934,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
             })
             .unwrap();
         assert!(withm.contains(r#"src="/islands/mermaid.js""#));
@@ -907,6 +965,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
             })
             .unwrap();
         assert!(!no_math.contains("katex.min.css"));
@@ -934,6 +993,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
             })
             .unwrap();
         assert!(with_math.contains(r#"href="/vendor/katex/katex.min.css""#));
@@ -1182,6 +1242,7 @@ mod tests {
             graph_json,
             graph_node_count: 2,
             graph_edge_count: 1,
+            home: None,
         };
         // Home page with graph data: embeds the graph block + data + island script.
         let home = r
@@ -1289,6 +1350,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                home: None,
             })
             .unwrap()
     }

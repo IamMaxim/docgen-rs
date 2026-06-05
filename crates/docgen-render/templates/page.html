@@ -84,6 +84,58 @@
     </nav>
     <div class="docgen-rail-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="-1"></div>
     <main class="docgen-content" id="docgen-main" tabindex="-1">
+      {% if home %}
+      <section class="docgen-home">
+        <header class="docgen-home__head">
+          <div>
+            <h1 class="docgen-home__title">{% if site_title %}{{ site_title }}{% else %}{{ title }}{% endif %}</h1>
+            {% if home.description %}<p class="docgen-home__sub">{{ home.description }}</p>{% endif %}
+          </div>
+          <div class="docgen-home__stats">
+            <div class="docgen-home__stat"><div class="docgen-home__stat-num">{{ home.pages }}</div><div class="docgen-home__stat-lbl">pages</div></div>
+            <div class="docgen-home__stat"><div class="docgen-home__stat-num">{{ home.links }}</div><div class="docgen-home__stat-lbl">links</div></div>
+            {% if commit %}<div class="docgen-home__stat"><div class="docgen-home__stat-num">{{ commit }}</div><div class="docgen-home__stat-lbl">commit</div></div>{% endif %}
+          </div>
+        </header>
+        {% if search_enabled %}
+        <button class="docgen-home__search" data-docgen-search>
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <span class="docgen-home__search-ph">Use ⌘K or / anywhere to search — or open the documentation</span>
+          <span class="docgen-home__search-hint">search</span>
+        </button>
+        {% endif %}
+        {% if home.sections or home.recent %}
+        <div class="docgen-home__grid">
+          {% if home.sections %}
+          <div class="docgen-home__col">
+            <div class="docgen-home__col-title"><span>Sections</span><span>{{ home.sections | length }}</span></div>
+            <div class="docgen-home__cards">
+              {% for s in home.sections %}
+              <a class="docgen-home__card" href="{{ base | safe }}/{{ s.slug | safe }}">
+                <span class="docgen-home__card-title">{{ s.label }}</span>
+                <span class="docgen-home__card-meta"><b>{{ s.count }}</b> pages</span>
+              </a>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+          {% if home.recent %}
+          <div class="docgen-home__col">
+            <div class="docgen-home__col-title"><span>Recent</span><span>{{ home.recent | length }}</span></div>
+            <ul class="docgen-home__recent">
+              {% for r in home.recent %}
+              <li>
+                <span class="docgen-home__recent-when">{% if r.section %}{{ r.section }}{% else %}—{% endif %}</span>
+                <a class="docgen-home__recent-what" href="{{ base | safe }}/{{ r.slug | safe }}">{{ r.title }}</a>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+      </section>
+      {% endif %}
       <article class="docgen-doc-content">
         {{ body | safe }}
       </article>

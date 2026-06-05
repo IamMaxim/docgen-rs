@@ -17,6 +17,18 @@
  * name.
  */
 
+/* ============================ full-bleed shell =========================== */
+/* The diff route renders into #docgen-diff-root inside this main. It spans the
+   entire area under the topbar: no doc sidebar, no padding, no max-width. */
+.docgen-diff-main {
+	width: 100%;
+	min-width: 0;
+	padding: 0;
+}
+.docgen-diff-main > #docgen-diff-root {
+	min-width: 0;
+}
+
 /* =============================== .diff-page =============================== */
 .diff-page {
 	display: flex;

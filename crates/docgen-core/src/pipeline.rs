@@ -193,6 +193,7 @@ pub fn render_doc(
             rel_path: p.rel_path.clone(),
             slug: p.slug.clone(),
             title: p.title.clone(),
+            description: p.description.clone(),
             body_html,
             has_math: math_count > 0,
             has_mermaid: mermaid_count > 0,

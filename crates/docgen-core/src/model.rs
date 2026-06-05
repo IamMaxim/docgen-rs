@@ -18,6 +18,10 @@ pub struct Doc {
     pub slug: String,
     /// Resolved page title.
     pub title: String,
+    /// Frontmatter `description:`, if any. Feeds the home dashboard subtitle and
+    /// the "Recent" list. `None` when the doc has no `description:`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// Rendered body HTML.
     pub body_html: String,
     /// Whether this doc contains math (drives the conditional KaTeX `<head>` link).

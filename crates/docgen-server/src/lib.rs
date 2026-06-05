@@ -36,7 +36,12 @@ pub struct DevOptions {
 /// One live-reload signal. Carried over the SSE channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReloadEvent {
+    /// A rebuild finished; browsers should reload.
     Reload,
+    /// The server is shutting down (Ctrl+C). Tells each live-reload SSE stream to
+    /// END, so axum's graceful shutdown can drain the otherwise-eternal keep-alive
+    /// connections instead of hanging on them.
+    Shutdown,
 }
 
 /// Shared, cheaply-clonable state behind every handler. `Clone` bumps the
@@ -328,9 +333,14 @@ async fn serve_async(opts: DevOptions) -> anyhow::Result<()> {
         let _ = open_browser(&format!("http://{addr}"));
     }
 
+    // Clone the reload sender before `state` moves into the router; the shutdown
+    // hook uses it to terminate the open live-reload SSE streams so the graceful
+    // drain can complete (otherwise the 15s keep-alive holds the process open).
+    let shutdown_tx = state.reload_tx.clone();
     axum::serve(listener, router(state))
-        .with_graceful_shutdown(async {
+        .with_graceful_shutdown(async move {
             let _ = tokio::signal::ctrl_c().await;
+            let _ = shutdown_tx.send(ReloadEvent::Shutdown);
         })
         .await?;
     Ok(())

@@ -15,8 +15,10 @@ window.docgen.island('docgenGraph', function (Alpine) {
       data: { nodes: [], edges: [] },
       adj: {},
       nodeEls: {},
+      nodeMeta: {},
       lineEls: [],
       root: null,
+      tip: null,
       init() {
         var tag = document.getElementById('docgen-graph-data');
         if (!tag) return;
@@ -26,8 +28,16 @@ window.docgen.island('docgenGraph', function (Alpine) {
           return;
         }
         this.buildAdjacency();
+        this.makeTip();
         this.draw();
         this.wirePanZoom();
+      },
+      makeTip() {
+        var tip = document.createElement('div');
+        tip.className = 'docgen-graph__tip';
+        tip.setAttribute('hidden', '');
+        this.$el.appendChild(tip);
+        this.tip = tip;
       },
       buildAdjacency() {
         var adj = {};
@@ -81,7 +91,7 @@ window.docgen.island('docgenGraph', function (Alpine) {
         var self = this;
         for (var n = 0; n < nodes.length; n++) {
           var node = nodes[n];
-          var r = clamp(4.5 + Math.sqrt(node.degree || 0) * 1.2, 5, 12);
+          var r = clamp(5 + Math.sqrt(node.degree || 0) * 1.4, 6, 14);
           // anchor so a plain click navigates to /{slug}. Encode per path
           // segment so slugs with spaces/#/?/% produce a well-formed URL that
           // matches the build's directory-emit path.
@@ -99,14 +109,20 @@ window.docgen.island('docgenGraph', function (Alpine) {
           link.appendChild(circle);
           gNodes.appendChild(link);
           this.nodeEls[node.slug] = circle;
-          (function (slug) {
-            circle.addEventListener('pointerenter', function () {
+          this.nodeMeta[node.slug] = node;
+          (function (slug, n) {
+            circle.addEventListener('pointerenter', function (ev) {
               self.hover(slug);
+              self.showTip(n, ev);
+            });
+            circle.addEventListener('pointermove', function (ev) {
+              self.moveTip(ev);
             });
             circle.addEventListener('pointerleave', function () {
               self.clearHover();
+              self.hideTip();
             });
-          })(node.slug);
+          })(node.slug, node);
         }
         root.appendChild(gNodes);
         svg.appendChild(root);
@@ -141,6 +157,34 @@ window.docgen.island('docgenGraph', function (Alpine) {
         for (var i = 0; i < this.lineEls.length; i++) {
           this.lineEls[i].classList.remove('active');
         }
+      },
+      showTip(node, ev) {
+        var tip = this.tip;
+        if (!tip) return;
+        // textContent (not innerHTML) so build-time titles/slugs can't inject markup.
+        tip.textContent = '';
+        var t = document.createElement('div');
+        t.className = 'docgen-graph__tip-title';
+        t.textContent = node.title || node.slug;
+        var p = document.createElement('div');
+        p.className = 'docgen-graph__tip-path';
+        p.textContent = '/' + node.slug;
+        tip.appendChild(t);
+        tip.appendChild(p);
+        tip.removeAttribute('hidden');
+        this.moveTip(ev);
+      },
+      moveTip(ev) {
+        var tip = this.tip;
+        if (!tip || tip.hasAttribute('hidden')) return;
+        var rect = this.$el.getBoundingClientRect();
+        var w = tip.offsetWidth || 220;
+        var h = tip.offsetHeight || 60;
+        tip.style.left = clamp(ev.clientX - rect.left + 14, 8, rect.width - w - 8) + 'px';
+        tip.style.top = clamp(ev.clientY - rect.top + 14, 8, rect.height - h - 8) + 'px';
+      },
+      hideTip() {
+        if (this.tip) this.tip.setAttribute('hidden', '');
       },
       applyTransform() {
         if (!this.root) return;

@@ -52,6 +52,7 @@ mod tests {
             rel_path: format!("{slug}.md"),
             slug: slug.into(),
             title: title.into(),
+            description: None,
             body_html: String::new(),
             has_math: false,
             has_mermaid: false,

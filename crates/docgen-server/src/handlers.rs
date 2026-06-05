@@ -188,14 +188,19 @@ async fn livereload_sse(
     State(state): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let rx = state.reload_tx.subscribe();
-    let stream = BroadcastStream::new(rx).filter_map(|ev| async move {
-        match ev {
-            Ok(ReloadEvent::Reload) => {
-                Some(Ok(Event::default().event("reload").data("now")))
+    let stream = BroadcastStream::new(rx)
+        // End the stream on shutdown so axum's graceful drain doesn't hang on this
+        // keep-alive connection (the root cause of Ctrl+C not stopping `docgen dev`).
+        .take_while(|ev| std::future::ready(!matches!(ev, Ok(ReloadEvent::Shutdown))))
+        .filter_map(|ev| async move {
+            match ev {
+                Ok(ReloadEvent::Reload) => {
+                    Some(Ok(Event::default().event("reload").data("now")))
+                }
+                // Shutdown is consumed by take_while above; lagged is skipped.
+                Ok(ReloadEvent::Shutdown) | Err(_) => None,
             }
-            Err(_) => None, // lagged: skip, the next reload still fires
-        }
-    });
+        });
     Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
 }
 
@@ -364,6 +369,36 @@ async fn serve_editor_page(
     ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], html).into_response()
 }
 
+/// The site topbar for the editor page: brand + diff link + working theme toggle,
+/// matching the published `page.html` topbar so the editor lives under the same
+/// chrome. The theme toggle is the real `docgenThemeToggle` Alpine island (loaded
+/// below); the `.doc-editor` shell already reserves `calc(100vh - --topbar-height)`
+/// for exactly this header. Kept as a const so `format!` doesn't choke on the
+/// Alpine `{ ... }` class bindings.
+const EDITOR_TOPBAR: &str = r#"<header class="docgen-topbar">
+  <a class="docgen-topbar__brand" href="/">
+    <span class="docgen-brand-mark" aria-hidden="true"></span>
+    <span class="docgen-brand-name">Docs</span>
+  </a>
+  <div class="docgen-topbar__main">
+    <div class="docgen-topbar__actions">
+      <div class="docgen-btn-strip" role="group" aria-label="Layout">
+        <a class="docgen-ctl--diff icon-only" href="/diff" aria-label="Show documentation diff" title="Show documentation diff">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4v16M18 4v16"/><path d="M9 8h6M9 16h6M12 5v6M12 13v6"/></svg>
+        </a>
+      </div>
+      <div class="docgen-theme-toggle" x-data="docgenThemeToggle" role="tablist" aria-label="Theme">
+        <button type="button" class="docgen-theme-toggle__btn" :class="{ 'is-active': theme==='dark' }" :aria-pressed="theme==='dark'" @click="set('dark')" aria-label="Dark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+        <button type="button" class="docgen-theme-toggle__btn" :class="{ 'is-active': theme==='light' }" :aria-pressed="theme==='light'" @click="set('light')" aria-label="Light">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</header>"#;
+
 /// Build the editor page shell. Dev-only; never written by `docgen build`.
 fn editor_page_html(slug: &str, doc_path: &str, title: &str) -> String {
     let esc = |s: &str| {
@@ -386,14 +421,20 @@ fn editor_page_html(slug: &str, doc_path: &str, title: &str) -> String {
 <link rel="stylesheet" href="/__docgen/editor.css" />
 </head>
 <body class="docgen-app">
+{topbar}
 <div id="docgen-editor-app" data-doc-path="{doc_path}" data-view-path="{view_path}" data-title="{title}" data-base=""></div>
+<script>window.DOCGEN_BASE = "";</script>
+<script src="/bootstrap.js"></script>
+<script src="/islands/theme-toggle.js"></script>
 <script src="/__docgen/editor-cm6.js"></script>
+<script src="/vendor/alpine/alpine.min.js" defer></script>
 </body>
 </html>
 "#,
         title = esc(title),
         doc_path = esc(doc_path),
         view_path = esc(&view_path),
+        topbar = EDITOR_TOPBAR,
     )
 }
 

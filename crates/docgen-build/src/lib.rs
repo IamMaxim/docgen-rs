@@ -22,7 +22,9 @@ use chrono::Local;
 use docgen_core::discover::discover_docs;
 use docgen_core::pipeline::{prepare, render_docs};
 use docgen_core::tree::build_tree;
-use docgen_render::{GraphContext, PageContext, Renderer, DEFAULT_PAGE_TEMPLATE};
+use docgen_render::{
+    GraphContext, HomeData, HomeRecent, HomeSection, PageContext, Renderer, DEFAULT_PAGE_TEMPLATE,
+};
 
 /// The slug docgen treats as the site home (served at `/`).
 const HOME_SLUG: &str = "index";
@@ -263,6 +265,46 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
         None
     };
 
+    // Home dashboard data (mirrors the original home: title/stats/sections/recent).
+    // "Sections" = top-level folders (the sidebar's grouping), ordered by first
+    // appearance, each linking to its first page with a doc count. "Recent" = the
+    // first docs in build order (home excluded). Computed once; only the index
+    // doc's render consumes it (every other page passes `home: None`).
+    let total_links = site.graph.edges.len();
+    let mut section_rows: Vec<(String, String, usize)> = Vec::new();
+    let mut section_idx: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for doc in &site.docs {
+        if doc.slug == HOME_SLUG || !doc.slug.contains('/') {
+            continue;
+        }
+        let label = doc.slug.split('/').next().unwrap_or("").to_string();
+        match section_idx.get(&label) {
+            Some(&i) => section_rows[i].2 += 1,
+            None => {
+                section_idx.insert(label.clone(), section_rows.len());
+                section_rows.push((label, doc.slug.clone(), 1));
+            }
+        }
+    }
+    let recent_rows: Vec<(String, String, String)> = site
+        .docs
+        .iter()
+        .filter(|d| d.slug != HOME_SLUG)
+        .take(6)
+        .map(|d| {
+            let section = d.slug.split_once('/').map(|(s, _)| s.to_string()).unwrap_or_default();
+            (d.title.clone(), d.slug.clone(), section)
+        })
+        .collect();
+    let home_sections: Vec<HomeSection> = section_rows
+        .iter()
+        .map(|(label, slug, count)| HomeSection { label, slug, count: *count })
+        .collect();
+    let home_recent: Vec<HomeRecent> = recent_rows
+        .iter()
+        .map(|(title, slug, section)| HomeRecent { title, slug, section })
+        .collect();
+
     // Phase 2: render the doc pages, linking to history where one was emitted.
     let empty: Vec<docgen_core::model::Backlink> = Vec::new();
     let mut home_html: Option<String> = None;
@@ -300,6 +342,17 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
             graph_json,
             graph_node_count,
             graph_edge_count,
+            home: if is_home {
+                Some(HomeData {
+                    description: doc.description.as_deref().unwrap_or(""),
+                    pages: site.docs.len(),
+                    links: total_links,
+                    sections: &home_sections,
+                    recent: &home_recent,
+                })
+            } else {
+                None
+            },
         })?;
 
         // `guide/intro` -> `dist/guide/intro/index.html` (clean URLs).
