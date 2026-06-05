@@ -307,6 +307,7 @@ dependencies = [
 name = "docgen-render"
 version = "0.0.0"
 dependencies = [
+ "docgen-core",
  "minijinja",
  "serde",
 ]

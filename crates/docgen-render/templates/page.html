@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }}</title>
+</head>
+<body>
+  <nav class="docgen-sidebar">
+    {% macro render_nodes(nodes) %}
+    <ul>
+      {% for node in nodes %}
+        {% if node.kind == "dir" %}
+          <li class="docgen-dir"><span>{{ node.name }}</span>{{ render_nodes(node.children) }}</li>
+        {% else %}
+          <li class="docgen-doc"><a href="/{{ node.slug }}">{{ node.title }}</a></li>
+        {% endif %}
+      {% endfor %}
+    </ul>
+    {% endmacro %}
+    {{ render_nodes(tree) }}
+  </nav>
+  <main class="docgen-content">
+    {{ body | safe }}
+  </main>
+</body>
+</html>
