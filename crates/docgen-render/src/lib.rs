@@ -88,6 +88,8 @@ pub struct PageContext<'a> {
     pub has_history: bool,
     /// Whether this page contains a mermaid diagram (gates the mermaid island script).
     pub has_mermaid: bool,
+    /// Whether this page contains math (gates the KaTeX stylesheet `<head>` link).
+    pub has_math: bool,
 }
 
 /// Owns a configured minijinja environment with the `page` template registered.
@@ -118,6 +120,7 @@ impl Renderer {
             backlinks => ctx.backlinks,
             has_history => ctx.has_history,
             has_mermaid => ctx.has_mermaid,
+            has_math => ctx.has_math,
             search_enabled => true,
         })
     }
@@ -154,6 +157,7 @@ mod tests {
                 backlinks: &[],
                 has_history: false,
                 has_mermaid: false,
+                has_math: false,
             })
             .unwrap();
         assert!(html.contains("<title>My Page</title>"));
@@ -176,6 +180,7 @@ mod tests {
                 backlinks: &[],
                 has_history: false,
                 has_mermaid: false,
+                has_math: false,
             })
             .unwrap();
         assert!(html.contains(r#"href="/guide/intro""#));
@@ -198,6 +203,7 @@ mod tests {
                 backlinks: &[],
                 has_history: false,
                 has_mermaid: false,
+                has_math: false,
             })
             .unwrap();
         // Title is HTML-escaped.
@@ -225,6 +231,7 @@ mod tests {
                 backlinks: &backlinks,
                 has_history: false,
                 has_mermaid: false,
+                has_math: false,
             })
             .unwrap();
         assert!(html.contains("Backlinks"));
@@ -243,6 +250,7 @@ mod tests {
                 backlinks: &[],
                 has_history: false,
                 has_mermaid: false,
+                has_math: false,
             })
             .unwrap();
         assert!(!html.contains("Backlinks"));
@@ -259,6 +267,7 @@ mod tests {
                 backlinks: &[],
                 has_history: true,
                 has_mermaid: false,
+                has_math: false,
             })
             .unwrap();
         assert!(with.contains(r#"href="/guide/intro/history""#));
@@ -272,6 +281,7 @@ mod tests {
                 backlinks: &[],
                 has_history: false,
                 has_mermaid: false,
+                has_math: false,
             })
             .unwrap();
         assert!(!without.contains(r#"href="/guide/intro/history""#));
@@ -288,6 +298,7 @@ mod tests {
                 backlinks: &[],
                 has_history: false,
                 has_mermaid: false,
+                has_math: false,
             })
             .unwrap();
         assert!(html.contains(r#"src="/bootstrap.js""#));
@@ -303,9 +314,41 @@ mod tests {
                 backlinks: &[],
                 has_history: false,
                 has_mermaid: true,
+                has_math: false,
             })
             .unwrap();
         assert!(withm.contains(r#"src="/islands/mermaid.js""#));
+    }
+
+    #[test]
+    fn page_links_katex_css_only_when_has_math() {
+        let no_math = renderer()
+            .render_page(&PageContext {
+                title: "X",
+                slug: "x",
+                body_html: "",
+                tree: &[],
+                backlinks: &[],
+                has_history: false,
+                has_mermaid: false,
+                has_math: false,
+            })
+            .unwrap();
+        assert!(!no_math.contains("katex.min.css"));
+
+        let with_math = renderer()
+            .render_page(&PageContext {
+                title: "X",
+                slug: "x",
+                body_html: "",
+                tree: &[],
+                backlinks: &[],
+                has_history: false,
+                has_mermaid: false,
+                has_math: true,
+            })
+            .unwrap();
+        assert!(with_math.contains(r#"href="/vendor/katex/katex.min.css""#));
     }
 
     #[test]
