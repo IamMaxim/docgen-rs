@@ -155,3 +155,27 @@ backgrounds against the dark card — mermaid default-theme artifact, fixable vi
 rail drag-handles (the original persists doc-left-rail-width / diff rail widths via drag) are NOT implemented —
 higher-effort, low visual-parity-impact nicety, deferred; (3) the dev-only edit icon (in-browser editor) is not
 shown in the static build's strip — by design (it's a dev-server affordance). PROJECT P1–P8 COMPLETE.
+
+## 2026-06-05 ~22:40 MSK — P8 residuals 1 & 2 closed (commit 4936cb3)
+User asked to add the two deferred P8 residuals. Both done + Chrome-validated; full gate green.
+- **Residual 2 — resizable left sidebar.** Ported the original starter `+layout` `.rail-resizer`: added a
+  5px grid track between `.docgen-sidebar` and `.docgen-content` in all three shell templates
+  (page/graph/history) holding a `.docgen-rail-resizer` separator. `layout.js` gained pointer-capture drag
+  (pointerdown/move/up + cancel) that sets `--left-rail-width` on `<html>` clamped 180–560 and persists to
+  `doc-left-rail-width`; the pre-paint head `<script>` now also applies the stored width before first paint
+  so there is no jump. CSS: base + `is-rail-collapsed` grids gained the 5px track; handle has hairline
+  `::before` that goes accent on hover/`.is-dragging`; hidden ≤1100px (rail reflows to a card there, matching
+  the original's narrow-viewport behavior). Verified in Chrome: real-mouse drag widened the sidebar with the
+  accent line showing, value persisted, far-drag clamped to 560, reload pre-painted the stored 210px with no
+  jump (inline var present before paint).
+- **Residual 1 — mermaid edge-label pills.** `mermaid.js` now passes `themeVariables` read from live tokens
+  via `getComputedStyle` (`edgeLabelBackground=--surface`, `labelColor/nodeTextColor/titleColor=--text`,
+  `lineColor=--text-dim`). The "yes"/"no" labels now blend into the diagram card (`rgba(21,20,15,.5)` in dark)
+  instead of a bright light pill. Verified in Chrome in BOTH dark and light; re-renders correctly on theme flip
+  (the existing MutationObserver re-init picks up the new token values).
+- Honest scope note: the original also has two *diff-pane* resizers (`doc-diff-rail-w` / `doc-diff-files-w`)
+  inside its two-pane diff route. docgen-rs's history page is a single-column timeline, so those handles have
+  no pane to attach to — not applicable here, recorded in REPORT.md so it isn't mistaken for a gap.
+- Gate: `cargo build --workspace` clean; `cargo test --workspace` all ok (0 failed); `cargo clippy
+  --all-targets` clean. Fixture rebuilt (6 pages); resizer + width-script + token-driven mermaid vars present
+  in emitted assets. Commit `4936cb3` (local only, not pushed).

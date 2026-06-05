@@ -32,11 +32,19 @@ P8 re-skinned docgen-rs to match the original (which is DARK-by-default) icon-fo
 - Full-width switcher, theme toggle, right-rail toggle all persist via localStorage (doc-full-width,
   doc-theme, doc-right-rail-collapsed).
 
-**Known residual (cosmetic / deliberately deferred, honest):**
-1. Mermaid edge labels ("yes"/"no") carry light pill backgrounds against the dark card — mermaid default-theme
-   artifact, fixable via `themeVariables`. Cosmetic.
-2. **Resizable rail drag-handles** (the original persists left-rail + diff-rail widths via drag) are NOT
-   implemented — higher-effort, low visual-parity value; deferred. Say the word and I'll add them.
+**Residuals — update (`4936cb3`, this session): 1 and 2 are now DONE.**
+1. ~~Mermaid edge labels carry light pill backgrounds~~ — **FIXED.** `mermaid.js` passes `themeVariables`
+   driven from live design tokens (`edgeLabelBackground=--surface`, label/node text `--text`, `lineColor
+   --text-dim`); labels blend into the card surface in BOTH themes. Verified in Chrome (dark + light).
+2. ~~Resizable rail drag-handles~~ — **DONE (left rail).** Draggable `.docgen-rail-resizer` in a 5px grid
+   track; `layout.js` pointer-drag sets `--left-rail-width` on `<html>` (clamped 180–560) and persists to
+   `doc-left-rail-width`; pre-paint head script applies stored width before first paint (no jump); accent
+   line on hover/drag; hidden ≤1100px where the rail reflows. On page/graph/history. Verified in Chrome
+   (real-mouse drag resizes + persists + clamps; reload pre-paints).
+   - *Note:* this is the **left sidebar** resizer (the visible one on every doc/graph/history page). The
+     original ALSO has two diff-pane resizers (`doc-diff-rail-w` / `doc-diff-files-w`) inside its two-pane
+     diff route. docgen-rs's history page is a single-column timeline (not a two-pane diff), so those two
+     handles have no surface to attach to here — not applicable, not a gap.
 3. The dev-only **edit icon** (in-browser editor) isn't in the static build's strip — by design; it's a
    dev-server affordance, shown when running `docgen dev`.
 

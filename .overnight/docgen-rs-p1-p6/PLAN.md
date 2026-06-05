@@ -81,6 +81,10 @@ doc-right-rail-collapsed, doc-left-rail-width). Built Prism theme: `~/work/psych
 **Validation bar (explicit):** I (architect) drive Claude-in-Chrome to compare docgen-rs (:8802) vs baseline (:8801)
 page-by-page (home, doc, math, diagram, directives, graph, history, search, BOTH themes, full-width toggle) and
 iterate with focused fix passes until pixel-close. Workflow gets it structurally close + green; I close the pixel gap.
+**P8 residuals closed (`4936cb3`, 2026-06-05 ~22:40 MSK):** (1) mermaid edge-label pills → token-driven
+`themeVariables` (blend into card, both themes); (2) resizable left sidebar → `.docgen-rail-resizer` drag in a
+5px grid track, `--left-rail-width` persisted to `doc-left-rail-width` + pre-paint applied. Both Chrome-verified,
+gate green. (The original's two diff-pane resizers don't apply: our history page is single-column, not two-pane.)
 
 ## Notes / open seams
 - **Island infrastructure lands in P3** (the `docgen-assets` crate + Alpine bootstrap + glue-JS emission).
