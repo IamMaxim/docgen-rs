@@ -1,0 +1,4 @@
+<aside class="docgen-callout docgen-callout--{{ attrs.type | default('note') }}">
+  {% if attrs.title %}<p class="docgen-callout__title">{{ attrs.title }}</p>{% endif %}
+  <div class="docgen-callout__body">{{ content | safe }}</div>
+</aside>

@@ -9,6 +9,49 @@ use std::path::Path;
 /// Every vendored + authored frontend file, embedded at compile time.
 static ASSETS: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/assets");
 
+/// Embedded built-in component sources (`components/<name>/...`). Loaded through
+/// the SAME raw parts a project component is, so built-ins dogfood the mechanism.
+static COMPONENTS: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/components");
+
+/// Raw parts of one embedded built-in component. Returned as borrowed `'static`
+/// strings so this crate stays dependency-free of `docgen-components`; the build
+/// assembles these into `docgen_components::Component`s.
+pub struct BuiltinComponent {
+    pub name: &'static str,
+    pub template: &'static str,
+    pub island_js: Option<&'static str>,
+    pub style_css: Option<&'static str>,
+}
+
+/// `(name, template, island_js?, style_css?)` for each embedded built-in
+/// component, name-sorted for deterministic output.
+pub fn builtin_components() -> Vec<BuiltinComponent> {
+    fn text(name: &str, file: &str) -> Option<&'static str> {
+        COMPONENTS
+            .get_file(format!("{name}/{file}"))
+            .and_then(|f| f.contents_utf8())
+    }
+    let mut subs: Vec<&Dir> = COMPONENTS.dirs().collect();
+    subs.sort_by_key(|d| d.path().file_name().map(|n| n.to_owned()));
+    let mut out = Vec::new();
+    for sub in subs {
+        let name = sub
+            .path()
+            .file_name()
+            .and_then(|n| n.to_str())
+            .expect("component dir has a utf-8 name");
+        let template =
+            text(name, "template.html").expect("builtin component needs template.html");
+        out.push(BuiltinComponent {
+            name,
+            template,
+            island_js: text(name, "island.js"),
+            style_css: text(name, "style.css"),
+        });
+    }
+    out
+}
+
 /// Coarse classification of an emitted asset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AssetKind {
@@ -235,6 +278,18 @@ mod tests {
             .get_file("vendor/alpine/alpine.min.js")
             .expect("alpine embedded");
         assert!(!alpine.contents().is_empty());
+    }
+
+    #[test]
+    fn ships_builtin_callout_component() {
+        let comps = builtin_components();
+        let c = comps
+            .iter()
+            .find(|c| c.name == "callout")
+            .expect("callout builtin");
+        assert!(c.template.contains("docgen-callout"));
+        assert!(c.style_css.is_some());
+        assert!(c.island_js.is_none()); // pure build-time
     }
 
     #[test]
