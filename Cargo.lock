@@ -609,6 +609,7 @@ name = "docgen-core"
 version = "0.0.0"
 dependencies = [
  "comrak",
+ "docgen-components",
  "docgen-config",
  "katex",
  "serde",

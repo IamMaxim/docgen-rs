@@ -1,4 +1,5 @@
 pub mod assemble;
+pub mod directivepass;
 pub mod discover;
 pub mod frontmatter;
 pub mod graph;
