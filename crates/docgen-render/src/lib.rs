@@ -5,6 +5,12 @@ use serde::Serialize;
 /// The built-in page template, embedded at compile time.
 pub const DEFAULT_PAGE_TEMPLATE: &str = include_str!("../templates/page.html");
 
+/// The vendored search client script, emitted to `dist/search.js`.
+pub const SEARCH_JS: &str = include_str!("../assets/search.js");
+
+/// Minimal stylesheet for wikilinks/backlinks/search, emitted to `dist/docgen.css`.
+pub const DOCGEN_CSS: &str = include_str!("../assets/docgen.css");
+
 /// Everything a single page render needs.
 #[derive(Serialize)]
 pub struct PageContext<'a> {
@@ -127,5 +133,13 @@ mod tests {
             .render_page(&PageContext { title: "X", body_html: "", tree: &[], backlinks: &[] })
             .unwrap();
         assert!(!html.contains("Backlinks"));
+    }
+
+    #[test]
+    fn ships_self_contained_search_assets() {
+        assert!(SEARCH_JS.contains("search-index.json"));
+        assert!(SEARCH_JS.contains("metaKey"));
+        assert!(!SEARCH_JS.contains("import ")); // no module imports / npm
+        assert!(DOCGEN_CSS.contains("docgen-search-modal"));
     }
 }
