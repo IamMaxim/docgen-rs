@@ -12,6 +12,34 @@ function docgenMermaidTheme() {
   }
 }
 
+// Override mermaid's built-in theme variables with our design tokens so edge
+// labels ("yes"/"no") sit on the diagram card surface instead of mermaid's
+// default light pill — which read as bright chips against the dark card. We
+// read the live computed token values so the colors track theme + light/dark.
+function docgenMermaidVars() {
+  try {
+    var cs = getComputedStyle(document.documentElement);
+    var pick = function (name, fallback) {
+      var v = cs.getPropertyValue(name).trim();
+      return v || fallback;
+    };
+    var surface = pick('--surface', '#15140f');
+    var text = pick('--text', '#ecebe5');
+    var textDim = pick('--text-dim', '#a8a59a');
+    return {
+      // The rect behind edge labels — match the card so the pill disappears.
+      edgeLabelBackground: surface,
+      // Keep label + node text legible on that surface.
+      labelColor: text,
+      nodeTextColor: text,
+      titleColor: text,
+      lineColor: textDim,
+    };
+  } catch (e) {
+    return {};
+  }
+}
+
 window.docgen.island('docgenMermaid', function (Alpine) {
   Alpine.data('docgenMermaid', function () {
     return {
@@ -32,7 +60,11 @@ window.docgen.island('docgenMermaid', function (Alpine) {
         await window.docgen.loadScript(base + '/vendor/mermaid/mermaid.min.js');
         const mermaid = window.mermaid;
         // Re-initialize each render so a theme change takes effect.
-        mermaid.initialize({ startOnLoad: false, theme: docgenMermaidTheme() });
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: docgenMermaidTheme(),
+          themeVariables: docgenMermaidVars(),
+        });
         const id = el.dataset.mermaidId || 'm-' + Math.random().toString(36).slice(2);
         // mermaid.render requires a unique node id per call; bump a suffix so a
         // re-render after a theme switch does not collide with the first.

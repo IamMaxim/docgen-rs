@@ -394,10 +394,40 @@ kbd,
 /* ================================ layout ================================ */
 .docgen-layout {
 	display: grid;
-	grid-template-columns: var(--left-rail-width) minmax(0, 1fr) var(--right-rail-width);
+	grid-template-columns: var(--left-rail-width) 5px minmax(0, 1fr) var(--right-rail-width);
 	max-width: 1440px;
 	margin: 0 auto;
 	align-items: start;
+}
+
+/* draggable sidebar resize handle (port of starter +layout .rail-resizer);
+   occupies the 5px grid track between sidebar and content. layout.js drives it. */
+.docgen-rail-resizer {
+	position: sticky;
+	top: var(--topbar-height);
+	height: calc(100vh - var(--topbar-height));
+	width: 5px;
+	cursor: col-resize;
+	background: transparent;
+	touch-action: none;
+	user-select: none;
+	z-index: 5;
+}
+.docgen-rail-resizer::before {
+	content: '';
+	position: absolute;
+	left: 2px;
+	top: 0;
+	bottom: 0;
+	width: 1px;
+	background: var(--border);
+	transition: background 0.12s, width 0.12s, left 0.12s;
+}
+.docgen-rail-resizer:hover::before,
+.docgen-rail-resizer.is-dragging::before {
+	background: var(--accent);
+	width: 2px;
+	left: 1.5px;
 }
 .docgen-content {
 	min-width: 0;
@@ -419,7 +449,7 @@ kbd,
 	display: none;
 }
 .docgen-app.is-rail-collapsed .docgen-layout {
-	grid-template-columns: var(--left-rail-width) minmax(0, 1fr);
+	grid-template-columns: var(--left-rail-width) 5px minmax(0, 1fr);
 }
 
 /* =============================== sidebar =============================== */
@@ -1263,6 +1293,11 @@ kbd,
 @media (max-width: 1100px) {
 	.docgen-layout {
 		grid-template-columns: var(--left-rail-width) minmax(0, 1fr);
+	}
+	/* below this width the rail reflows to a card; the drag handle is dropped
+	   (matches the original, which also hides the resizer on narrow viewports) */
+	.docgen-rail-resizer {
+		display: none;
 	}
 	.docgen-rail {
 		position: static;

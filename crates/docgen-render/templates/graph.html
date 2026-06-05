@@ -8,6 +8,8 @@
   var s=localStorage.getItem('doc-theme');
   var t=s||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');
   document.documentElement.setAttribute('data-theme',t);
+  var w=parseInt(localStorage.getItem('doc-left-rail-width'),10);
+  if(w>=180&&w<=560)document.documentElement.style.setProperty('--left-rail-width',w+'px');
 }catch(e){}})();</script>
   <link rel="stylesheet" href="{{ base | safe }}/docgen.css" />
   <link rel="stylesheet" href="{{ base | safe }}/code.css" />
@@ -74,6 +76,7 @@
       <a class="docgen-sidebar__graph" href="{{ base | safe }}/graph">Graph</a>
       {{ render_nodes(tree, 0) }}
     </nav>
+    <div class="docgen-rail-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="-1"></div>
     <main class="docgen-content docgen-graph-page" id="docgen-main" tabindex="-1">
       <article class="docgen-doc-content">
         <h1>Doc graph</h1>
