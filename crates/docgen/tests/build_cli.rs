@@ -38,16 +38,21 @@ fn builds_fixture_site() {
     assert!(intro.contains(">guide<"));
 
     // Resolved wikilink on the home page.
-    assert!(home.contains(r#"<a class="docgen-wikilink" href="/guide/intro">Intro guide</a>"#));
+    assert!(home.contains(
+        r#"<a class="docgen-wikilink" href="/guide/intro" data-wikilink-title="Intro guide" data-wikilink-path="/guide/intro">Intro guide</a>"#
+    ));
 
     // Intro page: resolved backlink target, broken wikilink, highlighted code.
     assert!(intro.contains(r#"href="/index""#));
     assert!(intro.contains("docgen-wikilink--broken"));
-    assert!(intro.contains("style=\"color:")); // syntect highlight
+    assert!(intro.contains(r#"<pre class="docgen-code">"#)); // class-based syntect highlight
 
-    // Backlinks section: intro links to index, so index's page lists intro as a backlink.
-    assert!(home.contains("Backlinks"));
-    assert!(home.contains(r#"href="/guide/intro""#));
+    // Backlinks now render in the right rail's "Referenced by" section: intro
+    // links to index, so index's page lists intro as a backlink card.
+    assert!(home.contains("Referenced by"));
+    assert!(home.contains(r#"class="docgen-rail__backlink" href="/guide/intro""#));
+    // The old in-content backlinks block is gone.
+    assert!(!home.contains("docgen-backlinks"));
 
     // Search index emitted with one entry per doc, plaintext, no markup.
     let idx = fs::read_to_string(tmp.join("dist/search-index.json")).unwrap();

@@ -15,6 +15,8 @@ pub struct PreparedDoc {
     pub rel_path: String,
     pub slug: String,
     pub title: String,
+    /// Optional `description:` from frontmatter, surfaced in backlink cards.
+    pub description: Option<String>,
     pub body_md: String,
 }
 
@@ -67,7 +69,13 @@ pub fn prepare(raw: RawDoc) -> PreparedDoc {
         .or_else(|| first_h1(&parsed.body))
         .unwrap_or_else(|| slug.rsplit('/').next().unwrap_or("").to_string());
 
-    PreparedDoc { rel_path: raw.rel_path, slug, title, body_md: parsed.body }
+    let description = parsed
+        .frontmatter
+        .get("description")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    PreparedDoc { rel_path: raw.rel_path, slug, title, description, body_md: parsed.body }
 }
 
 /// Render a markdown fragment (a block directive's inner content) to inner HTML,
@@ -107,8 +115,10 @@ pub fn render_docs(
     registry: &docgen_components::Registry,
 ) -> SiteBuild {
     let slugs: SlugSet = prepared.iter().map(|p| p.slug.clone()).collect();
-    let doc_meta: Vec<(String, String)> =
-        prepared.iter().map(|p| (p.slug.clone(), p.title.clone())).collect();
+    let doc_meta: Vec<(String, String, Option<String>)> = prepared
+        .iter()
+        .map(|p| (p.slug.clone(), p.title.clone(), p.description.clone()))
+        .collect();
     let options = comrak_options();
 
     let mut docs = Vec::with_capacity(prepared.len());
@@ -131,6 +141,11 @@ pub fn render_docs(
             text: plaintext(root),
         });
 
+        // Heading outline for the right-rail TOC. Collected from the pristine
+        // AST (after parse, before formatting) so the anchorized ids match what
+        // `stamp_heading_ids` writes onto the rendered tags below.
+        let headings = crate::headings::collect_headings(root);
+
         // Wikilink AST pass (mutates `root`) + highlighted HTML.
         let pass = transform_wikilinks(root, &arena, &slugs, &config.base);
         outbound.insert(p.slug.clone(), pass.resolved);
@@ -147,6 +162,9 @@ pub fn render_docs(
             0
         };
         let formatted = format_ast(root, &options);
+        // Stamp the anchorized ids onto the `<h2>`/`<h3>` tags so the rail TOC +
+        // scroll-spy can target them via `h2[id]` / `h3[id]`.
+        let formatted = crate::headings::stamp_heading_ids(&formatted, &headings);
 
         // Directive post-pass: substitute each sentinel with the component's
         // rendered HTML; block inner content is rendered by the full recursive
@@ -163,6 +181,7 @@ pub fn render_docs(
             has_math: math_count > 0,
             has_mermaid: mermaid_count > 0,
             components_used: used,
+            headings,
         });
     }
 
@@ -204,8 +223,8 @@ mod tests {
 
         // index links to guide/intro (resolved anchor).
         assert!(site.docs[0].body_html.contains(r#"href="/guide/intro""#));
-        // intro has highlighted code + a resolved link + a broken span.
-        assert!(site.docs[1].body_html.contains("style=\"color:"));
+        // intro has highlighted code (class-based) + a resolved link + a broken span.
+        assert!(site.docs[1].body_html.contains(r#"<pre class="docgen-code">"#));
         assert!(site.docs[1].body_html.contains(r#"href="/index""#));
         assert!(site.docs[1].body_html.contains("docgen-wikilink--broken"));
 

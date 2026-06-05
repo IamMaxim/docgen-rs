@@ -71,3 +71,30 @@
 - ARCHITECT VERIFICATION — re-ran gate (cargo test 275/0-fail, clippy clean, fixture builds 6 pages) AND drove ACTUAL SCREENSHOTS in Chrome per the explicit user requirement. Validated every page type in BOTH themes: home, doc/markup, math (KaTeX typeset), diagram (Mermaid SVG in framed card), directives (warning + nested info callouts, inline leaf component, unknown-directive error span), graph (nodes+edge), history/diff timeline, search modal (Ctrl-K + click trigger, live results w/ active-row highlight). Toggled light↔dark: persisted across navigation, no flash. All confirmed genuinely polished — a complete reversal of the "zero CSS / completely broken" starting state.
 - Honest minor nits (non-blocking, logged in REPORT): (1) graph nodes render as small faint dots — functional + themed but could be larger; (2) Mermaid edge labels carry light backgrounds against the dark card (Mermaid default-theme artifact); (3) syntect code card stays light in dark mode by design (InspiredGitHub emits inline light-tuned span colors that beat class rules — documented in docgen.css header, reads as a deliberate "paper" card).
 - ALL 7 PHASES GREEN. Project complete. Branch overnight/p1-p6, local only, builds + tests green.
+
+---
+
+## 2026-06-05 21:05 MSK — P8 START: pixel-perfect parity with original Svelte docgen
+
+User ran built docgen-rs side-by-side vs the original (baseline served from `~/work/psychoville/docgen/build`,
+which is DARK-by-default) and found "tons of regressions"; wants a pixel-perfect replica in UI + features
+(named: theme selection, full-width switcher, etc.). Driving as overnight phase P8 via an ultracode Workflow.
+
+**Scouting done (architect, inline):**
+- Served baseline on :8801 (`/docs`) and docgen-rs fixture on :8802; screenshotted both.
+- Confirmed gap: P7 shipped a DIFFERENT design — warm-paper LIGHT default, search pill right-aligned, two-button
+  theme toggle, NO full-width switcher / right-rail toggle / panel toggle, EMPTY right rail (backlinks dumped
+  inline in content), syntect light-only code card. Original is dark-default, centered search, segmented theme
+  pill, btn-strip controls, 3-section right rail, Prism token-aware code (dark+light), wikilink tooltips, callouts.
+- Cataloged original UI surface + read original tokens/controls/btn-strip/scrollbar CSS verbatim (ground truth).
+- Mapped docgen-rs seams: docgen.css (959 lines, docgen-assets/assets/docgen/), page.html template
+  (docgen-render/templates/), islands (docgen-assets/assets/docgen/islands/ + search.js), syntect in docgen-core
+  markdown.rs. docgen-rs already uses the SAME token NAMES as the original — P7 only changed values + chrome.
+- Original ground-truth files all readable under `~/work/docgen/packages/docgen/src/lib/{styles,components}`;
+  built Prism theme at `~/work/psychoville/docgen/build/css/code.css`.
+
+**Decomposition:** two disjoint file-sets — Track LOOK (all CSS) ∥ Track STRUCTURE (templates+Rust+island JS,
+sequential within track). Shared CONTRACT from an Extract phase. Workflow gets it structurally close + green
+gate (cargo test + clippy + fixture build); I (architect) close the pixel gap via side-by-side Chrome iteration.
+
+Launching Workflow #1 (P8-A re-skin) now.

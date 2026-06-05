@@ -1,16 +1,14 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% if site_title %}History: {{ title }} — {{ site_title }}{% else %}History: {{ title }}{% endif %}</title>
-  <script>
-(function(){try{
-  var s=localStorage.getItem('docgen-theme');
-  var t=s||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+  <script>(function(){try{
+  var s=localStorage.getItem('doc-theme');
+  var t=s||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');
   document.documentElement.setAttribute('data-theme',t);
-}catch(e){}})();
-  </script>
+}catch(e){}})();</script>
   <link rel="stylesheet" href="{{ base | safe }}/docgen.css" />
 </head>
 {% macro render_nodes(nodes, depth) %}

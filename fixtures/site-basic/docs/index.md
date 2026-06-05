@@ -1,5 +1,6 @@
 ---
 title: Home
+description: Landing page for the basic fixture site.
 ---
 
 # Welcome

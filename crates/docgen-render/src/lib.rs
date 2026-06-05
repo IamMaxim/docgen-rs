@@ -1,3 +1,4 @@
+use docgen_core::headings::Heading;
 use docgen_core::model::{Backlink, TreeNode};
 use minijinja::{context, Environment};
 use serde::Serialize;
@@ -104,7 +105,16 @@ pub struct PageContext<'a> {
     pub slug: &'a str,
     pub body_html: &'a str,
     pub tree: &'a [TreeNode],
+    /// Inbound references, rendered as cards in the right rail's "Referenced by"
+    /// section (this supersedes the old in-content backlinks block).
     pub backlinks: &'a [Backlink],
+    /// The `h2`/`h3` outline of this page, for the right-rail "On this page" TOC.
+    pub headings: &'a [Heading],
+    /// Short commit hash for the rail's "Additional info" → Commit row. `""` →
+    /// the Commit row is omitted (no git repo / detached build).
+    pub commit: &'a str,
+    /// Build timestamp (`YYYY-MM-DD HH:MM`) for the "Built" row. `""` → omitted.
+    pub built: &'a str,
     /// Whether this doc has an emitted `/<slug>/history/` page (drives the nav link).
     pub has_history: bool,
     /// Whether this page contains a mermaid diagram (gates the mermaid island script).
@@ -153,6 +163,9 @@ impl Renderer {
             slug => ctx.slug,
             tree => ctx.tree,
             backlinks => ctx.backlinks,
+            headings => ctx.headings,
+            commit => ctx.commit,
+            built => ctx.built,
             has_history => ctx.has_history,
             has_mermaid => ctx.has_mermaid,
             has_math => ctx.has_math,
@@ -217,6 +230,9 @@ mod tests {
                 body_html: "<p>hello</p>",
                 tree: &[],
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
@@ -240,6 +256,9 @@ mod tests {
                 body_html: "",
                 tree: &[],
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
@@ -271,6 +290,9 @@ mod tests {
                 body_html: "",
                 tree: &[],
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
@@ -291,6 +313,9 @@ mod tests {
                 body_html: "",
                 tree: &[],
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
@@ -319,6 +344,9 @@ mod tests {
                 body_html: "",
                 tree: &[],
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
@@ -341,6 +369,9 @@ mod tests {
                 body_html: "",
                 tree: &[],
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
@@ -364,6 +395,9 @@ mod tests {
                 body_html: "",
                 tree: &[],
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
@@ -383,6 +417,9 @@ mod tests {
                 body_html: "",
                 tree: &[],
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
@@ -410,6 +447,9 @@ mod tests {
                 body_html: "",
                 tree: &tree,
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: true,
                 has_mermaid: false,
                 has_math: false,
@@ -445,6 +485,9 @@ mod tests {
                 body_html: "",
                 tree: &tree,
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
@@ -473,6 +516,9 @@ mod tests {
                 body_html: "<p>raw & ok</p>",
                 tree: &tree,
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
@@ -498,6 +544,7 @@ mod tests {
         let backlinks = vec![Backlink {
             slug: "a".into(),
             title: "Page A".into(),
+            description: Some("All about A".into()),
         }];
         let html = renderer()
             .render_page(&PageContext {
@@ -506,6 +553,9 @@ mod tests {
                 body_html: "",
                 tree: &[],
                 backlinks: &backlinks,
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
@@ -516,9 +566,13 @@ mod tests {
                 has_component_island: false,
             })
             .unwrap();
-        assert!(html.contains("Backlinks"));
-        assert!(html.contains(r#"href="/a""#));
-        assert!(html.contains(">Page A</a>"));
+        // Backlinks now live in the right rail's "Referenced by" section as cards.
+        assert!(html.contains("Referenced by"));
+        assert!(html.contains(r#"class="docgen-rail__backlink" href="/a""#));
+        assert!(html.contains("<span>Page A</span>"));
+        assert!(html.contains("<small>All about A</small>"));
+        // The old in-content backlinks block is gone.
+        assert!(!html.contains("docgen-backlinks"));
     }
 
     #[test]
@@ -530,6 +584,9 @@ mod tests {
                 body_html: "",
                 tree: &[],
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
@@ -540,7 +597,9 @@ mod tests {
                 has_component_island: false,
             })
             .unwrap();
-        assert!(!html.contains("Backlinks"));
+        // No backlinks → the "Referenced by" rail section is omitted entirely.
+        assert!(!html.contains("Referenced by"));
+        assert!(!html.contains("docgen-rail__backlink"));
     }
 
     #[test]
@@ -552,6 +611,9 @@ mod tests {
                 body_html: "",
                 tree: &[],
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: true,
                 has_mermaid: false,
                 has_math: false,
@@ -571,6 +633,9 @@ mod tests {
                 body_html: "",
                 tree: &[],
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
@@ -593,6 +658,9 @@ mod tests {
                 body_html: "",
                 tree: &[],
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
@@ -614,6 +682,9 @@ mod tests {
                 body_html: "",
                 tree: &[],
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: true,
                 has_math: false,
@@ -636,6 +707,9 @@ mod tests {
                 body_html: "",
                 tree: &[],
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
@@ -655,6 +729,9 @@ mod tests {
                 body_html: "",
                 tree: &[],
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: false,
                 has_math: true,
@@ -812,6 +889,9 @@ mod tests {
                 body_html: "",
                 tree: &[],
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
@@ -897,6 +977,9 @@ mod tests {
                 body_html: "<p>hi</p>",
                 tree,
                 backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
                 has_history: false,
                 has_mermaid: false,
                 has_math: false,
@@ -928,7 +1011,7 @@ mod tests {
     fn page_has_no_flash_script_in_head() {
         let html = page("x", &[]);
         let script_at = html
-            .find("localStorage.getItem('docgen-theme')")
+            .find("localStorage.getItem('doc-theme')")
             .expect("no-flash script present");
         let css_at = html
             .find("/docgen.css")
@@ -938,6 +1021,8 @@ mod tests {
             "no-flash script must precede docgen.css link"
         );
         assert!(html.contains("prefers-color-scheme"));
+        // Dark is the bare default: pre-paint falls back to dark, not light.
+        assert!(html.contains("'light':'dark'"));
     }
 
     #[test]
@@ -945,7 +1030,9 @@ mod tests {
         let html = page("x", &[]);
         assert!(html.contains(r#"x-data="docgenThemeToggle""#));
         assert!(html.contains("/islands/theme-toggle.js"));
-        assert!(html.contains(r#"data-theme="light""#)); // default attr on <html>
+        // Dark is the bare default: <html> carries NO data-theme attr server-side;
+        // the pre-paint script sets it (dark when nothing stored / no light pref).
+        assert!(!html.contains(r#"<html lang="en" data-theme="#));
     }
 
     #[test]
@@ -1008,7 +1095,7 @@ mod tests {
             assert!(html.contains("docgen-topbar"));
             assert!(html.contains("data-theme"));
             assert!(html.contains("/islands/theme-toggle.js"));
-            assert!(html.contains("localStorage.getItem('docgen-theme')"));
+            assert!(html.contains("localStorage.getItem('doc-theme')"));
         }
     }
 }

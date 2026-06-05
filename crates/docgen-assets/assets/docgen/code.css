@@ -1,0 +1,146 @@
+/* docgen code highlighting — class-based syntect (ClassStyle::Spaced).
+ *
+ * docgen-core emits `<pre class="docgen-code"><code>…</code></pre>` where spans
+ * carry space-separated, lowercased TextMate scope atoms (e.g. `keyword`,
+ * `string`, `constant numeric`, `entity name function`). This stylesheet maps
+ * those scopes to colors for BOTH themes — dark is the bare default (VSCode Dark
+ * Plus), light overrides under `:root[data-theme='light']` (VS). Only token
+ * COLORS live here; the code-card chrome (padding, bg, border, radius, font) is
+ * owned by docgen.css.
+ *
+ * Linked AFTER docgen.css in <head>. Color values ported verbatim from the
+ * Svelte docgen `code.css`. LOOK does not touch this file. */
+
+/* ===== DARK (default) — VSCode Dark Plus ===== */
+
+.docgen-doc-content pre.docgen-code,
+.docgen-doc-content pre.docgen-code code {
+	color: #d4d4d4;
+}
+
+.docgen-doc-content pre.docgen-code .comment {
+	color: #6a9955;
+	font-style: italic;
+}
+
+/* keywords / storage / control flow */
+.docgen-doc-content pre.docgen-code .keyword,
+.docgen-doc-content pre.docgen-code .storage {
+	color: #569cd6;
+}
+.docgen-doc-content pre.docgen-code .keyword.control,
+.docgen-doc-content pre.docgen-code .controlflow,
+.docgen-doc-content pre.docgen-code .keyword.import {
+	color: #c586c0;
+}
+.docgen-doc-content pre.docgen-code .storage.type,
+.docgen-doc-content pre.docgen-code .storage.modifier {
+	color: #569cd6;
+}
+
+/* strings */
+.docgen-doc-content pre.docgen-code .string {
+	color: #ce9178;
+}
+
+/* numbers / constants / booleans */
+.docgen-doc-content pre.docgen-code .constant.numeric,
+.docgen-doc-content pre.docgen-code .numeric,
+.docgen-doc-content pre.docgen-code .constant.language,
+.docgen-doc-content pre.docgen-code .constant {
+	color: #b5cea8;
+}
+
+/* functions */
+.docgen-doc-content pre.docgen-code .entity.name.function,
+.docgen-doc-content pre.docgen-code .support.function {
+	color: #dcdcaa;
+}
+
+/* class names / types */
+.docgen-doc-content pre.docgen-code .entity.name.type,
+.docgen-doc-content pre.docgen-code .entity.name.class,
+.docgen-doc-content pre.docgen-code .support.type,
+.docgen-doc-content pre.docgen-code .support.class {
+	color: #4ec9b0;
+}
+
+/* variables / properties / parameters */
+.docgen-doc-content pre.docgen-code .variable,
+.docgen-doc-content pre.docgen-code .variable.parameter,
+.docgen-doc-content pre.docgen-code .meta.property,
+.docgen-doc-content pre.docgen-code .support.variable {
+	color: #9cdcfe;
+}
+
+/* regex */
+.docgen-doc-content pre.docgen-code .string.regexp {
+	color: #d16969;
+}
+
+/* punctuation / operators */
+.docgen-doc-content pre.docgen-code .punctuation,
+.docgen-doc-content pre.docgen-code .keyword.operator {
+	color: #d4d4d4;
+}
+
+/* ===== LIGHT — VS ===== */
+
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code code {
+	color: #393a34;
+}
+
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .comment {
+	color: #008000;
+	font-style: italic;
+}
+
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .keyword,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .storage,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .keyword.control,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .controlflow,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .keyword.import,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .storage.type,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .storage.modifier {
+	color: #0000ff;
+}
+
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .string {
+	color: #a31515;
+}
+
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .constant.numeric,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .numeric,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .constant.language,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .constant,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .variable,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .variable.parameter,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .meta.property,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .support.variable {
+	color: #36acaa;
+}
+
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .entity.name.type,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .entity.name.class,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .support.type,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .support.class {
+	color: #2b91af;
+}
+
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .entity.name.tag,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .entity.name.selector {
+	color: #800000;
+}
+
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .entity.other.attribute-name,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .string.regexp {
+	color: #ff0000;
+}
+
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .punctuation,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .keyword.operator,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .entity.name.function,
+:root[data-theme='light'] .docgen-doc-content pre.docgen-code .support.function {
+	color: #393a34;
+}

@@ -56,6 +56,7 @@ mod tests {
             has_math: false,
             has_mermaid: false,
             components_used: Default::default(),
+            headings: Vec::new(),
         }
     }
 

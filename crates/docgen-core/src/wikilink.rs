@@ -87,7 +87,7 @@ fn render_link(
             }
             let text = display_text(&target, label);
             format!(
-                r#"<a class="docgen-wikilink" href="{}/{}">{}</a>"#,
+                r#"<a class="docgen-wikilink" href="{0}/{1}" data-wikilink-title="{2}" data-wikilink-path="/{1}">{2}</a>"#,
                 base,
                 esc(&slug),
                 esc(&text)
@@ -272,14 +272,18 @@ mod tests {
     #[test]
     fn resolved_wikilink_becomes_anchor() {
         let (html, resolved) = render("see [[guide/intro]] now\n", &slugs());
-        assert!(html.contains(r#"<a class="docgen-wikilink" href="/guide/intro">guide/intro</a>"#));
+        assert!(html.contains(
+            r#"<a class="docgen-wikilink" href="/guide/intro" data-wikilink-title="guide/intro" data-wikilink-path="/guide/intro">guide/intro</a>"#
+        ));
         assert_eq!(resolved, vec!["guide/intro".to_string()]);
     }
 
     #[test]
     fn labeled_wikilink_uses_label_text() {
         let (html, _) = render("[[guide/intro|The Intro]]\n", &slugs());
-        assert!(html.contains(r#"href="/guide/intro">The Intro</a>"#));
+        assert!(html.contains(r#"href="/guide/intro""#));
+        assert!(html.contains(r#"data-wikilink-title="The Intro""#));
+        assert!(html.contains(r#">The Intro</a>"#));
     }
 
     #[test]
@@ -303,11 +307,12 @@ mod tests {
         // `[[index|]]` and `[[index|   ]]` must not render an empty clickable text;
         // they fall back to the target, matching the search-index unwrap path.
         let (html, _) = render("[[index|]]\n", &slugs());
-        assert!(html.contains(r#"href="/index">index</a>"#));
-        assert!(!html.contains(r#"href="/index"></a>"#));
+        assert!(html.contains(r#"href="/index""#));
+        assert!(html.contains(r#">index</a>"#));
+        assert!(!html.contains(r#">      </a>"#));
 
         let (html, _) = render("[[index|   ]]\n", &slugs());
-        assert!(html.contains(r#"href="/index">index</a>"#));
+        assert!(html.contains(r#">index</a>"#));
 
         // Broken target with empty label also falls back to the target text.
         let (html, _) = render("[[nope|]] x\n", &slugs());

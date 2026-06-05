@@ -1,25 +1,59 @@
 /* Built-in callout, tokenized to the docgen-rs theme. Emitted as `components.css`,
  * which always loads AFTER `docgen.css` (where :root / [data-theme] tokens live),
- * so every var() below resolves in both light and dark themes. */
+ * so every var() below resolves in both light and dark themes.
+ *
+ * This is the sole stylesheet for the rendered callout component: it owns layout,
+ * the typed left-accent / gradient, and the leading icon glyph (port of the
+ * original doc-callout `!` / `?` / `…` badges). The template emits the author's
+ * `type` verbatim, so the variant classes here are keyed to the accepted type
+ * values: note / warning / danger (with todo / info / discussion aliases for the
+ * original semantic names). */
 .docgen-callout {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
   border: 1px solid var(--border);
   border-left: 3px solid var(--cl, var(--accent));
-  background: var(--accent-soft);
+  background: linear-gradient(to right, var(--cl-soft, var(--accent-soft)), transparent 60%);
   border-radius: 0 var(--r-md) var(--r-md) 0;
   padding: 14px 16px;
   margin: 18px 0;
+  color: var(--text-dim);
 }
-.docgen-callout--note {
+.docgen-callout::before {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cl, var(--accent));
+  content: var(--cl-icon, '·');
+}
+.docgen-callout--note,
+.docgen-callout--info {
   --cl: var(--info);
-  background: var(--info-soft);
+  --cl-soft: var(--info-soft);
+  --cl-icon: '?';
 }
-.docgen-callout--warning {
+.docgen-callout--warning,
+.docgen-callout--warn,
+.docgen-callout--todo {
   --cl: var(--warn);
-  background: var(--warn-soft);
+  --cl-soft: var(--warn-soft);
+  --cl-icon: '!';
+}
+.docgen-callout--discussion {
+  --cl: var(--talk);
+  --cl-soft: var(--talk-soft);
+  --cl-icon: '…';
 }
 .docgen-callout--danger {
   --cl: var(--text-error);
-  background: var(--diff-removed-bg);
+  --cl-soft: var(--diff-removed-bg);
+  --cl-icon: '!';
 }
 .docgen-callout__title {
   font-weight: 600;
@@ -29,6 +63,10 @@
   font-size: 13px;
   margin: 0 0 0.25rem;
   color: var(--cl, var(--accent));
+}
+.docgen-callout__main {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .docgen-callout__body > :first-child {
   margin-top: 0;

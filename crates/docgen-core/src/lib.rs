@@ -4,6 +4,7 @@ pub mod discover;
 pub mod frontmatter;
 pub mod graph;
 pub mod graphlayout;
+pub mod headings;
 pub mod markdown;
 pub mod math;
 pub mod mathpass;
@@ -19,5 +20,6 @@ pub use graph::LinkGraph;
 pub use graphlayout::{
     graph_data_json, layout_graph, GraphData, GraphDataEdge, GraphNode, LayoutParams,
 };
+pub use headings::Heading;
 pub use model::{Backlink, Doc, LinkEdge, RawDoc, SearchEntry, TreeNode};
 pub use pipeline::{prepare, render_docs, PreparedDoc, SiteBuild};

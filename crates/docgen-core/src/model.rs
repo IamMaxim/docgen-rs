@@ -27,6 +27,11 @@ pub struct Doc {
     /// Names of custom components rendered on this page (drives per-page island load).
     #[serde(default)]
     pub components_used: std::collections::BTreeSet<String>,
+    /// The `h2`/`h3` outline of this page, in document order, for the right-rail
+    /// "On this page" table of contents. Ids match the `id` attributes stamped
+    /// onto the rendered heading tags in `body_html`.
+    #[serde(default)]
+    pub headings: Vec<crate::headings::Heading>,
 }
 
 /// A node in the sidebar tree.
@@ -49,6 +54,11 @@ pub struct LinkEdge {
 pub struct Backlink {
     pub slug: String,
     pub title: String,
+    /// The linking doc's frontmatter description, rendered as a `<small>` under
+    /// the title in the rail's "Referenced by" cards. `None` when the linking
+    /// doc has no `description:` in its frontmatter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 /// One entry in the static search index.

@@ -2,18 +2,35 @@ use std::sync::OnceLock;
 
 use comrak::nodes::AstNode;
 use comrak::options::Plugins;
-use comrak::plugins::syntect::SyntectAdapter;
+use comrak::plugins::syntect::{SyntectAdapter, SyntectAdapterBuilder};
 use comrak::{format_html_with_plugins, markdown_to_html_with_plugins, Options};
 
-/// Default syntect theme. Single source of truth.
-pub const SYNTECT_THEME: &str = "InspiredGitHub";
+/// CSS class on the highlighted `<pre>` wrapper. Syntect runs in **class-based**
+/// mode (`ClassStyle::Spaced`): spans carry space-separated, lowercased TextMate
+/// scope atoms (e.g. `keyword`, `string`, `constant numeric`) and the colors live
+/// in the shipped `code.css`, theme-aware for both light and dark. There is no
+/// embedded syntect theme and no inline `style="color:…"`.
+pub const CODE_PRE_CLASS: &str = "docgen-code";
 
-/// The syntect adapter loads/builds syntect's syntax + theme sets, which is the
-/// single most expensive object in the pipeline. It is immutable and reusable, so
-/// build it once and share `&adapter` across every document.
+/// The syntect adapter loads/builds syntect's syntax set, which is the single
+/// most expensive object in the pipeline. It is immutable and reusable, so build
+/// it once and share `&adapter` across every document. Built in class-based mode
+/// (`.css()`), so it emits scope-class spans rather than inline-styled ones.
 fn syntect_adapter() -> &'static SyntectAdapter {
     static ADAPTER: OnceLock<SyntectAdapter> = OnceLock::new();
-    ADAPTER.get_or_init(|| SyntectAdapter::new(Some(SYNTECT_THEME)))
+    ADAPTER.get_or_init(|| SyntectAdapterBuilder::new().css().build())
+}
+
+/// Comrak's class-based adapter wraps highlighted code in
+/// `<pre class="syntax-highlighting">`. Rewrite that wrapper class to our
+/// canonical `docgen-code` so `code.css` can scope token colors under
+/// `.docgen-doc-content pre.docgen-code`. The literal only appears as the
+/// highlighter's own wrapper, so a plain replace is safe.
+fn rewrite_code_pre_class(html: String) -> String {
+    html.replace(
+        r#"<pre class="syntax-highlighting">"#,
+        &format!(r#"<pre class="{CODE_PRE_CLASS}">"#),
+    )
 }
 
 /// The comrak options used across the whole pipeline (GFM + P0 extensions).
@@ -41,7 +58,7 @@ pub fn render_markdown(body: &str) -> String {
     let options = comrak_options();
     let mut plugins = Plugins::default();
     plugins.render.codefence_syntax_highlighter = Some(syntect_adapter());
-    markdown_to_html_with_plugins(body, &options, &plugins)
+    rewrite_code_pre_class(markdown_to_html_with_plugins(body, &options, &plugins))
 }
 
 /// Format an already-parsed (and possibly transformed) AST to HTML with syntect.
@@ -50,7 +67,7 @@ pub fn format_ast<'a>(root: &'a AstNode<'a>, options: &Options) -> String {
     plugins.render.codefence_syntax_highlighter = Some(syntect_adapter());
     let mut out = String::new();
     format_html_with_plugins(root, options, &mut out, &plugins).expect("format AST to HTML");
-    out
+    rewrite_code_pre_class(out)
 }
 
 #[cfg(test)]
@@ -101,11 +118,12 @@ mod tests {
     fn highlights_fenced_rust_code() {
         let md = "```rust\nfn main() { let x = 1; }\n```\n";
         let html = render_markdown(md);
-        // Syntect emits inline-styled spans inside a <pre> wrapper.
-        assert!(html.contains("<pre"));
-        assert!(html.contains("style=\"color:"));
-        // The keyword `fn` is highlighted as its own span, not left as plain text.
-        assert!(html.contains("<span"));
+        // Class-based syntect: spans carry scope classes (no inline styles), inside
+        // the canonical `pre.docgen-code` wrapper. Token colors live in code.css.
+        assert!(html.contains(r#"<pre class="docgen-code">"#));
+        assert!(!html.contains("style=\"color:"));
+        // The keyword `fn` is highlighted as its own classed span.
+        assert!(html.contains(r#"<span class="keyword"#));
     }
 
     #[test]

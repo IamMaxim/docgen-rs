@@ -31,6 +31,7 @@ no push/PR/remote; quarantine irreversible decisions behind a seam and flag them
 | P5 | Dev server (`axum` + `notify` + live reload) + CodeMirror editor island | P3 | GREEN | 48b2701 |
 | P6 | `docgen init` scaffold + custom-component directive system + binary distribution | P3 | GREEN | d8716db |
 | P7 | **Design / theme** — real site CSS: layout/grid, typography, sidebar/topbar, dark-mode toggle, responsive. (User-requested follow-up — site was unstyled.) | P0–P6 | GREEN | 5aa0bfa |
+| P8 | **Pixel-perfect parity with original Svelte docgen** — match tokens (dark default), Geist fonts, topbar (centered search + full-width switcher + right-rail toggle + segmented theme pill + brand mark), 3-section right rail (On this page / Additional info / Referenced by), doc-shell typography, 4-type callouts, wikilink tooltips, rust-ref chips, class-based syntect code (dark+light), search grouping. Validated side-by-side vs baseline. | P0–P7 | IN-PROGRESS | — |
 
 Status legend: TODO / IN-PROGRESS / GREEN / BLOCKED.
 
@@ -44,6 +45,42 @@ code/callout/table styling, working light/dark ThemeToggle, responsive/mobile. R
 **Validation bar (explicit user requirement):** drive by ACTUAL SCREENSHOTS in Chrome — every page type (home,
 doc, history, graph, math, diagram, custom-component, search-open, dark mode) must look polished, not merely
 "has CSS". Use frontend-design skill principles; iterate on screenshots.
+
+## P8 — Pixel-perfect parity (user-requested, added 2026-06-05 ~21:00 MSK)
+**Why:** user ran the built docgen-rs side-by-side against the original Svelte `docgen` (baseline served from
+`~/work/psychoville/docgen/build`, dark theme default) and found "tons of regressions". P7 shipped a *different*
+theme (warm-paper LIGHT default, no right rail, two-button theme toggle, no full-width switcher, syntect light-only
+code). Target = pixel-perfect replica of the original in BOTH UI and features.
+**Baseline:** `~/work/psychoville/docgen/build` served on :8801 (`/docs`). docgen-rs fixture on :8802.
+**Ground truth (original source):** `~/work/docgen/packages/docgen/src/lib/{styles,components}` —
+tokens.css (DARK is `:root` default; light is `[data-theme=light]`), doc-shell.css, controls.css, btn-strip.css,
+diff.css, scrollbar.css; Topbar.svelte, RightRail.svelte, DocTree.svelte, SearchModal.svelte, ThemeToggle.svelte,
+WikilinkTooltip.svelte; stores/ui-prefs.ts (localStorage keys: doc-theme, doc-full-width,
+doc-right-rail-collapsed, doc-left-rail-width). Built Prism theme: `~/work/psychoville/docgen/build/css/code.css`.
+**Parity gaps identified (architect, via screenshots + source):**
+1. Tokens: dark must be DEFAULT (`:root` = #0d0c0a…); light = `[data-theme=light]`. docgen-rs has it inverted.
+2. Topbar: centered search pill (min(360px,42vw), "Search pages, headings, Rust refs… ⌘K"); diamond brand mark;
+   btn-strip of icon controls (full-width/maximize toggle, right-rail/menu toggle); segmented moon/sun theme pill.
+3. Right rail (currently empty `<aside>`): 3 sections — "On this page" (h2/h3 TOC, scroll-spy), "Additional info"
+   (Path/Layer/Commit/Built grid), "Referenced by" (backlink cards). Move backlinks OUT of content into rail.
+4. Full-width switcher + right-rail collapse: localStorage-persisted islands toggling classes on `.docgen-app`.
+5. doc-shell typography: 15px/1.6, h1 38px, exact spacing rhythm, link accent underline, table/blockquote styling.
+6. Callouts: 4 types (TODO/warn, OPEN QUESTION/info, DISCUSSION/talk, CONTENT TODO) with left-accent gradient.
+7. Code blocks: switch syntect to CLASS-based output (`ClassedHTMLGenerator`/`ClassStyle::Spaced`) + ship a
+   token-aware `code.css` (dark + light) ported from the original Prism colors → fixes P7's light-only code card.
+8. Wikilink tooltips (hover popover), rust-ref chips, broken-link styling.
+9. Search: grouped fuzzy results (pages/headings + bonuses) closer to original SearchModal scoring.
+**Decomposition (conflict-free, two disjoint file-sets):**
+- **Track LOOK** (owns ALL CSS: `crates/docgen-assets/assets/docgen/docgen.css`): tokens→dark-default + original
+  values, global resets, doc-shell typography, topbar/sidebar/right-rail/search-modal/callout layout. ~70% of parity.
+- **Track STRUCTURE** (owns templates + Rust + island JS; sequential within track to avoid intra-file conflict):
+  page.html chrome + right-rail markup + PageContext data (TOC, page meta, move backlinks to rail) →
+  island JS (full-width, right-rail-collapse, wikilink tooltip, theme pill, scroll-spy) + emission in
+  docgen-assets/src/lib.rs + script tags → search.js grouping + syntect class output + code.css.
+  Tracks share a CONTRACT (class-name map, token block, dims, localStorage keys, island names) from the Extract phase.
+**Validation bar (explicit):** I (architect) drive Claude-in-Chrome to compare docgen-rs (:8802) vs baseline (:8801)
+page-by-page (home, doc, math, diagram, directives, graph, history, search, BOTH themes, full-width toggle) and
+iterate with focused fix passes until pixel-close. Workflow gets it structurally close + green; I close the pixel gap.
 
 ## Notes / open seams
 - **Island infrastructure lands in P3** (the `docgen-assets` crate + Alpine bootstrap + glue-JS emission).

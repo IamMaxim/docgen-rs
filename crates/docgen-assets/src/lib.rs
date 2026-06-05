@@ -97,10 +97,22 @@ pub fn core_assets() -> Vec<Asset> {
         same("vendor/alpine/alpine.min.js", AssetKind::Js),
         embed("docgen/bootstrap.js", "bootstrap.js", AssetKind::Js),
         embed("docgen/docgen.css", "docgen.css", AssetKind::Css),
+        embed("docgen/code.css", "code.css", AssetKind::Css),
         embed("docgen/search.js", "search.js", AssetKind::Js),
         embed(
             "docgen/islands/theme-toggle.js",
             "islands/theme-toggle.js",
+            AssetKind::Js,
+        ),
+        embed("docgen/islands/layout.js", "islands/layout.js", AssetKind::Js),
+        embed(
+            "docgen/islands/scrollspy.js",
+            "islands/scrollspy.js",
+            AssetKind::Js,
+        ),
+        embed(
+            "docgen/islands/wikilink.js",
+            "islands/wikilink.js",
             AssetKind::Js,
         ),
     ]
@@ -432,7 +444,12 @@ mod tests {
     #[test]
     fn shared_css_defines_theme_tokens() {
         let s = shared_css();
-        assert!(s.contains(r#":root[data-theme="dark"]"#));
+        // Dark is the bare default palette on `:root`; light overrides via
+        // `:root[data-theme='light']`. There is NO `:root[data-theme="dark"]`.
+        assert!(!s.contains(r#":root[data-theme="dark"]"#));
+        assert!(!s.contains(r#":root[data-theme='dark']"#));
+        assert!(s.contains(":root {") || s.contains(":root{"));
+        assert!(s.contains("[data-theme='light']") || s.contains(r#"[data-theme="light"]"#));
         for tok in ["--accent", "--bg", "--text", "--surface"] {
             assert!(s.contains(tok), "missing token {tok}");
         }
@@ -453,9 +470,14 @@ mod tests {
     }
 
     #[test]
-    fn shared_css_code_block_surface_is_theme_stable() {
+    fn shared_css_code_block_uses_theme_aware_tokens() {
+        // Code blocks are now theme-aware (class-based syntect, both themes) and
+        // use `--code-bg`/`--code-border` rather than the old theme-stable
+        // `--code-surface`/`--code-border-stable` card tokens.
         let s = shared_css();
-        assert!(s.contains("--code-surface"));
+        assert!(!s.contains("--code-surface"));
+        assert!(s.contains("--code-bg"));
+        assert!(s.contains("--code-border"));
         assert!(s.contains(".docgen-doc-content pre"));
     }
 

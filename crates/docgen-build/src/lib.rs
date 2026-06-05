@@ -192,10 +192,21 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
     let mut docs_with_history: HashSet<String> = HashSet::new();
     let repo = docgen_diff::discover_repo(&docs_dir)
         .with_context(|| format!("discovering git repo for {}", docs_dir.display()))?;
+    // Build metadata for the right-rail "Additional info" section. Best-effort:
+    // the short HEAD hash is empty outside a git repo (the Commit row is then
+    // omitted by the template); `built` is the wall-clock build time.
+    let now = Local::now();
+    let built_stamp = now.format("%Y-%m-%d %H:%M").to_string();
+    let mut commit_hash = String::new();
     if let Some(repo) = repo {
+        if let Ok(head) = repo.head() {
+            if let Some(oid) = head.target() {
+                let s = oid.to_string();
+                commit_hash = s.chars().take(7).collect();
+            }
+        }
         if let Some(workdir) = repo.workdir().map(Path::to_path_buf) {
             let limit = diff_limit();
-            let now = Local::now();
             for doc in &site.docs {
                 let Some(git_path) = git_rel_path(&docs_dir, &workdir, &doc.rel_path) else {
                     continue;
@@ -232,6 +243,9 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
             body_html: &doc.body_html,
             tree: &tree,
             backlinks,
+            headings: &doc.headings,
+            commit: &commit_hash,
+            built: &built_stamp,
             has_history: docs_with_history.contains(&doc.slug),
             has_mermaid: doc.has_mermaid,
             has_math: doc.has_math,

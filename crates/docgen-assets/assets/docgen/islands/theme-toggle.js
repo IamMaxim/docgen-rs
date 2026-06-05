@@ -5,12 +5,12 @@
 window.docgen.island('docgenThemeToggle', function (Alpine) {
   Alpine.data('docgenThemeToggle', function () {
     return {
-      theme: document.documentElement.getAttribute('data-theme') || 'light',
+      theme: document.documentElement.getAttribute('data-theme') || 'dark',
       set: function (t) {
         this.theme = t;
         document.documentElement.setAttribute('data-theme', t);
         try {
-          localStorage.setItem('docgen-theme', t);
+          localStorage.setItem('doc-theme', t);
         } catch (e) {}
       },
       toggle: function () {
