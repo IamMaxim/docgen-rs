@@ -29,3 +29,25 @@ pub enum TreeNode {
     Dir { name: String, children: Vec<TreeNode> },
     Doc { name: String, slug: String, title: String },
 }
+
+/// One resolved wikilink edge: `from` doc links to `to` doc (both slugs).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+pub struct LinkEdge {
+    pub from: String,
+    pub to: String,
+}
+
+/// Per-target inbound reference, for rendering a "Backlinks" section.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+pub struct Backlink {
+    pub slug: String,
+    pub title: String,
+}
+
+/// One entry in the static search index.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SearchEntry {
+    pub slug: String,
+    pub title: String,
+    pub text: String,
+}
