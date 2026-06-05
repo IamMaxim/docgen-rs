@@ -35,8 +35,18 @@ fn builds_fixture_site() {
     assert!(intro.contains(r#"href="/index""#));
     assert!(intro.contains(r#"href="/guide/intro""#));
     assert!(intro.contains(">guide<"));
-    // Wikilinks are rendered literally in P0 (no resolution).
-    assert!(intro.contains("[[wikilink]]"));
+
+    // Resolved wikilink on the home page.
+    assert!(home.contains(r#"<a class="docgen-wikilink" href="/guide/intro">Intro guide</a>"#));
+
+    // Intro page: resolved backlink target, broken wikilink, highlighted code.
+    assert!(intro.contains(r#"href="/index""#));
+    assert!(intro.contains("docgen-wikilink--broken"));
+    assert!(intro.contains("style=\"color:")); // syntect highlight
+
+    // Backlinks section: intro links to index, so index's page lists intro as a backlink.
+    assert!(home.contains("Backlinks"));
+    assert!(home.contains(r#"href="/guide/intro""#));
 
     let _ = fs::remove_dir_all(&tmp);
 }
