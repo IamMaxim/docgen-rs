@@ -11,7 +11,9 @@ window.docgen.island('docgenMermaid', function (Alpine) {
         const out = el.querySelector('.docgen-mermaid__out');
         if (!src || !out) return;
         // docgen.loadScript caches by URL, so multiple diagrams fetch the lib once.
-        await window.docgen.loadScript('/vendor/mermaid/mermaid.min.js');
+        // Prefix with the deployed base (set by the page) so a sub-path deploy works.
+        var base = window.DOCGEN_BASE || '';
+        await window.docgen.loadScript(base + '/vendor/mermaid/mermaid.min.js');
         const mermaid = window.mermaid;
         mermaid.initialize({ startOnLoad: false });
         const id = el.dataset.mermaidId || 'm-' + Math.random().toString(36).slice(2);
