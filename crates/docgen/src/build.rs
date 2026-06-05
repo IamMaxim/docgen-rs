@@ -7,7 +7,7 @@ use chrono::Local;
 use docgen_core::discover::discover_docs;
 use docgen_core::pipeline::{prepare, render_docs};
 use docgen_core::tree::build_tree;
-use docgen_render::{HistoryContext, PageContext, Renderer, DEFAULT_PAGE_TEMPLATE};
+use docgen_render::{GraphContext, HistoryContext, PageContext, Renderer, DEFAULT_PAGE_TEMPLATE};
 
 use crate::history::report_to_buckets;
 
@@ -119,6 +119,21 @@ pub fn build(project_root: &Path) -> Result<()> {
         fs::write(out_dir.join("index.html"), html)?;
     }
 
+    // Phase 3: the /graph/ page (default-on in P4). Deterministic force layout
+    // from the already-built link graph — never recomputes links.
+    let graph_data =
+        site.graph_data(docgen_core::graphlayout::LayoutParams::default());
+    let graph_json = docgen_core::graphlayout::graph_data_json(&graph_data);
+    let graph_html = renderer.render_graph(&GraphContext {
+        tree: &tree,
+        graph_json: &graph_json,
+        node_count: graph_data.nodes.len(),
+        edge_count: graph_data.edges.len(),
+    })?;
+    let graph_dir = dist_dir.join("graph");
+    fs::create_dir_all(&graph_dir)?;
+    fs::write(graph_dir.join("index.html"), graph_html)?;
+
     // Static search index.
     fs::write(
         dist_dir.join("search-index.json"),
@@ -131,6 +146,8 @@ pub fn build(project_root: &Path) -> Result<()> {
     let emit_opts = docgen_assets::EmitOptions {
         include_katex_runtime: false,
         include_mermaid: site.any_mermaid,
+        // The /graph/ page is always emitted in P4, so its island always ships.
+        include_graph: true,
     };
     docgen_assets::emit(&docgen_assets::assets_for(&emit_opts), &dist_dir)?;
 

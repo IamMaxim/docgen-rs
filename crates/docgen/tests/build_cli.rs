@@ -99,6 +99,80 @@ fn builds_fixture_site() {
     assert!(!tmp.join("dist/islands/mermaid.js").exists());
     assert!(!home.contains("islands/mermaid.js"));
 
+    // The /graph/ page + island always ship (P4 default-on).
+    assert!(tmp.join("dist/graph/index.html").is_file());
+    assert!(tmp.join("dist/islands/graph.js").is_file());
+    // Every doc page links to /graph/.
+    assert!(home.contains(r#"href="/graph""#));
+
+    let _ = fs::remove_dir_all(&tmp);
+}
+
+/// Graph view: the build emits /graph/ with embedded GraphData JSON, mounts the
+/// docgenGraph island, ships islands/graph.js, and every page links to /graph/.
+#[test]
+fn builds_graph_page_with_island_and_nav_link() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let workspace = manifest.parent().unwrap().parent().unwrap();
+    let fixture = workspace.join("fixtures/site-basic");
+
+    let tmp = std::env::temp_dir()
+        .join(format!("docgen_build_cli_graph_test_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&tmp);
+    fs::create_dir_all(tmp.join("docs/guide")).unwrap();
+    fs::copy(fixture.join("docs/index.md"), tmp.join("docs/index.md")).unwrap();
+    fs::copy(
+        fixture.join("docs/guide/intro.md"),
+        tmp.join("docs/guide/intro.md"),
+    )
+    .unwrap();
+
+    let status = Command::new(env!("CARGO_BIN_EXE_docgen"))
+        .arg("build")
+        .arg(&tmp)
+        .status()
+        .unwrap();
+    assert!(status.success());
+
+    // /graph/ page exists with the island + embedded data + meta.
+    let graph = fs::read_to_string(tmp.join("dist/graph/index.html")).unwrap();
+    assert!(graph.contains("<title>Graph</title>"));
+    assert!(graph.contains(r#"x-data="docgenGraph""#));
+    assert!(graph.contains(r#"id="docgen-graph-data""#));
+    assert!(graph.contains(r#"src="/islands/graph.js""#));
+
+    // Embedded JSON is real, parseable, and reflects the two docs + their links.
+    let start = graph.find("docgen-graph-data").unwrap();
+    let open = graph[start..].find('>').unwrap() + start + 1;
+    let close = graph[open..].find("</script>").unwrap() + open;
+    let json = &graph[open..close];
+    let data: serde_json::Value = serde_json::from_str(json).unwrap();
+    let nodes = data["nodes"].as_array().unwrap();
+    assert_eq!(nodes.len(), 2);
+    assert!(nodes.iter().any(|n| n["slug"] == "index"));
+    assert!(nodes.iter().any(|n| n["slug"] == "guide/intro"));
+    let edges = data["edges"].as_array().unwrap();
+    assert!(edges
+        .iter()
+        .any(|e| e["from"] == "index" && e["to"] == "guide/intro"));
+
+    // Positions are finite + in-bounds (integration-level determinism check).
+    for n in nodes {
+        let (x, y) = (n["x"].as_f64().unwrap(), n["y"].as_f64().unwrap());
+        assert!(x.is_finite() && y.is_finite());
+        assert!((74.0..=1420.0 - 74.0).contains(&x));
+        assert!((74.0..=760.0 - 74.0).contains(&y));
+    }
+
+    // The island JS is emitted, with no vendored graph lib.
+    assert!(tmp.join("dist/islands/graph.js").is_file());
+    let island = fs::read_to_string(tmp.join("dist/islands/graph.js")).unwrap();
+    assert!(!island.to_lowercase().contains("d3"));
+
+    // Every doc page links to /graph/.
+    let home = fs::read_to_string(tmp.join("dist/index/index.html")).unwrap();
+    assert!(home.contains(r#"href="/graph""#));
+
     let _ = fs::remove_dir_all(&tmp);
 }
 
