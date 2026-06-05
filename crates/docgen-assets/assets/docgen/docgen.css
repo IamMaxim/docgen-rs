@@ -28,7 +28,8 @@
   --hairline: #e8e3d6;
   --text: #181712;
   --text-dim: #5f5d54;
-  --text-mute: #918e83;
+  /* AA-passing muted text (>=4.5:1 on both --bg and --surface). */
+  --text-mute: #67645b;
   --text-error: #dc2626;
   --accent: oklch(0.55 0.14 60);
   --accent-soft: oklch(0.55 0.14 60 / 0.1);
@@ -102,7 +103,8 @@
   --hairline: #1d1c19;
   --text: #ecebe5;
   --text-dim: #a8a59a;
-  --text-mute: #6f6d64;
+  /* AA-passing muted text (>=4.5:1 on both --bg and --surface). */
+  --text-mute: #8d8a7f;
   --text-error: #ff8a8a;
   --accent: oklch(0.78 0.13 75);
   --accent-soft: oklch(0.78 0.13 75 / 0.14);
@@ -128,6 +130,31 @@
 /* ============================== reset / base ============================== */
 * {
   box-sizing: border-box;
+}
+/* Alpine cloak — ships here (not just dev) so x-show elements (e.g. the mobile
+   sidebar backdrop) stay hidden until Alpine boots, preventing a flash. */
+[x-cloak] {
+  display: none !important;
+}
+/* skip-to-content — visually hidden until focused (WCAG 2.4.1 Bypass Blocks). */
+.docgen-skip-link {
+  position: fixed;
+  top: var(--sp-2);
+  left: var(--sp-2);
+  z-index: 1100;
+  padding: 8px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--bg-elev);
+  color: var(--text);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  box-shadow: var(--shadow-md);
+  transform: translateY(-150%);
+  transition: transform 0.12s ease;
+}
+.docgen-skip-link:focus-visible {
+  transform: none;
 }
 html {
   scroll-padding-top: calc(var(--topbar-height) + 18px);
@@ -208,11 +235,13 @@ kbd {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
+  min-width: 0;
   color: var(--text);
   font-weight: 600;
 }
 .docgen-brand-mark {
   display: inline-block;
+  flex-shrink: 0;
   width: 18px;
   height: 18px;
   border-radius: var(--r-xs);
@@ -221,6 +250,10 @@ kbd {
 .docgen-brand-name {
   font-size: 15px;
   letter-spacing: -0.01em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .docgen-topbar__actions {
   margin-left: auto;
@@ -502,6 +535,17 @@ kbd {
   cursor: help;
   border-bottom: 0;
 }
+/* docgen-emitted error surface for broken/unknown directives — must read as an
+   error, not ordinary prose, in both themes (tokens resolve light/dark). */
+.docgen-directive-error {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--text-error);
+  background: var(--diff-removed-bg);
+  border: 1px solid var(--diff-removed);
+  border-radius: var(--r-xs);
+  padding: 0 0.35em;
+}
 
 /* inline code — theme-aware */
 .docgen-doc-content :not(pre) > code {
@@ -635,7 +679,11 @@ kbd {
   background: transparent;
   color: var(--text);
   font-size: 1.05rem;
+}
+.docgen-search-input:focus-visible {
   outline: none;
+  border-bottom-color: var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 .docgen-search-results {
   list-style: none;
@@ -889,5 +937,23 @@ kbd {
   }
   .docgen-search-trigger {
     min-width: 0;
+  }
+  /* Let wide tables establish their own scroll region instead of forcing
+     whole-page horizontal overflow on narrow viewports. */
+  .docgen-doc-content table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+/* ============================ reduced motion ============================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -13,13 +13,11 @@ pub const DEFAULT_PAGE_TEMPLATE: &str = include_str!("../templates/page.html");
 #[deprecated(note = "use docgen-assets::core_assets() / emit()")]
 pub const SEARCH_JS: &str = include_str!("../assets/search.js");
 
-/// Minimal stylesheet for wikilinks/backlinks/search, emitted to `dist/docgen.css`.
-///
-/// Deprecated: assets now flow through the `docgen-assets` crate. Kept for one
-/// phase so dependents migrate without breakage. The bytes are byte-identical to
-/// `docgen-assets`' embedded copy.
-#[deprecated(note = "use docgen-assets::core_assets() / emit()")]
-pub const DOCGEN_CSS: &str = include_str!("../assets/docgen.css");
+// The canonical, fully-themed stylesheet now lives in the `docgen-assets` crate
+// (`assets/docgen/docgen.css`, embedded via include_dir and emitted as
+// `dist/docgen.css`). The previous stale 37-line copy under
+// `crates/docgen-render/assets/docgen.css` was deleted to avoid divergence; use
+// `docgen-assets::core_assets()` / `emit()` for the shipped theme.
 
 /// The built-in per-doc history-timeline template, embedded at compile time.
 pub const DEFAULT_HISTORY_TEMPLATE: &str = include_str!("../templates/history.html");
@@ -231,6 +229,37 @@ mod tests {
             .unwrap();
         assert!(html.contains("<title>My Page</title>"));
         assert!(html.contains("<p>hello</p>"));
+    }
+
+    #[test]
+    fn page_has_accessibility_landmarks() {
+        let html = renderer()
+            .render_page(&PageContext {
+                title: "P",
+                slug: "p",
+                body_html: "",
+                tree: &[],
+                backlinks: &[],
+                has_history: false,
+                has_mermaid: false,
+                has_math: false,
+                base: "",
+                site_title: "",
+                search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
+            })
+            .unwrap();
+        // Skip link targets a labelled, focusable <main>.
+        assert!(html.contains(r##"class="docgen-skip-link" href="#docgen-main""##));
+        assert!(html.contains(r#"id="docgen-main""#));
+        assert!(html.contains(r#"tabindex="-1""#));
+        // Hamburger links to the drawer it controls; Escape closes it.
+        assert!(html.contains(r#"aria-controls="docgen-sidebar""#));
+        assert!(html.contains("@keydown.escape.window=\"navOpen=false\""));
+        // Theme toggle exposes pressed state to AT.
+        assert!(html.contains(":aria-pressed=\"theme==='light'\""));
+        assert!(html.contains(":aria-pressed=\"theme==='dark'\""));
     }
 
     #[test]
@@ -640,19 +669,11 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)] // consts kept one phase as byte-identical re-exports
+    #[allow(deprecated)] // SEARCH_JS kept one phase as a byte-identical re-export
     fn ships_self_contained_search_assets() {
         assert!(SEARCH_JS.contains("search-index.json"));
         assert!(SEARCH_JS.contains("metaKey"));
         assert!(!SEARCH_JS.contains("import ")); // no module imports / npm
-        assert!(DOCGEN_CSS.contains("docgen-search-modal"));
-    }
-
-    #[test]
-    #[allow(deprecated)] // consts kept one phase as byte-identical re-exports
-    fn ships_diff_timeline_styles() {
-        assert!(DOCGEN_CSS.contains("docgen-diff-line--added"));
-        assert!(DOCGEN_CSS.contains("docgen-diff-line--removed"));
     }
 
     fn sample_buckets() -> Vec<TimelineBucketView> {

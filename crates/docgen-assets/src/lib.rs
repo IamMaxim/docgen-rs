@@ -486,6 +486,35 @@ mod tests {
     }
 
     #[test]
+    fn shared_css_styles_directive_error_surface() {
+        // docgen core always emits `.docgen-directive-error`; it must read as an
+        // error (tokenized), not inherit plain prose color.
+        let s = shared_css();
+        assert!(s.contains(".docgen-directive-error"));
+    }
+
+    #[test]
+    fn shared_css_has_a11y_affordances() {
+        let s = shared_css();
+        // skip-to-content link, Alpine cloak (ships, not dev-only), and a
+        // reduced-motion guard.
+        assert!(s.contains(".docgen-skip-link"), "missing skip link style");
+        assert!(s.contains("[x-cloak]"), "x-cloak must ship to avoid flashes");
+        assert!(
+            s.contains("prefers-reduced-motion"),
+            "must honor reduced-motion"
+        );
+    }
+
+    #[test]
+    fn shared_css_mobile_tables_scroll_in_place() {
+        // Wide tables must not force whole-page horizontal overflow on mobile.
+        let s = shared_css();
+        assert!(s.contains(".docgen-doc-content table"));
+        assert!(s.contains("overflow-x: auto"));
+    }
+
+    #[test]
     fn shared_css_responsive_has_mobile_drawer() {
         let s = shared_css();
         assert!(s.contains("@media"));

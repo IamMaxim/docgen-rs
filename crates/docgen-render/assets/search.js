@@ -37,6 +37,48 @@
   }
 
   var modal, input, list, selected = 0, results = [];
+  // Element focused before the modal opened, restored on close (WCAG 2.4.3).
+  var opener = null;
+  // App-shell siblings hidden from AT / removed from tab order while the modal
+  // is open (focus trap + no obscured-content navigation; WCAG 2.1.2/2.4.3).
+  var inertEls = [];
+
+  function setShellInert(on) {
+    inertEls = [];
+    var kids = document.body.children;
+    for (var i = 0; i < kids.length; i++) {
+      var el = kids[i];
+      if (el === modal || el.tagName === "SCRIPT") continue;
+      if (on) {
+        el.setAttribute("aria-hidden", "true");
+        el.setAttribute("inert", "");
+        inertEls.push(el);
+      }
+    }
+    if (!on) {
+      var all = document.body.children;
+      for (var j = 0; j < all.length; j++) {
+        all[j].removeAttribute("aria-hidden");
+        all[j].removeAttribute("inert");
+      }
+    }
+  }
+
+  function focusables() {
+    return Array.prototype.slice.call(
+      modal.querySelectorAll('input, a[href], button:not([disabled])')
+    ).filter(function (el) { return el.offsetParent !== null || el === input; });
+  }
+
+  function trapTab(ev) {
+    if (ev.key !== "Tab") return;
+    var f = focusables();
+    if (!f.length) { ev.preventDefault(); return; }
+    var first = f[0], last = f[f.length - 1];
+    var active = document.activeElement;
+    if (ev.shiftKey && active === first) { ev.preventDefault(); last.focus(); }
+    else if (!ev.shiftKey && active === last) { ev.preventDefault(); first.focus(); }
+  }
 
   function buildModal() {
     modal = document.createElement("div");
@@ -53,6 +95,11 @@
 
     input.addEventListener("input", function () { render(search(input.value)); });
     input.addEventListener("keydown", onKey);
+    // Escape + Tab-trap work no matter where focus sits inside the dialog.
+    modal.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") { ev.preventDefault(); close(); return; }
+      trapTab(ev);
+    });
     modal.addEventListener("click", function (ev) {
       if (ev.target.hasAttribute("data-close")) close();
     });
@@ -98,12 +145,21 @@
 
   function open() {
     if (!modal) buildModal();
+    if (!modal.hasAttribute("hidden")) return;
+    opener = document.activeElement;
     loadIndex().then(function () { render(search(input.value)); });
     modal.removeAttribute("hidden");
+    setShellInert(true);
     input.value = ""; list.innerHTML = "";
     input.focus();
   }
-  function close() { if (modal) modal.setAttribute("hidden", ""); }
+  function close() {
+    if (!modal || modal.hasAttribute("hidden")) return;
+    modal.setAttribute("hidden", "");
+    setShellInert(false);
+    if (opener && typeof opener.focus === "function") opener.focus();
+    opener = null;
+  }
 
   document.addEventListener("keydown", function (ev) {
     if ((ev.metaKey || ev.ctrlKey) && (ev.key === "k" || ev.key === "K")) {
