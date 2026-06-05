@@ -1,0 +1,9 @@
+[package]
+name = "docgen-render"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+minijinja = "2.20.0"
+serde = { version = "1.0.228", features = ["derive"] }

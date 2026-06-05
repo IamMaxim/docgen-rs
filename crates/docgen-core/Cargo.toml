@@ -1,0 +1,12 @@
+[package]
+name = "docgen-core"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+comrak = "0.52.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_yml = "0.0.13"
+thiserror = "2.0.18"
+walkdir = "2.5.0"
