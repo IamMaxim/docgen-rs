@@ -211,3 +211,37 @@ Chrome-validated; full gate green (cargo test --workspace ok / clippy clean / fi
 - Chrome validation: home page shows "Doc graph · 6 nodes · 1 links" embedded below content with NO sidebar
   Graph link; sidebar/content boundary shows a single line; `docgen dev` strip shows the edit pencil and
   clicking it opens the CodeMirror source editor. Commit `d1cf9b7` (local only, not pushed).
+
+## 2026-06-05 ~23:50 MSK — Regression pass (user: popups / diff / editor "miles behind")
+User flagged 3 regressions vs the fresher ~/work/docgen source. Fully re-read the
+original diff + editor subsystems (two Explore agents → exhaustive specs).
+
+1. **Popups (FIXED, `47b4815`).** Wikilink tooltip never hid: docgen.css keyed
+   visibility on a `[hidden]` attribute, but wikilink.js toggled an `.is-visible`
+   class no rule responded to — show() only "worked" via text+position, hide() was
+   a no-op. Restored the original's opacity-fade `.is-visible` contract.
+   Chrome-verified: fades out on mouseout.
+
+2. **Diff view (REBUILT, `741f2b7`).** The per-page `/history` static dump was
+   nothing like the original's single global `/diff` workspace. Ported it:
+   - docgen-diff: `global_doc_revisions` (global commit walk) +
+     `build_global_doc_diff_report` (each point = a commit with all changed docs +
+     rendered block diffs). Reused existing block/line/file-tree/timeline layers.
+   - Fixed a real parity bug: file-tree struct-variant fields serialized snake_case
+     (enum `rename_all` only renames variant tags) → island saw `+NaN`. Added
+     per-variant camelCase + regression test.
+   - docgen-build emits dist/diff/{index.html, timeline.json, revisions/<id>.json};
+     dropped the per-doc history loop. docgen-render gained DiffContext/render_diff +
+     diff.html shell; `has_diff` drives the topbar diff icon (doc+graph+diff pages).
+   - docgen-assets: diff_assets() (islands/diff.js + diff.css) gated by include_diff.
+   - diff.js (general-purpose agent) ports DocDiffView; diff.css (agent) ports the
+     stylesheet verbatim onto docgen-rs tokens (no token substitutions needed).
+   - Chrome-verified dark+light: 3-col workspace, rendered-markdown block diffs,
+     commit-switch lazy revision fetch, correct file-tree stats, ?c=/?f= URL sync.
+   - Tests: rewrote history_cli + 2 render tests to the new design; workspace green,
+     clippy clean.
+
+3. **Editor (PENDING).** Current dev editor = CM5 single-pane overlay. Original =
+   full-page split route (CM6 source | live preview), merge-vs-HEAD, wikilink
+   autocomplete from search index, table-format, theme system. Large rebuild;
+   scoping with user next (CM6 vendoring + dedicated route is the faithful path).
