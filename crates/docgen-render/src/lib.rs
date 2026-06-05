@@ -26,6 +26,11 @@ pub const DEFAULT_HISTORY_TEMPLATE: &str = include_str!("../templates/history.ht
 /// The built-in `/graph/` doc-link-graph template, embedded at compile time.
 pub const DEFAULT_GRAPH_TEMPLATE: &str = include_str!("../templates/graph.html");
 
+/// The built-in `/diff/` workspace shell template, embedded at compile time.
+/// The page is a mount point (`#docgen-diff-root`) hydrated by `islands/diff.js`
+/// from the build-time `timeline.json` + `revisions/<id>.json` payloads.
+pub const DEFAULT_DIFF_TEMPLATE: &str = include_str!("../templates/diff.html");
+
 /// One diff line, render-friendly. `kind`/line numbers are pre-stringified by
 /// the caller so `docgen-render` stays free of the `docgen-diff` domain types.
 #[derive(Serialize)]
@@ -98,6 +103,22 @@ pub struct GraphContext<'a> {
     pub site_title: &'a str,
     /// Whether the search UI ships (gates the trigger + `search.js`).
     pub search_enabled: bool,
+    /// Whether the `/diff/` workspace page exists (drives the topbar diff icon).
+    pub has_diff: bool,
+}
+
+/// Everything the `/diff/` workspace shell render needs. The diff data itself
+/// is not templated — it ships as `timeline.json` + `revisions/<id>.json` and
+/// is hydrated client-side by `islands/diff.js` into `#docgen-diff-root`.
+#[derive(Serialize)]
+pub struct DiffContext<'a> {
+    pub tree: &'a [TreeNode],
+    /// Deployed base path (e.g. `/docs`); `""` → no `<base>` tag (default).
+    pub base: &'a str,
+    /// Site title; `""` → no `"page — site"` suffix (default).
+    pub site_title: &'a str,
+    /// Whether the search UI ships (gates the trigger + `search.js`).
+    pub search_enabled: bool,
 }
 
 /// Everything a single page render needs.
@@ -129,6 +150,8 @@ pub struct PageContext<'a> {
     pub site_title: &'a str,
     /// Whether the search UI ships (gates the trigger + `search.js`).
     pub search_enabled: bool,
+    /// Whether the `/diff/` workspace page exists (drives the topbar diff icon).
+    pub has_diff: bool,
     /// Whether any component shipped a `style.css` (links `/components.css`). The
     /// component stylesheet is small + cacheable, so it links on every page when
     /// present rather than per-page.
@@ -163,6 +186,7 @@ impl Renderer {
         env.add_template_owned("page.html", page_template.to_string())?;
         env.add_template_owned("history.html", DEFAULT_HISTORY_TEMPLATE.to_string())?;
         env.add_template_owned("graph.html", DEFAULT_GRAPH_TEMPLATE.to_string())?;
+        env.add_template_owned("diff.html", DEFAULT_DIFF_TEMPLATE.to_string())?;
         Ok(Self { env })
     }
 
@@ -191,6 +215,7 @@ impl Renderer {
             has_components_css => ctx.has_components_css,
             has_component_island => ctx.has_component_island,
             is_home => ctx.is_home,
+            has_diff => ctx.has_diff,
             graph_json => safe_graph_json,
             graph_node_count => ctx.graph_node_count,
             graph_edge_count => ctx.graph_edge_count,
@@ -215,6 +240,7 @@ impl Renderer {
             base => ctx.base,
             site_title => ctx.site_title,
             search_enabled => ctx.search_enabled,
+            has_diff => ctx.has_diff,
         })
     }
 
@@ -226,6 +252,18 @@ impl Renderer {
             slug => ctx.slug,
             tree => ctx.tree,
             buckets => ctx.buckets,
+            base => ctx.base,
+            site_title => ctx.site_title,
+            search_enabled => ctx.search_enabled,
+        })
+    }
+
+    /// Render the `/diff/` workspace shell to a full HTML document.
+    pub fn render_diff(&self, ctx: &DiffContext) -> Result<String, minijinja::Error> {
+        let tmpl = self.env.get_template("diff.html")?;
+        tmpl.render(context! {
+            tree => ctx.tree,
+            slug => "",
             base => ctx.base,
             site_title => ctx.site_title,
             search_enabled => ctx.search_enabled,
@@ -263,6 +301,7 @@ mod tests {
                 has_components_css: false,
                 has_component_island: false,
                 is_home: false,
+                has_diff: false,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
@@ -293,6 +332,7 @@ mod tests {
                 has_components_css: false,
                 has_component_island: false,
                 is_home: false,
+                has_diff: false,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
@@ -331,6 +371,7 @@ mod tests {
                 has_components_css: false,
                 has_component_island: false,
                 is_home: false,
+                has_diff: false,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
@@ -358,6 +399,7 @@ mod tests {
                 has_components_css: true,
                 has_component_island: true,
                 is_home: false,
+                has_diff: false,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
@@ -377,6 +419,7 @@ mod tests {
                 has_components_css: false,
                 has_component_island: false,
                 is_home: false,
+                has_diff: false,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
@@ -406,6 +449,7 @@ mod tests {
                 has_components_css: false,
                 has_component_island: false,
                 is_home: false,
+                has_diff: false,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
@@ -436,6 +480,7 @@ mod tests {
                 has_components_css: false,
                 has_component_island: false,
                 is_home: false,
+                has_diff: false,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
@@ -462,6 +507,7 @@ mod tests {
                 has_components_css: false,
                 has_component_island: false,
                 is_home: false,
+                has_diff: false,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
@@ -496,6 +542,7 @@ mod tests {
                 has_components_css: true,
                 has_component_island: false,
                 is_home: false,
+                has_diff: true,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
@@ -507,7 +554,7 @@ mod tests {
                 headings: &[],
                 commit: "",
                 built: "",
-                has_history: true,
+                has_history: false,
                 has_mermaid: false,
                 has_math: false,
             })
@@ -519,10 +566,10 @@ mod tests {
         assert!(html.contains(r#"href="/docs/components.css""#));
         assert!(html.contains(r#"src="/docs/bootstrap.js""#));
         assert!(html.contains(r#"src="/docs/search.js""#));
-        // Nav + history links under base. (The sidebar graph link was removed;
+        // Nav + diff links under base. (The sidebar graph link was removed;
         // the graph now lives on the home page, covered by its own test.)
         assert!(html.contains(r#"href="/docs/guide""#));
-        assert!(html.contains(r#"href="/docs/x/history""#));
+        assert!(html.contains(r#"href="/docs/diff""#));
         // Nothing left at the bare root.
         assert!(!html.contains(r#"href="/docgen.css""#));
         assert!(!html.contains(r#"src="/bootstrap.js""#));
@@ -554,6 +601,7 @@ mod tests {
                 has_components_css: false,
                 has_component_island: false,
                 is_home: false,
+                has_diff: false,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
@@ -589,6 +637,7 @@ mod tests {
                 has_components_css: false,
                 has_component_island: false,
                 is_home: false,
+                has_diff: false,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
@@ -630,6 +679,7 @@ mod tests {
                 has_components_css: false,
                 has_component_island: false,
                 is_home: false,
+                has_diff: false,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
@@ -665,6 +715,7 @@ mod tests {
                 has_components_css: false,
                 has_component_island: false,
                 is_home: false,
+                has_diff: false,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
@@ -676,7 +727,7 @@ mod tests {
     }
 
     #[test]
-    fn renders_history_link_only_when_has_history() {
+    fn renders_diff_link_only_when_has_diff() {
         let with = renderer()
             .render_page(&PageContext {
                 title: "X",
@@ -687,7 +738,7 @@ mod tests {
                 headings: &[],
                 commit: "",
                 built: "",
-                has_history: true,
+                has_history: false,
                 has_mermaid: false,
                 has_math: false,
                 base: "",
@@ -696,12 +747,13 @@ mod tests {
                 has_components_css: false,
                 has_component_island: false,
                 is_home: false,
+                has_diff: true,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
             })
             .unwrap();
-        assert!(with.contains(r#"href="/guide/intro/history""#));
+        assert!(with.contains(r#"href="/diff""#));
 
         let without = renderer()
             .render_page(&PageContext {
@@ -722,12 +774,13 @@ mod tests {
                 has_components_css: false,
                 has_component_island: false,
                 is_home: false,
+                has_diff: false,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
             })
             .unwrap();
-        assert!(!without.contains(r#"href="/guide/intro/history""#));
+        assert!(!without.contains(r#"href="/diff""#));
     }
 
     #[test]
@@ -751,6 +804,7 @@ mod tests {
                 has_components_css: false,
                 has_component_island: false,
                 is_home: false,
+                has_diff: false,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
@@ -779,6 +833,7 @@ mod tests {
                 has_components_css: false,
                 has_component_island: false,
                 is_home: false,
+                has_diff: false,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
@@ -808,6 +863,7 @@ mod tests {
                 has_components_css: false,
                 has_component_island: false,
                 is_home: false,
+                has_diff: false,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
@@ -834,6 +890,7 @@ mod tests {
                 has_components_css: false,
                 has_component_island: false,
                 is_home: false,
+                has_diff: false,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
@@ -901,6 +958,7 @@ mod tests {
                 tree: &[],
                 graph_json: json,
                 node_count: 1,
+                has_diff: false,
                 edge_count: 0,
                 base: "",
                 site_title: "",
@@ -931,6 +989,7 @@ mod tests {
                 tree: &tree,
                 graph_json: r#"{"nodes":[],"edges":[]}"#,
                 node_count: 0,
+                has_diff: false,
                 edge_count: 0,
                 base: "",
                 site_title: "",
@@ -950,6 +1009,7 @@ mod tests {
                 tree: &[],
                 graph_json: json,
                 node_count: 1,
+                has_diff: false,
                 edge_count: 0,
                 base: "",
                 site_title: "",
@@ -968,6 +1028,7 @@ mod tests {
                 tree: &[],
                 graph_json: r#"{"nodes":[],"edges":[]}"#,
                 node_count: 0,
+                has_diff: false,
                 edge_count: 0,
                 base: "",
                 site_title: "",
@@ -999,6 +1060,7 @@ mod tests {
             base: "",
             site_title: "",
             search_enabled: true,
+            has_diff: false,
             has_components_css: false,
             has_component_island: false,
             is_home,
@@ -1108,6 +1170,7 @@ mod tests {
                 has_components_css: false,
                 has_component_island: false,
                 is_home: false,
+                has_diff: false,
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
@@ -1198,6 +1261,7 @@ mod tests {
                 tree: &[],
                 graph_json: r#"{"nodes":[],"edges":[]}"#,
                 node_count: 0,
+                has_diff: false,
                 edge_count: 0,
                 base: "",
                 site_title: "",

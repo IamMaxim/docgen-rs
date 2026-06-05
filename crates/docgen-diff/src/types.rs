@@ -91,6 +91,10 @@ pub enum DocDiffFileTreeNode {
         label: String,
         children: Vec<DocDiffFileTreeNode>,
     },
+    // Field-level camelCase must be set on the variant: the enum-level
+    // `rename_all` renames only the variant tags, not struct-variant fields. The
+    // original TS file-tree nodes use `oldPath`/`addedLines`/`removedLines`.
+    #[serde(rename_all = "camelCase")]
     File {
         id: String,
         label: String,
@@ -203,5 +207,10 @@ mod tests {
         let v = serde_json::to_string(&n).unwrap();
         assert!(v.contains(r#""type":"file""#));
         assert!(!v.contains("oldPath"));
+        // Fields must be camelCase (parity with the TS file-tree node), not the
+        // Rust snake_case — the diff island reads `addedLines`/`removedLines`.
+        assert!(v.contains(r#""addedLines":3"#));
+        assert!(v.contains(r#""removedLines":0"#));
+        assert!(!v.contains("added_lines"));
     }
 }

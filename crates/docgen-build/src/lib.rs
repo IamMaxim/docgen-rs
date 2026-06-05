@@ -9,10 +9,11 @@
 //! features and supplies the site title/`base`; the registry drives directive
 //! rendering and per-page component asset emission.
 
+// Retained for its timeline-bucket grouping logic + tests; the per-doc history
+// page it fed was superseded by the global `/diff` workspace.
+#[allow(dead_code)]
 mod history;
-use history::report_to_buckets;
 
-use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -21,7 +22,7 @@ use chrono::Local;
 use docgen_core::discover::discover_docs;
 use docgen_core::pipeline::{prepare, render_docs};
 use docgen_core::tree::build_tree;
-use docgen_render::{GraphContext, HistoryContext, PageContext, Renderer, DEFAULT_PAGE_TEMPLATE};
+use docgen_render::{GraphContext, PageContext, Renderer, DEFAULT_PAGE_TEMPLATE};
 
 /// The slug docgen treats as the site home (served at `/`).
 const HOME_SLUG: &str = "index";
@@ -189,7 +190,6 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
     // Phase 1: build the per-doc git history pages (graceful no-op outside a
     // git repo or for docs with no commit history). Collect which slugs got a
     // history page so the doc page can conditionally show its "History" link.
-    let mut docs_with_history: HashSet<String> = HashSet::new();
     let repo = docgen_diff::discover_repo(&docs_dir)
         .with_context(|| format!("discovering git repo for {}", docs_dir.display()))?;
     // Build metadata for the right-rail "Additional info" section. Best-effort:
@@ -198,6 +198,9 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
     let now = Local::now();
     let built_stamp = now.format("%Y-%m-%d %H:%M").to_string();
     let mut commit_hash = String::new();
+    // Whether the interactive `/diff/` workspace was emitted (repo has doc
+    // history) — drives the topbar diff icon + the diff asset slice.
+    let mut has_diff = false;
     if let Some(repo) = repo {
         if let Ok(head) = repo.head() {
             if let Some(oid) = head.target() {
@@ -206,29 +209,45 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
             }
         }
         if let Some(workdir) = repo.workdir().map(Path::to_path_buf) {
-            let limit = diff_limit();
-            for doc in &site.docs {
-                let Some(git_path) = git_rel_path(&docs_dir, &workdir, &doc.rel_path) else {
-                    continue;
-                };
-                let report = docgen_diff::build_doc_diff_report(&repo, &git_path, limit)
-                    .with_context(|| format!("building diff report for {git_path}"))?;
-                let Some(report) = report else { continue };
-
-                let buckets = report_to_buckets(&report, now);
-                let html = renderer.render_history(&HistoryContext {
-                    title: &doc.title,
-                    slug: &doc.slug,
-                    tree: &tree,
-                    buckets: &buckets,
-                    base: &config.base,
-                    site_title: config.title.as_deref().unwrap_or(""),
-                    search_enabled: config.features.search,
-                })?;
-                let out_dir = dist_dir.join(&doc.slug).join("history");
-                fs::create_dir_all(&out_dir)?;
-                fs::write(out_dir.join("index.html"), html)?;
-                docs_with_history.insert(doc.slug.clone());
+            // The docs dir as git sees it, e.g. `docs` (trailing slash trimmed —
+            // `git_rel_path` joins an empty leaf to the prefix).
+            if let Some(docs_prefix) =
+                git_rel_path(&docs_dir, &workdir, "").map(|p| p.trim_end_matches('/').to_string())
+            {
+                let limit = diff_limit();
+                // The global doc-diff report across all docs, with rendered block
+                // diffs — the analogue of the original `/docs/diff` payload.
+                let report =
+                    docgen_diff::build_global_doc_diff_report(&repo, &docs_prefix, limit, true)
+                        .with_context(|| {
+                            format!("building global doc diff report for {docs_prefix}")
+                        })?;
+                if let Some(report) = report {
+                    let diff_dir = dist_dir.join("diff");
+                    fs::create_dir_all(diff_dir.join("revisions"))?;
+                    // timeline.json — the lightweight index (hunks/blocks stripped).
+                    let summary = docgen_diff::summarize_report(&report);
+                    fs::write(diff_dir.join("timeline.json"), serde_json::to_vec(&summary)?)?;
+                    // revisions/<id>.json — each commit's full per-file block diff,
+                    // lazily fetched by the island when a commit is selected.
+                    for point in &report.timeline {
+                        fs::write(
+                            diff_dir
+                                .join("revisions")
+                                .join(format!("{}.json", point.id)),
+                            serde_json::to_vec(point)?,
+                        )?;
+                    }
+                    // The /diff workspace shell (hydrated client-side by diff.js).
+                    let diff_html = renderer.render_diff(&docgen_render::DiffContext {
+                        tree: &tree,
+                        base: &config.base,
+                        site_title: config.title.as_deref().unwrap_or(""),
+                        search_enabled: config.features.search,
+                    })?;
+                    fs::write(diff_dir.join("index.html"), diff_html)?;
+                    has_diff = true;
+                }
             }
         }
     }
@@ -266,12 +285,13 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
             headings: &doc.headings,
             commit: &commit_hash,
             built: &built_stamp,
-            has_history: docs_with_history.contains(&doc.slug),
+            has_history: false,
             has_mermaid: doc.has_mermaid,
             has_math: doc.has_math,
             base: &config.base,
             site_title: config.title.as_deref().unwrap_or(""),
             search_enabled: config.features.search,
+            has_diff,
             has_components_css,
             has_component_island: doc
                 .components_used
@@ -310,6 +330,7 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
             base: &config.base,
             site_title: config.title.as_deref().unwrap_or(""),
             search_enabled: config.features.search,
+            has_diff,
         })?;
         let graph_dir = dist_dir.join("graph");
         fs::create_dir_all(&graph_dir)?;
@@ -332,6 +353,7 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
         include_katex_runtime: false,
         include_mermaid: site.any_mermaid,
         include_graph: config.features.graph,
+        include_diff: has_diff,
         // Component bundles are written separately (B-8) via emit_component_bundle;
         // these flags are inert in assets_for.
         include_component_css: false,

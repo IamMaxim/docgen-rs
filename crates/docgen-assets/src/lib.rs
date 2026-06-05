@@ -191,6 +191,17 @@ pub fn graph_assets() -> Vec<Asset> {
     )]
 }
 
+/// Diff workspace assets — the interactive `/diff/` page island plus its
+/// dedicated stylesheet. Emitted only on builds that render the `/diff/` page
+/// (gated by [`EmitOptions::include_diff`]); the page consumes the build-time
+/// `timeline.json` + `revisions/<id>.json` payloads written by the build.
+pub fn diff_assets() -> Vec<Asset> {
+    vec![
+        embed("docgen/islands/diff.js", "islands/diff.js", AssetKind::Js),
+        embed("docgen/diff.css", "diff.css", AssetKind::Css),
+    ]
+}
+
 /// DEV-ONLY assets, served by `docgen dev` ONLY. NEVER returned by [`assets_for`]
 /// and NEVER emitted by `docgen build`. Dist paths are namespaced under
 /// `__docgen/` and `__codemirror/` so they cannot collide with doc slugs.
@@ -253,6 +264,10 @@ pub struct EmitOptions {
     /// Ship the graph island (`islands/graph.js`) — emitted when the `/graph/`
     /// page is rendered. Default false.
     pub include_graph: bool,
+    /// Ship the diff workspace island + stylesheet (`islands/diff.js`,
+    /// `diff.css`) — emitted when the `/diff/` page is rendered (the repo has
+    /// doc history). Default false.
+    pub include_diff: bool,
     /// Emit `components.css` (set when any component had a `style.css`). The
     /// authored bytes are concatenated by the build and written via
     /// [`emit_component_bundle`], not [`assets_for`]. Default false.
@@ -275,6 +290,7 @@ impl Default for EmitOptions {
             include_katex_runtime: false,
             include_mermaid: false,
             include_graph: false,
+            include_diff: false,
             include_component_css: false,
             include_component_js: false,
             include_search: true,
@@ -298,6 +314,9 @@ pub fn assets_for(opts: &EmitOptions) -> Vec<Asset> {
     }
     if opts.include_graph {
         out.extend(graph_assets());
+    }
+    if opts.include_diff {
+        out.extend(diff_assets());
     }
     out
 }
@@ -808,6 +827,7 @@ mod tests {
                         include_katex_runtime: k,
                         include_mermaid: m,
                         include_graph: g,
+                        include_diff: g,
                         // Component bundles flow through emit_component_bundle, not
                         // assets_for; both flags are inert here but iterated so the
                         // exhaustive matrix stays honest.

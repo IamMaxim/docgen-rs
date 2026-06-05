@@ -182,6 +182,163 @@ pub fn doc_revisions(
     Ok(out)
 }
 
+/// One changed doc file within a single commit (the `new` side, plus its
+/// `old` content from the first parent). The global analogue of the per-file
+/// [`RevisionContent`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GlobalFileChange {
+    pub status: DocDiffFileStatus,
+    /// Repo-relative path of the doc at this revision (the `new` side).
+    pub path: String,
+    /// Set when this file was renamed (the `old` side path).
+    pub old_path: Option<String>,
+    pub old_text: String,
+    pub new_text: String,
+}
+
+/// One commit in the global doc timeline: its metadata plus every doc file it
+/// changed (under `docs_prefix`), diffed against its first parent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GlobalRevision {
+    pub meta: CommitMeta,
+    pub files: Vec<GlobalFileChange>,
+}
+
+/// True when `path` is `prefix` itself or lives beneath it (`prefix/...`).
+fn under_prefix(path: &str, prefix: &str) -> bool {
+    path == prefix || path.starts_with(&format!("{prefix}/"))
+}
+
+/// All commits (newest-first, capped at `limit` doc-touching commits) that
+/// changed any file under `docs_prefix` (repo-relative, e.g. `"docs"`), each
+/// paired with the per-file old/new content from its first parent. The global
+/// analogue of [`doc_revisions`] — mirrors `git log -- <docsPath>` plus the
+/// per-commit `git diff` in the original `git-diff.server.ts`.
+pub fn global_doc_revisions(
+    repo: &Repository,
+    docs_prefix: &str,
+    limit: usize,
+) -> Result<Vec<GlobalRevision>, DiffError> {
+    let mut revwalk = repo.revwalk()?;
+    revwalk.set_sorting(Sort::TIME | Sort::TOPOLOGICAL)?;
+    if revwalk.push_head().is_err() {
+        return Ok(Vec::new());
+    }
+
+    let mut out: Vec<GlobalRevision> = Vec::new();
+
+    for oid in revwalk {
+        if out.len() >= limit {
+            break;
+        }
+        let oid = oid?;
+        let commit = repo.find_commit(oid)?;
+        let commit_tree = commit.tree()?;
+        let parent = commit.parents().next();
+        let parent_tree: Option<Tree> = match &parent {
+            Some(p) => Some(p.tree()?),
+            None => None,
+        };
+
+        // Merge history simplification (parity with `git log -- <docsPath>`): a
+        // merge whose docs subtree is identical to a parent's brought no change
+        // of its own under the docs prefix — its authoring commits are walked
+        // separately. Skip it to avoid duplicating those changes.
+        if commit.parent_count() > 1
+            && merge_docs_treesame_to_a_parent(&commit, &commit_tree, docs_prefix)?
+        {
+            continue;
+        }
+
+        let mut diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&commit_tree), None)?;
+        let mut find_opts = DiffFindOptions::new();
+        find_opts.renames(true);
+        find_opts.rename_threshold(50);
+        diff.find_similar(Some(&mut find_opts))?;
+
+        let mut files: Vec<GlobalFileChange> = Vec::new();
+        for delta in diff.deltas() {
+            let new_path = delta.new_file().path().and_then(|p| p.to_str());
+            let old_path = delta.old_file().path().and_then(|p| p.to_str());
+            let status = classify(delta.status());
+
+            // Resolve the doc path on the side that exists, then filter to docs.
+            let touch_path = if status == DocDiffFileStatus::Deleted {
+                old_path
+            } else {
+                new_path
+            };
+            let Some(touch_path) = touch_path else { continue };
+            if !under_prefix(touch_path, docs_prefix) {
+                continue;
+            }
+
+            let resolved_new = new_path.unwrap_or(touch_path).to_string();
+            let resolved_old = old_path.map(|s| s.to_string());
+
+            let new_text = if status == DocDiffFileStatus::Deleted {
+                String::new()
+            } else {
+                blob_text(repo, &commit_tree, &resolved_new)
+            };
+            let old_text = match (&parent_tree, status) {
+                (_, DocDiffFileStatus::Added) => String::new(),
+                (Some(pt), _) => {
+                    let read_path = resolved_old.as_deref().unwrap_or(resolved_new.as_str());
+                    blob_text(repo, pt, read_path)
+                }
+                (None, _) => String::new(),
+            };
+            let rename_old_path = if status == DocDiffFileStatus::Renamed {
+                resolved_old.clone()
+            } else {
+                None
+            };
+
+            files.push(GlobalFileChange {
+                status,
+                path: resolved_new,
+                old_path: rename_old_path,
+                old_text,
+                new_text,
+            });
+        }
+
+        if files.is_empty() {
+            // Commit touched no docs files — skip (parity with the TS
+            // `entries.length === 0 -> continue`).
+            continue;
+        }
+
+        // Stable, deterministic order by new-side path.
+        files.sort_by(|a, b| a.path.cmp(&b.path));
+
+        out.push(GlobalRevision {
+            meta: commit_meta(&commit)?,
+            files,
+        });
+    }
+
+    Ok(out)
+}
+
+/// True when the merge `commit`'s tree entry at `docs_prefix` is identical to
+/// that of at least one parent (TREESAME on the docs subtree).
+fn merge_docs_treesame_to_a_parent(
+    commit: &git2::Commit,
+    commit_tree: &Tree,
+    docs_prefix: &str,
+) -> Result<bool, DiffError> {
+    let merge_oid = blob_oid_at(commit_tree, docs_prefix);
+    for parent in commit.parents() {
+        let parent_tree = parent.tree()?;
+        if blob_oid_at(&parent_tree, docs_prefix) == merge_oid {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 /// True when the merge `commit`'s blob at `path` is identical to that path's
 /// blob in at least one parent (TREESAME). Mirrors git-log's merge history
 /// simplification: such a merge contributed no change of its own on `path`.

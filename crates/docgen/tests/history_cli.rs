@@ -53,7 +53,7 @@ fn write_and_commit(repo: &Repository, root: &Path, rel: &str, content: &str, su
 }
 
 #[test]
-fn build_emits_history_pages_for_docs_in_a_git_repo() {
+fn build_emits_global_diff_workspace_for_docs_in_a_git_repo() {
     let tmp = unique_temp_dir("git");
     let repo = Repository::init(&tmp).unwrap();
     configure_local_user(&repo);
@@ -79,19 +79,33 @@ fn build_emits_history_pages_for_docs_in_a_git_repo() {
         .unwrap();
     assert!(status.success());
 
-    let hist = fs::read_to_string(tmp.join("dist/guide/intro/history/index.html")).unwrap();
-    assert!(hist.contains("History: Intro"));
-    assert!(hist.contains("edit intro"));
-    assert!(hist.contains("add intro"));
-    assert!(hist.contains("docgen-diff-line--removed"));
-    assert!(hist.contains("docgen-diff-line--added"));
-    assert!(hist.contains("first body."));
-    assert!(hist.contains("second body."));
-    assert!(hist.contains(r#"href="/guide/intro""#)); // back link
+    // The global /diff workspace shell + its hydration assets.
+    let diff = fs::read_to_string(tmp.join("dist/diff/index.html")).unwrap();
+    assert!(diff.contains(r#"id="docgen-diff-root""#));
+    assert!(diff.contains(r#"src="/islands/diff.js""#));
+    assert!(tmp.join("dist/diff.css").exists());
+    assert!(tmp.join("dist/islands/diff.js").exists());
 
-    // The normal doc page still builds and links to history.
+    // timeline.json: both commits, summarized (no hunks), camelCase tree fields.
+    let timeline = fs::read_to_string(tmp.join("dist/diff/timeline.json")).unwrap();
+    assert!(timeline.contains("edit intro"));
+    assert!(timeline.contains("add intro"));
+    assert!(timeline.contains(r#""mode":"build-history""#));
+    assert!(timeline.contains("addedLines"));
+    assert!(!timeline.contains("added_lines"));
+
+    // One revisions/<id>.json per commit, carrying the rendered block diff.
+    let head_oid = repo.head().unwrap().target().unwrap().to_string();
+    let rev = fs::read_to_string(tmp.join(format!("dist/diff/revisions/{head_oid}.json"))).unwrap();
+    assert!(rev.contains("second body."));
+    assert!(rev.contains(r#""blocks""#));
+    assert!(rev.contains("<p>")); // rendered markdown HTML
+
+    // The normal doc page links to the global diff (not a per-page history page).
     let page = fs::read_to_string(tmp.join("dist/guide/intro/index.html")).unwrap();
-    assert!(page.contains(r#"href="/guide/intro/history""#));
+    assert!(page.contains(r#"href="/diff""#));
+    assert!(!page.contains("/history"));
+    assert!(!tmp.join("dist/guide/intro/history/index.html").exists());
 
     let _ = fs::remove_dir_all(&tmp);
 }
@@ -112,9 +126,10 @@ fn build_in_non_git_dir_skips_history_without_error() {
     // Doc page built fine.
     let page = fs::read_to_string(tmp.join("dist/guide/intro/index.html")).unwrap();
     assert!(page.contains("<title>Intro</title>"));
-    // No history page emitted, and no History link.
-    assert!(!tmp.join("dist/guide/intro/history/index.html").exists());
-    assert!(!page.contains(r#"href="/guide/intro/history""#));
+    // No diff workspace emitted, and no diff link in the topbar.
+    assert!(!tmp.join("dist/diff/index.html").exists());
+    assert!(!tmp.join("dist/diff.css").exists());
+    assert!(!page.contains(r#"href="/diff""#));
 
     let _ = fs::remove_dir_all(&tmp);
 }

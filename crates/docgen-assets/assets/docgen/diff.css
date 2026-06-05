@@ -1,0 +1,736 @@
+/* docgen-rs diff workspace styles — ported from the original Svelte docgen.
+ *
+ * Source of truth:
+ *   - packages/docgen/src/lib/styles/diff.css (the full stylesheet)
+ *   - the scoped <style> blocks of DocDiffView / CommitHeader /
+ *     DiffTimelineRail / DiffFileTree / DiffFileView (layout CSS folded in).
+ *
+ * The diff page is its OWN shell (not the doc shell), so these rules use the
+ * original global class names directly (no `.docgen-` prefix). Svelte
+ * `:global(...)` wrappers were dropped — only the inner selector is kept.
+ *
+ * Every numeric value (paddings, font-sizes, radii, widths, breakpoints,
+ * oklch colors) is preserved verbatim from the original. No token var()
+ * substitutions were required: every token the original references
+ * (--text-mute, --surface-hi, --accent-line, --bg-soft, --warn, --hairline,
+ * --code-bg, --code-border, etc.) already exists in docgen-rs with the same
+ * name.
+ */
+
+/* =============================== .diff-page =============================== */
+.diff-page {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	width: 100%;
+	min-width: 0;
+	color: var(--text);
+	font-size: 13px;
+	--diff-added: oklch(0.76 0.12 145);
+	--diff-added-bg: oklch(0.76 0.12 145 / 0.09);
+	--diff-removed: var(--text-error);
+	--diff-removed-bg: oklch(0.67 0.16 25 / 0.1);
+	--gutter-w: 22px;
+}
+
+.diff-page .added {
+	color: var(--diff-added);
+}
+.diff-page .removed {
+	color: var(--diff-removed);
+}
+
+/* ================================= pills ================================= */
+.diff-page .pill {
+	display: inline-grid;
+	place-items: center;
+	min-width: 14px;
+	height: 14px;
+	padding: 0 3px;
+	border-radius: 3px;
+	font-family: var(--font-mono);
+	font-size: 9px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	line-height: 1;
+}
+.diff-page .pill--added {
+	background: var(--diff-added-bg);
+	color: var(--diff-added);
+}
+.diff-page .pill--modified {
+	background: oklch(0.78 0.13 80 / 0.18);
+	color: oklch(0.78 0.13 80);
+}
+.diff-page .pill--deleted {
+	background: var(--diff-removed-bg);
+	color: var(--diff-removed);
+}
+.diff-page .pill--renamed {
+	background: oklch(0.72 0.1 240 / 0.18);
+	color: oklch(0.72 0.1 240);
+}
+
+/* ========================= warnings / empty-state ======================== */
+.diff-page .warnings,
+.diff-page .empty-state {
+	padding: 14px 16px;
+	border: 1px solid var(--border);
+	border-radius: var(--r-md);
+	background: var(--surface);
+}
+.diff-page .warnings ul {
+	margin: 10px 0 0;
+	padding-left: 18px;
+	color: var(--text-dim);
+}
+
+/* ============================== skeletons ================================ */
+.diff-page .skel {
+	display: grid;
+	gap: 16px;
+}
+.diff-page .skel--page {
+	grid-template-columns: var(--rail-w) minmax(0, 1fr);
+}
+.diff-page .skel--page .skel-rail,
+.diff-page .skel--page .skel-main {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+.diff-page .skel--page .skel-rail div,
+.diff-page .skel--page .skel-main div,
+.diff-page .skel--blocks div {
+	height: 48px;
+	border-radius: var(--r-sm);
+	background: linear-gradient(
+		90deg,
+		var(--surface) 0%,
+		var(--surface-hi) 50%,
+		var(--surface) 100%
+	);
+	background-size: 200% 100%;
+	animation: diff-shimmer 1.4s linear infinite;
+}
+.diff-page .skel--page .skel-main div {
+	height: 96px;
+}
+@keyframes diff-shimmer {
+	from {
+		background-position: 200% 0;
+	}
+	to {
+		background-position: -200% 0;
+	}
+}
+
+/* =============================== kbd hint ================================ */
+.diff-page .kbd-hint {
+	margin: 4px 0 0;
+	color: var(--text-mute);
+	font-size: 10px;
+}
+.diff-page .kbd-hint kbd {
+	display: inline-block;
+	min-width: 12px;
+	padding: 0 3px;
+	border: 1px solid var(--border);
+	border-radius: 2px;
+	background: var(--surface);
+	font-family: var(--font-mono);
+	font-size: 9px;
+	text-align: center;
+}
+
+/* ============================== col-resizer ============================== */
+.diff-page .col-resizer {
+	position: sticky;
+	top: var(--topbar-height);
+	height: calc(100vh - var(--topbar-height));
+	width: 5px;
+	cursor: col-resize;
+	background: transparent;
+	touch-action: none;
+	user-select: none;
+	z-index: 5;
+}
+.diff-page .col-resizer::before {
+	content: '';
+	position: absolute;
+	left: 2px;
+	top: 0;
+	bottom: 0;
+	width: 1px;
+	background: var(--border);
+	transition:
+		background 0.12s,
+		width 0.12s;
+}
+.diff-page .col-resizer:hover::before {
+	background: var(--accent-line);
+	width: 2px;
+	left: 1.5px;
+}
+
+/* ==================== rendered-blocks doc-shell rhythm =================== */
+/* Diff is a doc-shell with main docs base styling intact. */
+/* Only spacing/rhythm compacted; sizes, colors, links inherit. */
+.diff-page .rendered-blocks.doc-shell {
+	max-width: none;
+	display: flex;
+}
+
+.diff-page .doc-shell h1:first-child {
+	display: block;
+}
+
+.diff-page .diff-block > h1,
+.diff-page .diff-block > h2,
+.diff-page .diff-block > h3,
+.diff-page .diff-block > h4 {
+	margin-top: 8px;
+}
+.diff-page .diff-block > h1:first-child,
+.diff-page .diff-block > h2:first-child,
+.diff-page .diff-block > h3:first-child,
+.diff-page .diff-block > h4:first-child {
+	margin-top: 2px;
+}
+.diff-page .doc-shell h2 {
+	margin: 18px 0 6px;
+}
+.diff-page .doc-shell h3 {
+	margin: 12px 0 4px;
+}
+.diff-page .doc-shell h4 {
+	margin: 10px 0 4px;
+}
+.diff-page .doc-shell p {
+	margin: 0 0 6px;
+}
+.diff-page .doc-shell ul,
+.diff-page .doc-shell ol {
+	margin: 0 0 6px;
+}
+.diff-page .doc-shell li {
+	margin: 2px 0;
+}
+.diff-page .doc-shell pre {
+	margin: 4px 0;
+}
+.diff-page .doc-shell table {
+	margin: 6px 0;
+}
+.diff-page .doc-shell blockquote {
+	margin: 4px 0;
+}
+.diff-page .doc-shell pre.doc-mermaid.language-mermaid {
+	padding: 10px;
+	margin: 4px 0;
+}
+
+/* ============================ raw rust-ref HTML ========================== */
+/* Raw rust-ref HTML (server-rendered, no Svelte component instance). */
+/* Match RustRef.svelte appearance + inject icon via background. */
+.diff-page a.rust-ref-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	max-width: 100%;
+	min-width: 0;
+	padding: 1px 7px 1px 22px;
+	border: 1px solid var(--code-border);
+	border-radius: 4px;
+	background: var(--code-bg) no-repeat 5px center / 14px 14px;
+	background-image: url('/icons/rust.svg');
+	color: var(--text);
+	font-family: var(--font-mono);
+	font-size: 0.85em;
+	text-decoration: none;
+	white-space: normal;
+	vertical-align: middle;
+}
+.diff-page a.rust-ref-link:hover {
+	border-color: var(--accent-line);
+	color: var(--accent);
+}
+.diff-page a.rust-ref-link .rust-ref__path {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: normal;
+}
+
+/* ============================= diff-workspace ============================ */
+/* Folded in from DocDiffView.svelte <style>. */
+.diff-workspace {
+	display: grid;
+	grid-template-columns: var(--rail-w) 5px var(--files-w) 5px minmax(0, 1fr);
+	gap: 0;
+	align-items: start;
+	min-width: 0;
+}
+
+@media (max-width: 1100px) {
+	.diff-workspace {
+		grid-template-columns: var(--files-w) minmax(0, 1fr);
+	}
+}
+
+@media (max-width: 800px) {
+	.diff-workspace {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* ============================== commit-header =========================== */
+/* Folded in from CommitHeader.svelte <style>. */
+.commit-header {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-rows: auto auto;
+	column-gap: 12px;
+	row-gap: 2px;
+	align-items: center;
+	padding: 6px 10px;
+	border: 1px solid var(--border);
+	border-top: none;
+	border-radius: var(--r-sm);
+	background: var(--surface);
+}
+.commit-header h1 {
+	margin: 0;
+	font-size: 14px;
+	font-weight: 500;
+	letter-spacing: -0.005em;
+	line-height: 1.25;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.commit-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 0;
+	color: var(--text-mute);
+	font-family: var(--font-mono);
+	font-size: 11px;
+	grid-column: 1;
+}
+.commit-meta .hash {
+	color: var(--accent);
+}
+.commit-meta .sep {
+	opacity: 0.5;
+}
+.timeline-toggle {
+	grid-row: 1 / span 2;
+	grid-column: 2;
+	justify-self: end;
+	align-self: center;
+	padding: 6px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--r-sm);
+	background: var(--surface);
+	color: var(--text-dim);
+	font-size: 12px;
+	cursor: pointer;
+}
+.timeline-toggle:hover {
+	border-color: var(--accent-line);
+	color: var(--text);
+}
+
+@media (min-width: 1101px) {
+	.timeline-toggle {
+		display: none;
+	}
+}
+
+@media (max-width: 800px) {
+	.commit-header h1 {
+		font-size: 22px;
+	}
+}
+
+/* ============================== timeline-rail =========================== */
+/* Folded in from DiffTimelineRail.svelte <style>. */
+.timeline-rail {
+	position: sticky;
+	top: var(--topbar-height);
+	height: calc(100vh - var(--topbar-height));
+	max-height: calc(100vh - var(--topbar-height));
+	overflow-y: auto;
+	min-width: 0;
+	padding: 8px 8px 16px;
+}
+
+.timeline-rail h3 {
+	margin: 8px 4px 3px;
+	color: var(--text-mute);
+	font-family: var(--font-mono);
+	font-size: 9.5px;
+	font-weight: 500;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+.timeline-rail h3:first-child {
+	margin-top: 0;
+}
+.timeline-rail ul {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+}
+.timeline-rail button {
+	display: grid;
+	grid-template-columns: 8px minmax(0, 1fr) auto;
+	gap: 6px;
+	align-items: center;
+	width: 100%;
+	padding: 3px 6px;
+	border: 0;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--text-dim);
+	text-align: left;
+	cursor: pointer;
+}
+.timeline-rail button:hover {
+	background: var(--bg-soft);
+	color: var(--text);
+}
+.timeline-rail button.active {
+	background: var(--surface-hi);
+	color: var(--text);
+}
+.timeline-rail button.active .dot,
+.timeline-rail button.worktree .dot {
+	box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.timeline-rail button.worktree .dot {
+	background: var(--warn);
+}
+.timeline-rail .dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 999px;
+	background: var(--accent);
+}
+.timeline-rail .copy {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	min-width: 0;
+}
+.timeline-rail .copy strong {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 11.5px;
+	font-weight: 500;
+	line-height: 1.3;
+}
+.timeline-rail .copy small {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-mute);
+	font-family: var(--font-mono);
+	font-size: 9.5px;
+	line-height: 1.3;
+}
+.timeline-rail .stat {
+	display: flex;
+	gap: 4px;
+	font-family: var(--font-mono);
+	font-size: 9.5px;
+}
+
+@media (max-width: 1100px) {
+	.timeline-rail {
+		position: fixed;
+		top: var(--topbar-height);
+		right: 0;
+		bottom: 0;
+		width: min(360px, 88vw);
+		max-height: none;
+		padding: 16px;
+		border-left: 1px solid var(--border);
+		background: var(--bg);
+		transform: translateX(100%);
+		transition: transform 0.18s ease;
+		z-index: 30;
+	}
+	.diff-workspace.timeline-open .timeline-rail {
+		transform: translateX(0);
+	}
+}
+
+/* =============================== file-sidebar =========================== */
+/* Folded in from DiffFileTree.svelte <style>. */
+.file-sidebar {
+	position: sticky;
+	top: var(--topbar-height);
+	height: calc(100vh - var(--topbar-height));
+	max-height: calc(100vh - var(--topbar-height));
+	overflow-y: auto;
+	min-width: 0;
+	padding: 8px 8px 16px;
+}
+.sidebar-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	margin-bottom: 6px;
+	padding-bottom: 5px;
+	border-bottom: 1px solid var(--hairline);
+}
+.file-sidebar h2 {
+	margin: 0;
+	color: var(--text-mute);
+	font-family: var(--font-mono);
+	font-size: 9.5px;
+	font-weight: 500;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+.sidebar-summary {
+	display: flex;
+	gap: 6px;
+	color: var(--text-mute);
+	font-family: var(--font-mono);
+	font-size: 10px;
+	white-space: nowrap;
+}
+
+.file-tree {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+}
+.tree-row {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	width: 100%;
+	min-width: 0;
+	padding: 2px 0 2px calc(var(--depth, 0) * 12px);
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	color: var(--text-dim);
+	font-size: 11.5px;
+	text-align: left;
+	cursor: pointer;
+	position: relative;
+}
+.tree-row::before {
+	content: '';
+	position: absolute;
+	left: calc((var(--depth, 0) - 1) * 12px + 5px);
+	top: 0;
+	bottom: 0;
+	width: 1px;
+	background: var(--hairline);
+	display: var(--depth-guide, none);
+}
+.tree-row[style*='--depth:1'],
+.tree-row[style*='--depth:2'],
+.tree-row[style*='--depth:3'],
+.tree-row[style*='--depth:4'] {
+	--depth-guide: block;
+}
+.tree-row:hover {
+	background: var(--bg-soft);
+	color: var(--text);
+}
+.tree-row.active {
+	background: var(--surface-hi);
+	color: var(--text);
+}
+.tree-row--group {
+	color: var(--text-mute);
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	letter-spacing: 0.02em;
+}
+.tree-row--group .chev {
+	display: inline-grid;
+	place-items: center;
+	width: 12px;
+	font-size: 11px;
+	color: var(--text-mute);
+}
+.tree-row--group .tree-label {
+	display: inline-flex;
+	gap: 6px;
+	align-items: baseline;
+}
+.tree-row .tree-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.tree-row--file .tree-label {
+	font-family: var(--font-mono);
+	font-size: 11px;
+}
+.tree-row .tree-counts {
+	display: flex;
+	gap: 5px;
+	align-items: center;
+	color: var(--text-mute);
+	font-family: var(--font-mono);
+	font-size: 9.5px;
+	white-space: nowrap;
+}
+.tree-row--group .count-files::before {
+	content: '(';
+}
+.tree-row--group .count-files::after {
+	content: ')';
+}
+
+@media (max-width: 800px) {
+	.file-sidebar {
+		position: static;
+		max-height: none;
+		padding: 12px;
+		border: 1px solid var(--border);
+		border-radius: var(--r-md);
+		background: var(--surface);
+	}
+}
+
+/* =============================== selected-file ========================== */
+/* Folded in from DiffFileView.svelte <style>. */
+.selected-file {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: 100%;
+	min-width: 0;
+	padding: 8px 16px 32px;
+}
+
+.file-header {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	padding: 5px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--r-sm);
+	background: var(--surface);
+	min-width: 0;
+	position: sticky;
+	top: calc(var(--topbar-height) + 8px);
+	z-index: 2;
+}
+.file-header .path {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 2px;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.file-header .path-dir {
+	color: var(--text-mute);
+}
+.file-header .path-base {
+	color: var(--text);
+	font-weight: 500;
+}
+.file-header .arrow {
+	margin: 0 6px;
+	color: var(--text-mute);
+}
+.file-header .spacer {
+	flex: 1;
+}
+.file-header .counts {
+	display: flex;
+	gap: 8px;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	white-space: nowrap;
+}
+
+.rendered-blocks {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	width: 100%;
+	min-width: 0;
+	max-width: none;
+	font-size: 14px;
+}
+
+.diff-run {
+	display: grid;
+	grid-template-columns: var(--gutter-w) minmax(0, 1fr);
+	min-width: 0;
+	border-radius: 3px;
+}
+.diff-run--added {
+	background: var(--diff-added-bg);
+}
+.diff-run--removed {
+	background: var(--diff-removed-bg);
+}
+.diff-run--context {
+	background: transparent;
+}
+.diff-gutter {
+	display: flex;
+	justify-content: center;
+	padding-top: 4px;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	font-weight: 600;
+	border-radius: 3px 0 0 3px;
+}
+.diff-run--added .diff-gutter {
+	color: var(--diff-added);
+	background: oklch(0.76 0.12 145 / 0.2);
+}
+.diff-run--removed .diff-gutter {
+	color: var(--diff-removed);
+	background: oklch(0.67 0.16 25 / 0.22);
+}
+.diff-body {
+	min-width: 0;
+	padding: 2px 0;
+}
+.diff-block {
+	padding: 2px 12px;
+	min-width: 0;
+}
+.diff-block :first-child {
+	margin-top: 0;
+}
+.diff-block :last-child {
+	margin-bottom: 0;
+}
+.diff-block pre {
+	overflow-x: auto;
+}
+.diff-block .table-wrap,
+.diff-block table {
+	max-width: 100%;
+	overflow-x: auto;
+	display: block;
+}
+.diff-block table {
+	border-collapse: collapse;
+}

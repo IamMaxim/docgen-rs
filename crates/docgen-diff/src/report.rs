@@ -115,6 +115,93 @@ fn build_doc_diff_report_inner(
     Ok(Some(report_from_timeline(timeline)))
 }
 
+/// Build the global build-history report across all docs under `docs_prefix`
+/// (repo-relative, e.g. `"docs"`). Each timeline point is a commit carrying
+/// *every* doc file it changed — the analogue of the original global
+/// `/docs/diff` report. Returns `Ok(None)` when no commit touched the docs.
+/// With `with_blocks`, each file additionally carries its rendered block diff.
+pub fn build_global_doc_diff_report(
+    repo: &git2::Repository,
+    docs_prefix: &str,
+    limit: usize,
+    with_blocks: bool,
+) -> Result<Option<DocDiffReport>, DiffError> {
+    let revs = history::global_doc_revisions(repo, docs_prefix, limit)?;
+    if revs.is_empty() {
+        return Ok(None);
+    }
+
+    let mut timeline: Vec<DocDiffTimelinePoint> = Vec::with_capacity(revs.len());
+
+    for rev in revs {
+        let mut files: Vec<DocDiffFile> = Vec::new();
+        for change in &rev.files {
+            let hunks = line_diff::build_line_hunks_default(&change.old_text, &change.new_text);
+            let mut blocks = block_diff::build_block_diff(&change.old_text, &change.new_text);
+            let all_context = blocks.iter().all(|b| b.kind == DocDiffBlockKind::Context);
+
+            // Parity with the TS `return null`: a file whose only change is
+            // invisible (no hunks, all-context blocks) is dropped.
+            if hunks.is_empty() && all_context {
+                continue;
+            }
+
+            let blocks = if with_blocks {
+                for block in &mut blocks {
+                    block.html = render_markdown(&block.raw);
+                }
+                Some(blocks)
+            } else {
+                None
+            };
+
+            files.push(DocDiffFile {
+                path: change.path.clone(),
+                old_path: change.old_path.clone(),
+                status: change.status,
+                added_lines: count_lines(&hunks, DocDiffLineKind::Added),
+                removed_lines: count_lines(&hunks, DocDiffLineKind::Removed),
+                hunks,
+                blocks,
+            });
+        }
+
+        // A commit whose docs changes were all invisible yields no files — skip.
+        if files.is_empty() {
+            continue;
+        }
+
+        let file_tree = file_tree::build_file_tree(&files);
+        let total_added_lines = files.iter().map(|f| f.added_lines).sum();
+        let total_removed_lines = files.iter().map(|f| f.removed_lines).sum();
+        let base_ref = git_refs::base_ref_for_parents(&rev.meta.parents);
+        let head_ref = rev.meta.hash.clone();
+
+        timeline.push(DocDiffTimelinePoint {
+            id: rev.meta.hash.clone(),
+            kind: DocDiffTimelinePointKind::Commit,
+            hash: Some(rev.meta.hash.clone()),
+            short_hash: rev.meta.short_hash.clone(),
+            subject: rev.meta.subject.clone(),
+            author: rev.meta.author.clone(),
+            date: rev.meta.date.clone(),
+            base_ref,
+            head_ref,
+            files,
+            file_tree,
+            total_added_lines,
+            total_removed_lines,
+            warnings: vec![],
+        });
+    }
+
+    if timeline.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(report_from_timeline(timeline)))
+}
+
 fn count_lines(hunks: &[crate::types::DocDiffHunk], kind: DocDiffLineKind) -> u32 {
     hunks
         .iter()
@@ -217,6 +304,62 @@ mod tests {
         assert!(head.total_added_lines >= 1 && head.total_removed_lines >= 1);
         // Blocks are not built/rendered in the build path — nothing consumes them.
         assert!(file.blocks.is_none());
+    }
+
+    #[test]
+    fn global_report_groups_all_changed_docs_per_commit() {
+        let r = TempRepo::init();
+        // Commit 1: two docs added.
+        r.commit_file("docs/a.md", "# A\n\nfirst.\n", "init");
+        std::fs::write(r.dir.join("docs/b.md"), "# B\n\nbee.\n").unwrap();
+        r.commit_all("add b");
+        // Commit 2: edit a + add nested c in ONE commit.
+        std::fs::write(r.dir.join("docs/a.md"), "# A\n\nsecond.\n").unwrap();
+        std::fs::create_dir_all(r.dir.join("docs/sub")).unwrap();
+        std::fs::write(r.dir.join("docs/sub/c.md"), "# C\n\ncee.\n").unwrap();
+        r.commit_all("edit a + add c");
+
+        let report = build_global_doc_diff_report(&r.repo, "docs", 50, true)
+            .unwrap()
+            .unwrap();
+        assert_eq!(report.mode, "build-history");
+
+        // Head commit changed a.md (edit) and c.md (add) -> both present.
+        let head = &report.timeline[0];
+        let paths: Vec<&str> = head.files.iter().map(|f| f.path.as_str()).collect();
+        assert!(paths.contains(&"docs/a.md"));
+        assert!(paths.contains(&"docs/sub/c.md"));
+        // Block html rendered for the detail report.
+        assert!(head
+            .files
+            .iter()
+            .any(|f| f.blocks.as_ref().is_some_and(|b| b.iter().any(|x| x.html.contains("<p>")))));
+        // File tree nests docs/sub.
+        assert!(!head.file_tree.is_empty());
+
+        // Selection points at the head commit + its first file.
+        assert_eq!(report.selected_point_id.as_deref(), Some(head.id.as_str()));
+    }
+
+    #[test]
+    fn global_report_summary_strips_blocks() {
+        let r = TempRepo::init();
+        r.commit_file("docs/a.md", "# A\n\none.\n", "init");
+        r.commit_file("docs/a.md", "# A\n\ntwo.\n", "edit");
+        let report = build_global_doc_diff_report(&r.repo, "docs", 50, false)
+            .unwrap()
+            .unwrap();
+        assert!(report.timeline[0].files[0].blocks.is_none());
+        assert!(!report.timeline[0].files[0].hunks.is_empty());
+    }
+
+    #[test]
+    fn global_report_is_none_without_docs_commits() {
+        let r = TempRepo::init();
+        r.commit_file("notes/a.md", "x\n", "non-docs");
+        assert!(build_global_doc_diff_report(&r.repo, "docs", 50, true)
+            .unwrap()
+            .is_none());
     }
 
     #[test]

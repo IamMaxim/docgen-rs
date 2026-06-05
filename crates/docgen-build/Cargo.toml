@@ -13,6 +13,7 @@ docgen-core = { path = "../docgen-core" }
 docgen-diff = { path = "../docgen-diff" }
 docgen-assets = { path = "../docgen-assets" }
 docgen-render = { path = "../docgen-render" }
+serde_json = "1"
 
 [dev-dependencies]
 tempfile = "3"

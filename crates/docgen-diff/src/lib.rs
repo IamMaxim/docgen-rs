@@ -26,9 +26,14 @@ pub use error::DiffError;
 pub use file_tree::build_file_tree;
 pub use git_parsing::{parse_name_status, parse_untracked_docs, NameStatusEntry};
 pub use git_refs::{base_ref_for_commit_parents, base_ref_for_parents, EMPTY_TREE_REF};
-pub use history::{discover_repo, doc_revisions, CommitMeta, RevisionContent};
+pub use history::{
+    discover_repo, doc_revisions, global_doc_revisions, CommitMeta, GlobalFileChange,
+    GlobalRevision, RevisionContent,
+};
 pub use line_diff::{build_line_hunks, build_line_hunks_default};
 pub use payloads::{summarize_file, summarize_report, summarize_timeline_point};
-pub use report::{build_doc_diff_report, build_doc_diff_report_with_blocks};
+pub use report::{
+    build_doc_diff_report, build_doc_diff_report_with_blocks, build_global_doc_diff_report,
+};
 pub use timeline_groups::{bucket_label, format_date, group_timeline, ymd, TimelineBucket};
 pub use types::*;
