@@ -227,7 +227,7 @@ pub fn dev_assets() -> Vec<Asset> {
 ///
 /// Both fields default to `false`: the default build takes the build-time KaTeX
 /// path (no runtime JS) and emits mermaid only when a page used a diagram.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct EmitOptions {
     /// Ship runtime `katex.min.js` + `auto-render.min.js` (fallback path). Default false.
     pub include_katex_runtime: bool,
@@ -243,12 +243,35 @@ pub struct EmitOptions {
     /// Emit `components.js` (set when any *used* component had an `island.js`).
     /// Written via [`emit_component_bundle`], not [`assets_for`]. Default false.
     pub include_component_js: bool,
+    /// Ship the search client (`search.js`). Gated by `[features] search`. The
+    /// page template only links it when search is enabled, so dropping it here
+    /// keeps the dist free of an orphan asset. Default `true` (search on).
+    pub include_search: bool,
+}
+
+impl Default for EmitOptions {
+    /// The default build: build-time KaTeX (no runtime JS), mermaid/graph only
+    /// when used, component bundles written elsewhere — and search **on**, the
+    /// pre-P6 behaviour every feature-toggle test relies on.
+    fn default() -> Self {
+        Self {
+            include_katex_runtime: false,
+            include_mermaid: false,
+            include_graph: false,
+            include_component_css: false,
+            include_component_js: false,
+            include_search: true,
+        }
+    }
 }
 
 /// The full asset set to emit for this build: core + katex css (always, for math
 /// output) + conditional runtime/mermaid. Stable ordering for deterministic tests.
 pub fn assets_for(opts: &EmitOptions) -> Vec<Asset> {
     let mut out = core_assets();
+    if !opts.include_search {
+        out.retain(|a| a.path != "search.js");
+    }
     out.extend(katex_css_assets());
     if opts.include_katex_runtime {
         out.extend(katex_runtime_assets());
@@ -465,6 +488,20 @@ mod tests {
     }
 
     #[test]
+    fn search_js_gated_by_include_search() {
+        // On by default (pre-P6 behaviour).
+        assert!(assets_for(&EmitOptions::default())
+            .iter()
+            .any(|a| a.path == "search.js"));
+        // Dropped when search is disabled — no orphan asset in the dist.
+        let off = assets_for(&EmitOptions {
+            include_search: false,
+            ..Default::default()
+        });
+        assert!(!off.iter().any(|a| a.path == "search.js"));
+    }
+
+    #[test]
     fn graph_island_is_js_kinded() {
         assert_eq!(
             graph_assets()
@@ -581,6 +618,7 @@ mod tests {
                         // exhaustive matrix stays honest.
                         include_component_css: k,
                         include_component_js: m,
+                        include_search: g,
                     };
                     for a in assets_for(&opts) {
                         assert!(

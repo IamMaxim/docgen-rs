@@ -301,6 +301,10 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
         // these flags are inert in assets_for.
         include_component_css: false,
         include_component_js: false,
+        // Honour `[features] search = false`: the page template already gates the
+        // search trigger + script link, so the client script would otherwise be an
+        // orphan file in the dist.
+        include_search: config.features.search,
     };
     docgen_assets::emit(&docgen_assets::assets_for(&emit_opts), dist_dir)?;
 
