@@ -2,8 +2,8 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use docgen_core::assemble::assemble;
 use docgen_core::discover::discover_docs;
+use docgen_core::pipeline::{prepare, render_docs};
 use docgen_core::tree::build_tree;
 use docgen_render::{PageContext, Renderer, DEFAULT_PAGE_TEMPLATE};
 
@@ -14,8 +14,11 @@ pub fn build(project_root: &Path) -> Result<()> {
 
     let raws = discover_docs(&docs_dir)
         .with_context(|| format!("reading docs from {}", docs_dir.display()))?;
-    let docs: Vec<_> = raws.into_iter().map(assemble).collect();
-    let tree = build_tree(&docs);
+
+    // Two-pass: prepare all docs, then render with full slug knowledge.
+    let prepared: Vec<_> = raws.into_iter().map(prepare).collect();
+    let site = render_docs(prepared);
+    let tree = build_tree(&site.docs);
 
     let renderer = Renderer::new(DEFAULT_PAGE_TEMPLATE)?;
 
@@ -23,11 +26,14 @@ pub fn build(project_root: &Path) -> Result<()> {
     let _ = fs::remove_dir_all(&dist_dir);
     fs::create_dir_all(&dist_dir)?;
 
-    for doc in &docs {
+    let empty: Vec<docgen_core::model::Backlink> = Vec::new();
+    for doc in &site.docs {
+        let backlinks = site.graph.backlinks.get(&doc.slug).unwrap_or(&empty);
         let html = renderer.render_page(&PageContext {
             title: &doc.title,
             body_html: &doc.body_html,
             tree: &tree,
+            backlinks,
         })?;
 
         // `guide/intro` -> `dist/guide/intro/index.html` (clean URLs).
@@ -36,6 +42,7 @@ pub fn build(project_root: &Path) -> Result<()> {
         fs::write(out_dir.join("index.html"), html)?;
     }
 
-    println!("Built {} page(s) -> {}", docs.len(), dist_dir.display());
+    // Cluster C adds: emit search-index.json, search.js, docgen.css here.
+    println!("Built {} page(s) -> {}", site.docs.len(), dist_dir.display());
     Ok(())
 }
