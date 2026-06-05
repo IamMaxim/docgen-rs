@@ -58,9 +58,43 @@ pub fn core_assets() -> Vec<Asset> {
 
 /// KaTeX stylesheet + fonts, always emitted (build-time-rendered HTML needs them).
 ///
-/// Stub for Cluster A; filled in Cluster B (B-5).
+/// Font dist paths stay siblings of the css under `vendor/katex/` so the css's
+/// relative `url(fonts/...)` references resolve. Paths are `&'static str`
+/// literals (no runtime formatting), so each `Asset` carries embedded bytes
+/// directly.
 pub fn katex_css_assets() -> Vec<Asset> {
-    vec![]
+    macro_rules! font {
+        ($name:literal) => {
+            embed(
+                concat!("vendor/katex/fonts/KaTeX_", $name, ".woff2"),
+                concat!("vendor/katex/fonts/KaTeX_", $name, ".woff2"),
+                AssetKind::Font,
+            )
+        };
+    }
+    vec![
+        embed(
+            "vendor/katex/katex.min.css",
+            "vendor/katex/katex.min.css",
+            AssetKind::Css,
+        ),
+        font!("AMS-Regular"),
+        font!("Caligraphic-Bold"),
+        font!("Caligraphic-Regular"),
+        font!("Fraktur-Bold"),
+        font!("Fraktur-Regular"),
+        font!("Main-Bold"),
+        font!("Main-BoldItalic"),
+        font!("Main-Italic"),
+        font!("Main-Regular"),
+        font!("Math-BoldItalic"),
+        font!("Math-Italic"),
+        font!("SansSerif-Bold"),
+        font!("SansSerif-Italic"),
+        font!("SansSerif-Regular"),
+        font!("Script-Regular"),
+        font!("Typewriter-Regular"),
+    ]
 }
 
 /// Runtime KaTeX (`katex.min.js` + `auto-render.min.js`). Fallback path only,
@@ -206,6 +240,42 @@ mod tests {
         assert!(tmp.join("docgen.css").is_file());
         assert!(tmp.join("search.js").is_file());
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    // ---- B-5: katex_css_assets() ----
+
+    #[test]
+    fn katex_css_and_all_16_fonts_present() {
+        let a = katex_css_assets();
+        assert!(a.iter().any(|x| x.path == "vendor/katex/katex.min.css"));
+        let fonts = a.iter().filter(|x| x.kind == AssetKind::Font).count();
+        assert_eq!(fonts, 16);
+        for x in &a {
+            assert!(!x.bytes.is_empty(), "{} empty", x.path);
+        }
+    }
+
+    #[test]
+    fn katex_css_url_paths_are_relative_to_fonts_dir() {
+        let css = katex_css_assets()
+            .into_iter()
+            .find(|x| x.path.ends_with(".css"))
+            .unwrap();
+        let s = std::str::from_utf8(css.bytes).unwrap();
+        assert!(s.contains("fonts/KaTeX_Main-Regular.woff2"));
+    }
+
+    #[test]
+    fn default_build_always_emits_katex_css() {
+        // Build-time math HTML always needs the css + fonts, even with no flags.
+        let base = assets_for(&EmitOptions::default());
+        assert!(base
+            .iter()
+            .any(|a| a.path == "vendor/katex/katex.min.css"));
+        assert_eq!(
+            base.iter().filter(|a| a.kind == AssetKind::Font).count(),
+            16
+        );
     }
 
     #[test]
