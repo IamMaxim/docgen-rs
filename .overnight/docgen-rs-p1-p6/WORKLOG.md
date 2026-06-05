@@ -56,3 +56,11 @@
 - User correctly flagged: the built site has ZERO theme CSS and looks broken (confirmed by my own screenshots — default serif, no layout, raw-bullet sidebar). P0 shipped no CSS by design; P1–P6 added only component-scoped styles, never a global theme.
 - Added P7 "Design/theme" as a follow-up milestone in PLAN.md: real docgen.css (layout/typography/sidebar/topbar/dark-mode/responsive), referencing the original Svelte src/lib/styles. Explicit user requirement: validate heavily via ACTUAL screenshots across all page types incl. dark mode; use frontend-design principles.
 - Sequencing: let the in-flight P6 workflow finish + validate, then run P7 as its own workflow, then final report. P7 depends on all prior phases (it styles their output).
+
+## 2026-06-05 19:25 MSK — P6 GREEN (final functional phase)
+- Workflow w0cr0mltm (~55 min): plan → 3 TDD clusters (config+root-/ fix / custom-component directives / init+distribution) → gate → 4 reviews → fix → verify.
+- New crates: docgen-config (docgen.toml: title/base/feature-toggles), docgen-components (Registry, Component, discover/override), docgen-init (scaffold). docgen-core directivepass (source-level :::block + :leaf pre-pass, code-fence-aware). Built-in callout dogfoods the component system. Root '/' now emitted (dist/index.html) — fixes the P0 carry-over.
+- Result: 259 tests green, clippy clean, 120 commits. Review 7 findings, 6 applied / 2 rejected. TWO BLOCKERS caught+fixed: (1) directives wrongly parsed/destroyed inside code blocks → pre-pass made fence+inline-code-aware; (2) 'base' sub-path config emitted an inert <base> while links were root-absolute → now prefixes every emitted URL with base (real sub-path deploys work).
+- ARCHITECT VERIFICATION: cargo test 259/30 binaries, clippy clean; built fixture (6 pages incl. root /index.html + rendered :::callout note/warning); 'docgen init /tmp/...' scaffolds docgen.toml+docs+components/note/+ and the scaffolded site BUILDS; release.yml + binstall metadata present. Confirmed.
+- ALL 6 SPEC PHASES FUNCTIONALLY COMPLETE. Remaining: P7 design/theme (user follow-up) — the site is unstyled.
+- Next: P7 styling, then heavy screenshot validation, then final report.
