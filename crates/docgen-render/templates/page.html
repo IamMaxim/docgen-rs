@@ -13,7 +13,7 @@
         {% if node.kind == "dir" %}
           <li class="docgen-dir"><span>{{ node.name }}</span>{{ render_nodes(node.children) }}</li>
         {% else %}
-          <li class="docgen-doc"><a href="/{{ node.slug }}">{{ node.title }}</a></li>
+          <li class="docgen-doc"><a href="/{{ node.slug | safe }}">{{ node.title }}</a></li>
         {% endif %}
       {% endfor %}
     </ul>

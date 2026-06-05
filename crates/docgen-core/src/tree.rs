@@ -73,4 +73,46 @@ mod tests {
         }
         assert!(matches!(&tree[1], TreeNode::Doc { slug, .. } if slug == "index"));
     }
+
+    #[test]
+    fn dirs_come_before_docs_even_when_doc_sorts_first() {
+        // "aaa" sorts before "zzz_dir" alphabetically; dirs-first must still win.
+        let docs = vec![doc("aaa", "A"), doc("zzz_dir/page", "Page")];
+        let tree = build_tree(&docs);
+        assert_eq!(tree.len(), 2);
+        assert!(matches!(&tree[0], TreeNode::Dir { name, .. } if name == "zzz_dir"));
+        assert!(matches!(&tree[1], TreeNode::Doc { slug, .. } if slug == "aaa"));
+    }
+
+    #[test]
+    fn multiple_dirs_and_docs_each_sorted_within_group() {
+        let docs = vec![
+            doc("m_doc", "M"),
+            doc("b_dir/x", "X"),
+            doc("a_doc", "A"),
+            doc("a_dir/y", "Y"),
+        ];
+        let tree = build_tree(&docs);
+        // Dirs first (a_dir, b_dir), then docs (a_doc, m_doc).
+        assert!(matches!(&tree[0], TreeNode::Dir { name, .. } if name == "a_dir"));
+        assert!(matches!(&tree[1], TreeNode::Dir { name, .. } if name == "b_dir"));
+        assert!(matches!(&tree[2], TreeNode::Doc { name, .. } if name == "a_doc"));
+        assert!(matches!(&tree[3], TreeNode::Doc { name, .. } if name == "m_doc"));
+    }
+
+    #[test]
+    fn groups_nested_directories() {
+        let docs = vec![doc("a/b/c", "Deep")];
+        let tree = build_tree(&docs);
+        // a -> b -> c (doc), three levels deep.
+        let a = match &tree[0] {
+            TreeNode::Dir { name, children } if name == "a" => children,
+            other => panic!("expected dir a, got {other:?}"),
+        };
+        let b = match &a[0] {
+            TreeNode::Dir { name, children } if name == "b" => children,
+            other => panic!("expected dir b, got {other:?}"),
+        };
+        assert!(matches!(&b[0], TreeNode::Doc { slug, .. } if slug == "a/b/c"));
+    }
 }

@@ -9,7 +9,7 @@ fn builds_fixture_site() {
     let workspace = manifest.parent().unwrap().parent().unwrap(); // repo root
     let fixture = workspace.join("fixtures/site-basic");
 
-    let tmp = std::env::temp_dir().join("docgen_build_cli_test");
+    let tmp = std::env::temp_dir().join(format!("docgen_build_cli_test_{}", std::process::id()));
     let _ = fs::remove_dir_all(&tmp);
     fs::create_dir_all(tmp.join("docs/guide")).unwrap();
     fs::copy(fixture.join("docs/index.md"), tmp.join("docs/index.md")).unwrap();
@@ -25,11 +25,18 @@ fn builds_fixture_site() {
     let home = fs::read_to_string(tmp.join("dist/index/index.html")).unwrap();
     assert!(home.contains("<title>Home</title>"));
     assert!(home.contains("<strong>basic</strong>"));
+    // Sidebar renders on the index page too: links to the guide doc and the dir label.
+    assert!(home.contains(r#"href="/guide/intro""#));
+    assert!(home.contains(">guide<"));
 
     let intro = fs::read_to_string(tmp.join("dist/guide/intro/index.html")).unwrap();
     assert!(intro.contains("<title>Introduction</title>"));
-    // Sidebar shows both entries on every page.
+    // Sidebar shows both entries on every page, including the dir node.
     assert!(intro.contains(r#"href="/index""#));
+    assert!(intro.contains(r#"href="/guide/intro""#));
+    assert!(intro.contains(">guide<"));
+    // Wikilinks are rendered literally in P0 (no resolution).
+    assert!(intro.contains("[[wikilink]]"));
 
     let _ = fs::remove_dir_all(&tmp);
 }

@@ -6,7 +6,8 @@ use docgen_core::tree::build_tree;
 
 #[test]
 fn discovers_and_processes_a_temp_site() {
-    let dir = std::env::temp_dir().join("docgen_core_pipeline_test");
+    let dir =
+        std::env::temp_dir().join(format!("docgen_core_pipeline_test_{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(dir.join("docs/guide")).unwrap();
     fs::write(dir.join("docs/index.md"), "# Home\n").unwrap();

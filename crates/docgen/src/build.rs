@@ -25,8 +25,8 @@ pub fn build(project_root: &Path) -> Result<()> {
 
     for doc in &docs {
         let html = renderer.render_page(&PageContext {
-            title: doc.title.clone(),
-            body_html: doc.body_html.clone(),
+            title: &doc.title,
+            body_html: &doc.body_html,
             tree: &tree,
         })?;
 

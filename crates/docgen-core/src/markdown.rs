@@ -34,4 +34,24 @@ mod tests {
         let html = render_markdown("~~gone~~");
         assert!(html.contains("<del>"));
     }
+
+    #[test]
+    fn renders_task_list() {
+        let html = render_markdown("- [x] done\n- [ ] todo\n");
+        assert!(html.contains("type=\"checkbox\""));
+        assert!(html.contains("checked"));
+    }
+
+    #[test]
+    fn renders_autolink() {
+        let html = render_markdown("see https://example.com here\n");
+        assert!(html.contains(r#"href="https://example.com""#));
+    }
+
+    #[test]
+    fn renders_footnote() {
+        let html = render_markdown("text[^1]\n\n[^1]: a note\n");
+        assert!(html.contains("<sup"));
+        assert!(html.contains("footnote"));
+    }
 }

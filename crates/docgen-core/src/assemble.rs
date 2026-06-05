@@ -27,7 +27,8 @@ pub fn assemble(raw: RawDoc) -> Doc {
         .or_else(|| first_h1(&parsed.body))
         .unwrap_or_else(|| {
             // Last path segment of the slug as a final fallback.
-            slug.rsplit('/').next().unwrap_or(&slug).to_string()
+            // `rsplit` always yields at least one segment, so `next()` is never None.
+            slug.rsplit('/').next().unwrap_or("").to_string()
         });
 
     let body_html = render_markdown(&parsed.body);
@@ -64,5 +65,25 @@ mod tests {
 
         let bare = assemble(RawDoc { rel_path: "c.md".into(), raw: "no heading here\n".into() });
         assert_eq!(bare.title, "c");
+    }
+
+    #[test]
+    fn frontmatter_without_title_key_falls_back_to_h1() {
+        // Frontmatter present but no `title` key -> first H1.
+        let doc = assemble(RawDoc {
+            rel_path: "d.md".into(),
+            raw: "---\nweight: 3\n---\n# H1 Title\n".into(),
+        });
+        assert_eq!(doc.title, "H1 Title");
+    }
+
+    #[test]
+    fn non_string_frontmatter_title_falls_back_to_slug() {
+        // `title: 42` is not a string -> as_str() is None -> fall through to slug.
+        let doc = assemble(RawDoc {
+            rel_path: "e.md".into(),
+            raw: "---\ntitle: 42\n---\nbody\n".into(),
+        });
+        assert_eq!(doc.title, "e");
     }
 }
