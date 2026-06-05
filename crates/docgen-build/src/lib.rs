@@ -223,6 +223,7 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
                     buckets: &buckets,
                     base: &config.base,
                     site_title: config.title.as_deref().unwrap_or(""),
+                    search_enabled: config.features.search,
                 })?;
                 let out_dir = dist_dir.join(&doc.slug).join("history");
                 fs::create_dir_all(&out_dir)?;

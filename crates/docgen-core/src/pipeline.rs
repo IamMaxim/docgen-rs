@@ -81,19 +81,28 @@ pub fn prepare(raw: RawDoc) -> PreparedDoc {
 /// Render a markdown fragment (a block directive's inner content) to inner HTML,
 /// running the full directive + AST pipeline but emitting no page chrome.
 ///
-/// Inner fragments are rendered without the site slug set, so wikilinks inside a
-/// directive body resolve against an empty set (broken-span styling) — an
-/// accepted P6 limitation; wikilinks *outside* directives are unaffected. The
+/// Wikilinks inside a directive body are resolved against the same site `slugs`
+/// and `base` as top-level body content, so `[[target|label]]` becomes a resolved
+/// `<a>` (or a broken span) exactly as it would outside a directive. The
 /// nested-directive case works because `substitute` recurses through this fn.
+///
+/// Note: resolved targets discovered inside directive bodies are NOT folded into
+/// the link graph / backlinks (the graph is built from the top-level pass only);
+/// the rendered HTML is correct, but a wikilink that *only* appears inside a
+/// directive body does not yet create a graph edge.
 pub fn render_block_markdown(
     md: &str,
     config: &docgen_config::SiteConfig,
     registry: &docgen_components::Registry,
+    slugs: &SlugSet,
 ) -> String {
     let (rewritten, instances) = crate::directivepass::extract(md);
     let options = comrak_options();
     let arena = Arena::new();
     let root = parse_document(&arena, &rewritten, &options);
+    // Resolve wikilinks in the directive body the same way top-level body content
+    // does, before math/mermaid rewrite their nodes.
+    let _pass = transform_wikilinks(root, &arena, slugs, &config.base);
     if config.features.math {
         crate::mathpass::transform_math(root);
     }
@@ -101,7 +110,7 @@ pub fn render_block_markdown(
         crate::mermaidpass::transform_mermaid(root);
     }
     let inner_html = format_ast(root, &options);
-    let render_inner = |m: &str| render_block_markdown(m, config, registry);
+    let render_inner = |m: &str| render_block_markdown(m, config, registry, slugs);
     let (out, _used) =
         crate::directivepass::substitute(&inner_html, &instances, registry, &render_inner);
     out
@@ -169,7 +178,7 @@ pub fn render_docs(
         // Directive post-pass: substitute each sentinel with the component's
         // rendered HTML; block inner content is rendered by the full recursive
         // pipeline. `used` drives per-page island/style gating.
-        let render_inner = |m: &str| render_block_markdown(m, config, registry);
+        let render_inner = |m: &str| render_block_markdown(m, config, registry, &slugs);
         let (body_html, used) =
             crate::directivepass::substitute(&formatted, &instances, registry, &render_inner);
 
@@ -360,6 +369,34 @@ mod tests {
         ];
         let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &reg);
         assert!(site.docs[0].body_html.contains(r#"href="/guide""#));
+    }
+
+    #[test]
+    fn wikilink_inside_directive_body_resolves_to_anchor() {
+        let mut reg = docgen_components::Registry::empty();
+        reg.insert(docgen_components::Component::from_parts(
+            "callout",
+            "<aside>{{ content | safe }}</aside>",
+            None,
+            None,
+        ));
+        let prepared = vec![
+            prepare(raw(
+                "index.md",
+                "# Home\n\n:::callout{}\nSee [[guide/intro|wikilink]] and [[ghost]].\n:::\n",
+            )),
+            prepare(raw("guide/intro.md", "# Intro\n")),
+        ];
+        let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &reg);
+        let h = &site.docs[0].body_html;
+        // The resolved wikilink inside the directive body is a real anchor with the
+        // label text, not literal `[[...]]`.
+        assert!(h.contains(r#"href="/guide/intro""#));
+        assert!(h.contains(r#">wikilink</a>"#));
+        assert!(!h.contains("[[guide/intro|wikilink]]"));
+        // An unresolved target inside a directive body still gets the broken span.
+        assert!(h.contains("docgen-wikilink--broken"));
+        assert!(!h.contains("[[ghost]]"));
     }
 
     #[test]

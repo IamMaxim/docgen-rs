@@ -90,7 +90,7 @@
         out.push({
           kind: "body",
           title: e.title,
-          path: "Full text / " + e.slug,
+          path: e.slug,
           slug: e.slug,
           context: excerpt(e.text, q),
           score: bodyScore,
@@ -138,8 +138,9 @@
     });
   }
 
-  // Append the highlighted title (matched substring wrapped in <mark>) into `el`
-  // using DOM APIs, so an arbitrary slug/title cannot inject markup.
+  // Append `text` into `el`, wrapping the first occurrence of `term` in a
+  // <mark>, using DOM APIs only so an arbitrary slug/title/body cannot inject
+  // markup.
   function appendHighlighted(el, text, term) {
     var t = (term || "").trim();
     var idx = t ? text.toLowerCase().indexOf(t.toLowerCase()) : -1;
@@ -183,19 +184,23 @@
         a.setAttribute("href", BASE + "/" + r.slug);
         var main = document.createElement("span");
         main.className = "docgen-search-result__main";
+        // Title line (bold), with the matched substring wrapped in <mark>.
         var title = document.createElement("span");
-        title.className = "title";
+        title.className = "docgen-search-result__title";
         appendHighlighted(title, r.title, term);
         main.appendChild(title);
+        // Slug / path line (muted mono).
         var path = document.createElement("span");
         path.className = "docgen-search-result__path";
         path.textContent = r.path;
         main.appendChild(path);
+        // Context excerpt (dimmed, single line) for full-text hits, with the
+        // matched substring highlighted inside the snippet too.
         if (r.context) {
-          var ctx = document.createElement("span");
-          ctx.className = "docgen-search-result__context";
-          ctx.textContent = r.context;
-          main.appendChild(ctx);
+          var snippet = document.createElement("span");
+          snippet.className = "docgen-search-result__snippet";
+          appendHighlighted(snippet, r.context, term);
+          main.appendChild(snippet);
         }
         a.appendChild(main);
         li.appendChild(a);

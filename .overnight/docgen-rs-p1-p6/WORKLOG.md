@@ -98,3 +98,26 @@ sequential within track). Shared CONTRACT from an Extract phase. Workflow gets i
 gate (cargo test + clippy + fixture build); I (architect) close the pixel gap via side-by-side Chrome iteration.
 
 Launching Workflow #1 (P8-A re-skin) now.
+
+## 2026-06-05 21:35 MSK — P8-A workflow GREEN (commit a1e2c71), architect screenshot review
+
+Workflow wf_8732525a-97a completed GREEN (275+ tests pass, clippy clean, dark-default confirmed). I drove
+Chrome :8802 vs baseline :8801 across page types + interactions. HUGE improvement — now closely matches the
+original: dark default, diamond brand, centered search pill ("Search pages, headings, Rust refs… ⌘K"),
+full-width + right-rail toggle controls, segmented theme pill, 3-section right rail (On this page TOC w/
+scroll-spy + h2 accent dots, Additional info w/ Path/Layer/Commit/Built — Commit+Built got wired, Referenced by
+cards). Callouts (4 types, left-accent gradient + nested) ✓. Broken-link styling ✓. **P7 light-only code
+regression FIXED** — class-based syntect renders legible colored code on a dark card in dark mode AND light card
+in light mode. Full-width toggle, theme toggle (light verified), search grouping (Pages/Full text + match
+highlight) all functional. Committed as a1e2c71.
+
+**Residual deltas found (→ P8-B):**
+1. [MAJOR] graph.html + history.html still carry the OLD topbar (right-aligned "Search Ctrl K", two-button theme
+   toggle, history page has NO search). Only page.html was re-skinned. Must replicate page.html topbar chrome.
+2. [MAJOR] Search result rows concatenate title+path+snippet with no spacing/typography ("Introductionguide/intro").
+   Need structured rows (title, muted mono path, snippet) like original SearchModal.
+3. [minor] Wikilinks inside directive/callout body render literally as [[...]] instead of links.
+4. [minor] Mermaid doesn't theme-sync to dark; missing "diagram · mermaid" corner label; graph nodes tiny/faint.
+
+Launching P8-B focused fix workflow: 3 disjoint-file agents (A: graph/history templates; B: search.js + docgen.css
+search/graph/mermaid styles; C: docgen-core/components wikilink-in-directive + mermaid island theme sync).

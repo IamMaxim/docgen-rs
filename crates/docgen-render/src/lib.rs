@@ -80,6 +80,8 @@ pub struct HistoryContext<'a> {
     pub base: &'a str,
     /// Site title; `""` → no `"page — site"` suffix (default).
     pub site_title: &'a str,
+    /// Whether the search UI ships (gates the trigger + `search.js`).
+    pub search_enabled: bool,
 }
 
 /// Everything the `/graph/` page render needs. `graph_json` is the serialized
@@ -208,6 +210,7 @@ impl Renderer {
             buckets => ctx.buckets,
             base => ctx.base,
             site_title => ctx.site_title,
+            search_enabled => ctx.search_enabled,
         })
     }
 }
@@ -916,6 +919,7 @@ mod tests {
                 buckets: &buckets,
                 base: "",
                 site_title: "",
+                search_enabled: true,
             })
             .unwrap();
         assert!(html.contains("<title>History: A</title>"));
@@ -961,6 +965,7 @@ mod tests {
                 buckets: &buckets,
                 base: "",
                 site_title: "",
+                search_enabled: true,
             })
             .unwrap();
         assert!(html.contains("&lt;script&gt;alert(1)&lt;&#x2f;script&gt;"));
@@ -1089,6 +1094,7 @@ mod tests {
                 buckets: &[],
                 base: "",
                 site_title: "",
+                search_enabled: true,
             })
             .unwrap();
         for html in [&graph, &hist] {
