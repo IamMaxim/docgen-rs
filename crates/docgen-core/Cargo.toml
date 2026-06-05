@@ -5,7 +5,7 @@ license.workspace = true
 version.workspace = true
 
 [dependencies]
-comrak = "0.52.0"
+comrak = { version = "0.52.0", features = ["syntect"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_yml = "0.0.13"
 thiserror = "2.0.18"
