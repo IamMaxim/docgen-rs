@@ -1,5 +1,5 @@
 // docgen island registry. Islands push a registrar; bootstrap runs them all,
-// then Alpine starts exactly once. Lazy libs (mermaid, codemirror) are fetched
+// then Alpine starts exactly once. Lazy libs (e.g. mermaid) are fetched
 // by the island itself inside its registrar/x-init, only when present on the page.
 (function () {
   window.docgen = window.docgen || {};
