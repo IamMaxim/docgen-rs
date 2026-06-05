@@ -288,6 +288,13 @@
 	.diff-workspace {
 		grid-template-columns: var(--files-w) minmax(0, 1fr);
 	}
+	/* The narrow grid has only 2 tracks, so the timeline rail + its column
+	   resizers must be removed — otherwise the 5 children auto-place across two
+	   columns and the diff view drops to a third row, far below the fold. */
+	.diff-workspace > .timeline-rail,
+	.diff-workspace > .col-resizer {
+		display: none;
+	}
 }
 
 @media (max-width: 800px) {

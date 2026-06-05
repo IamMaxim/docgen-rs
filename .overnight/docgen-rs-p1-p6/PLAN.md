@@ -110,3 +110,26 @@ P5 GREEN (48b2701), validated live (docgen dev: SSE live-reload auto-reloaded on
 - `docgen` build.rs emits `dist/{search-index.json, search.js, docgen.css}` + clean-URL pages.
 - **The link graph (`graph::LinkGraph.edges`) is already built — P4 graph view consumes it directly.**
 - **Asset-emission pattern** (include_str! const in a crate, written to dist by build.rs) is the seed P3 generalizes into `docgen-assets`.
+
+## 2026-06-06 — Post-preview polish batch (user-directed: deviation + TODO.md)
+Scope: remaining theme-switcher deviation + the project-root TODO.md items. Milestones:
+- [x] PB1 Ctrl+C stops `docgen dev` — SSE livereload keeps connection open so axum
+      graceful-shutdown hangs. Add ReloadEvent::Shutdown; serve_async sends it on ctrl_c;
+      livereload_sse take_while-ends on it so the stream drains.
+- [x] PB2 Diff route full-bleed — diff.html drops sidebar/rail/content-padding; full area
+      under topbar like original .diff-page. CSS for .docgen-diff-main full-width.
+- [x] PB3 Graph polish — bigger nodes, darker/thicker links (var(--text-mute), opacity .42,
+      width 2.2), + hover popup (.docgen-graph__tip: section/title/desc) in graph.js. Parity
+      with original HomeDocGraph.svelte.
+- [x] PB4 Editor topbar — editor page HTML (handlers.rs) gains the real .docgen-topbar
+      (brand + theme toggle), matching page.html; reconciles with editor.css 100vh-topbar.
+- [x] PB5 Editor theme switcher — port original editor-themes.ts (8 CM themes) + SettingsMenu
+      into editor-cm6.entry.js: settings menu w/ wrap + 8-theme radio list, persist
+      doc-editor-theme; rebuild esbuild bundle.
+- [ ] PB6 Homepage redesign — structured home (title+desc, stats pages/callouts/commit,
+      search bar, Sections cards, Recent list, graph) per original DocsIndexPage/starter
+      +page.svelte ("Psychoville" = user's demo). Build passes stats/sections/recent; new
+      home template or home block.
+- [x] PB7 Vendor all JS in-crate — VERIFIED already done: zero remote URLs in any shipped
+      asset; alpine/katex/mermaid/CM6 all under assets/vendor + esbuild IIFE. Document only.
+Gate each on cargo test --workspace + clippy; commit local-only; Chrome-validate visual ones.

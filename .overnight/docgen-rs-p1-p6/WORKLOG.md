@@ -330,3 +330,29 @@ View button broken — all fixed by routing preview through the build pipeline +
 real asset stack. Deviation "wikilinks unresolved in preview" → CLOSED.
 STILL OPEN (separate, larger): editor multi-theme switcher / settings menu
 (original's 8 CM themes) — editor chrome only, independent of preview; not started.
+
+## 2026-06-06 00:18 MSK — Polish batch GREEN + Chrome-verified (deviation + TODO.md)
+Branch overnight/p1-p6. Two commits: fdb4600 (PB1-4,6) + (this) PB5+diff-fix.
+PB1 Ctrl+C: ReloadEvent::Shutdown; serve_async broadcasts on ctrl_c; livereload_sse
+   take_while-ends. CHROME: SIGINT w/ browser SSE open → process EXITED <500ms
+   (was an indefinite hang on the keep-alive drain).
+PB2 Diff full-bleed: diff.html dropped sidebar/rail/resizer/padding; .docgen-diff-main
+   full width. Plus responsive fix: hide .timeline-rail + .col-resizer at <=1100px (the
+   2-col reflow otherwise drops the diff view to a 3rd row off-screen — latent in the
+   original too). CHROME: FILES tree + diff view ("+Updated." line) full-bleed, no sidebar.
+PB3 Graph: removed CSS r:5 pin (radii now degree-scaled 6-14); links var(--text-mute)
+   opacity .42 width 2.2; hover tooltip (.docgen-graph__tip title+path) in graph.js.
+   CHROME: hover highlights edges gold + dims rest + tooltip "Introduction //guide/intro".
+PB4 Editor topbar: handlers.rs EDITOR_TOPBAR (brand+diff+theme toggle island) + bootstrap/
+   alpine on the editor page. CHROME: topbar present, fills the reserved 52px.
+PB5 Theme switcher: ported editor-themes.ts (8 palettes + buildNamedTheme + EDITOR_THEMES)
+   + a settings menu (wrap toggle + 8-theme radio list, doc-editor-theme persist) into
+   editor-cm6.entry.js; re-bundled esbuild IIFE (633KB). editor.css settings-menu styles.
+   CHROME: menu opens w/ 8 swatched themes; Monokai applied to CM6 + PERSISTS across reload.
+PB6 Home dashboard: page.html home block (title+desc, pages/links/commit tiles, search,
+   Section cards, Recent list) then body+graph. Doc gained `description`; build computes
+   sections(top folders)/recent(first 6); PageContext.home: Option<HomeData>. CHROME:
+   full dashboard renders (5 pages/11 links/f2222c5, guide+reference cards, recent x4).
+PB7 Vendor JS: VERIFIED already air-gapped (zero remote URLs; alpine/katex/mermaid/CM6
+   all under assets/vendor + esbuild IIFE). Documentation-only; no code change.
+GATE: cargo test --workspace = 279 passed/0 failed; clippy --all-targets clean.
