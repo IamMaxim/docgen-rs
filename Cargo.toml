@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/docgen-core", "crates/docgen-diff", "crates/docgen-assets", "crates/docgen-render", "crates/docgen"]
+members = ["crates/docgen-core", "crates/docgen-diff", "crates/docgen-assets", "crates/docgen-render", "crates/docgen-build", "crates/docgen-server", "crates/docgen"]
 
 [workspace.package]
 edition = "2021"

@@ -1,6 +1,3 @@
-mod build;
-mod history;
-
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -25,11 +22,36 @@ enum Command {
         #[arg(default_value = ".")]
         root: PathBuf,
     },
+    /// Run the dev server with live reload + in-browser editor (localhost only).
+    Dev {
+        /// Project root (defaults to the current directory).
+        #[arg(default_value = ".")]
+        root: PathBuf,
+        /// Loopback port to bind.
+        #[arg(long, default_value_t = 4321)]
+        port: u16,
+        /// Open a browser on start.
+        #[arg(long, default_value_t = false)]
+        open: bool,
+    },
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Build { root } => build::build(&root),
+        Command::Build { root } => {
+            let outcome = docgen_build::build(&root)?;
+            println!(
+                "Built {} page(s) -> {}",
+                outcome.page_count,
+                outcome.out_dir.display()
+            );
+            Ok(())
+        }
+        Command::Dev { root, port, open } => docgen_server::serve(docgen_server::DevOptions {
+            project_root: root,
+            port,
+            open,
+        }),
     }
 }

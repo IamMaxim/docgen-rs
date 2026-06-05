@@ -1,6 +1,14 @@
+//! The reusable site-build pipeline: discover -> render -> emit the whole
+//! `docs/` tree into an output dir. Both `docgen build` and the dev server
+//! (`docgen-server`) call [`build_site`], so the pipeline lives here once
+//! rather than inline in the bin.
+
+mod history;
+use history::report_to_buckets;
+
 use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use chrono::Local;
@@ -8,8 +16,6 @@ use docgen_core::discover::discover_docs;
 use docgen_core::pipeline::{prepare, render_docs};
 use docgen_core::tree::build_tree;
 use docgen_render::{GraphContext, HistoryContext, PageContext, Renderer, DEFAULT_PAGE_TEMPLATE};
-
-use crate::history::report_to_buckets;
 
 /// Default per-doc commit-history depth (parity with the original `diffLimit`).
 const DEFAULT_DIFF_LIMIT: usize = 50;
@@ -46,10 +52,55 @@ fn git_rel_path(docs_dir: &Path, workdir: &Path, rel_path: &str) -> Option<Strin
     Some(parts.join("/"))
 }
 
-/// Build the site at `project_root` (which must contain `docs/`) into `project_root/dist`.
-pub fn build(project_root: &Path) -> Result<()> {
-    let docs_dir = project_root.join("docs");
-    let dist_dir = project_root.join("dist");
+/// Whether this build is for static distribution or for the dev server.
+///
+/// [`build_site`] emits ONLY production assets in BOTH modes; the dev server
+/// adds dev-only assets/HTML itself, AFTER `build_site` returns. The mode is
+/// recorded for logging + so the dev server can assert its build context.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BuildMode {
+    #[default]
+    Production,
+    Dev,
+}
+
+/// Inputs to a full site build.
+pub struct BuildOptions<'a> {
+    /// Project root containing `docs/`.
+    pub project_root: &'a Path,
+    /// Where the static site is written. `docgen build` passes `project_root/dist`;
+    /// the dev server passes a temp dir it owns.
+    pub out_dir: &'a Path,
+    pub mode: BuildMode,
+}
+
+/// Result of a build (counts for logging; extend later if needed).
+#[derive(Debug, Clone)]
+pub struct BuildOutcome {
+    pub page_count: usize,
+    pub any_mermaid: bool,
+    pub out_dir: PathBuf,
+}
+
+/// Back-compat thin wrapper used by `docgen build`: builds `root/docs` into
+/// `root/dist` in Production mode. Equivalent to the old `build::build(root)`.
+pub fn build(project_root: &Path) -> Result<BuildOutcome> {
+    build_site(&BuildOptions {
+        project_root,
+        out_dir: &project_root.join("dist"),
+        mode: BuildMode::Production,
+    })
+}
+
+/// Discover -> render -> emit the whole site into `opts.out_dir`. This is the
+/// single pipeline both `docgen build` and `docgen dev` call. Wipes + recreates
+/// `out_dir`. Emits ONLY production assets regardless of `opts.mode`.
+pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
+    let docs_dir = opts.project_root.join("docs");
+    let dist_dir = opts.out_dir;
+
+    // The mode is recorded for logging/parity; the pipeline is mode-independent.
+    let _ = opts.mode;
 
     let raws = discover_docs(&docs_dir)
         .with_context(|| format!("reading docs from {}", docs_dir.display()))?;
@@ -62,8 +113,8 @@ pub fn build(project_root: &Path) -> Result<()> {
     let renderer = Renderer::new(DEFAULT_PAGE_TEMPLATE)?;
 
     // Clean and recreate dist.
-    let _ = fs::remove_dir_all(&dist_dir);
-    fs::create_dir_all(&dist_dir)?;
+    let _ = fs::remove_dir_all(dist_dir);
+    fs::create_dir_all(dist_dir)?;
 
     // Phase 1: build the per-doc git history pages (graceful no-op outside a
     // git repo or for docs with no commit history). Collect which slugs got a
@@ -121,8 +172,7 @@ pub fn build(project_root: &Path) -> Result<()> {
 
     // Phase 3: the /graph/ page (default-on in P4). Deterministic force layout
     // from the already-built link graph — never recomputes links.
-    let graph_data =
-        site.graph_data(docgen_core::graphlayout::LayoutParams::default());
+    let graph_data = site.graph_data(docgen_core::graphlayout::LayoutParams::default());
     let graph_json = docgen_core::graphlayout::graph_data_json(&graph_data);
     let graph_html = renderer.render_graph(&GraphContext {
         tree: &tree,
@@ -149,12 +199,11 @@ pub fn build(project_root: &Path) -> Result<()> {
         // The /graph/ page is always emitted in P4, so its island always ships.
         include_graph: true,
     };
-    docgen_assets::emit(&docgen_assets::assets_for(&emit_opts), &dist_dir)?;
+    docgen_assets::emit(&docgen_assets::assets_for(&emit_opts), dist_dir)?;
 
-    println!(
-        "Built {} page(s) -> {}",
-        site.docs.len(),
-        dist_dir.display()
-    );
-    Ok(())
+    Ok(BuildOutcome {
+        page_count: site.docs.len(),
+        any_mermaid: site.any_mermaid,
+        out_dir: dist_dir.to_path_buf(),
+    })
 }

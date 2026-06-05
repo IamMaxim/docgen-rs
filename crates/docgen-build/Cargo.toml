@@ -1,20 +1,16 @@
 [package]
-name = "docgen"
+name = "docgen-build"
 edition.workspace = true
 license.workspace = true
 version.workspace = true
 
 [dependencies]
 anyhow = "1.0.102"
-clap = { version = "4.6.1", features = ["derive"] }
+chrono = { version = "0.4.41", default-features = false, features = ["clock"] }
 docgen-core = { path = "../docgen-core" }
 docgen-diff = { path = "../docgen-diff" }
 docgen-assets = { path = "../docgen-assets" }
 docgen-render = { path = "../docgen-render" }
-docgen-build = { path = "../docgen-build" }
-docgen-server = { path = "../docgen-server" }
-chrono = { version = "0.4.41", default-features = false, features = ["clock"] }
 
 [dev-dependencies]
-serde_json = "1.0.150"
-git2 = "0.20.2"
+tempfile = "3"
