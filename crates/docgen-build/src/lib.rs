@@ -240,6 +240,10 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
         include_katex_runtime: false,
         include_mermaid: site.any_mermaid,
         include_graph: config.features.graph,
+        // Component bundles are written separately (B-8) via emit_component_bundle;
+        // these flags are inert in assets_for.
+        include_component_css: false,
+        include_component_js: false,
     };
     docgen_assets::emit(&docgen_assets::assets_for(&emit_opts), dist_dir)?;
 

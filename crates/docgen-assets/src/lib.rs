@@ -236,6 +236,13 @@ pub struct EmitOptions {
     /// Ship the graph island (`islands/graph.js`) — emitted when the `/graph/`
     /// page is rendered. Default false.
     pub include_graph: bool,
+    /// Emit `components.css` (set when any component had a `style.css`). The
+    /// authored bytes are concatenated by the build and written via
+    /// [`emit_component_bundle`], not [`assets_for`]. Default false.
+    pub include_component_css: bool,
+    /// Emit `components.js` (set when any *used* component had an `island.js`).
+    /// Written via [`emit_component_bundle`], not [`assets_for`]. Default false.
+    pub include_component_js: bool,
 }
 
 /// The full asset set to emit for this build: core + katex css (always, for math
@@ -264,6 +271,22 @@ pub fn emit(assets: &[Asset], dist: &Path) -> std::io::Result<()> {
             std::fs::create_dir_all(parent)?;
         }
         std::fs::write(out, a.bytes)?;
+    }
+    Ok(())
+}
+
+/// Write the authored component CSS/JS the build concatenated from the registry.
+/// These bytes are dynamic (authored content, not `&'static` embedded files), so
+/// they flow through here rather than [`assets_for`]/[`emit`]. An empty string
+/// skips its file (per-page gating decides whether a page *links* them). `css` is
+/// the concatenation of every component `style.css`; `js` is the concatenation of
+/// the `island.js` of every *used* island component.
+pub fn emit_component_bundle(dist: &Path, css: &str, js: &str) -> std::io::Result<()> {
+    if !css.is_empty() {
+        std::fs::write(dist.join("components.css"), css)?;
+    }
+    if !js.is_empty() {
+        std::fs::write(dist.join("components.js"), js)?;
     }
     Ok(())
 }
@@ -553,6 +576,11 @@ mod tests {
                         include_katex_runtime: k,
                         include_mermaid: m,
                         include_graph: g,
+                        // Component bundles flow through emit_component_bundle, not
+                        // assets_for; both flags are inert here but iterated so the
+                        // exhaustive matrix stays honest.
+                        include_component_css: k,
+                        include_component_js: m,
                     };
                     for a in assets_for(&opts) {
                         assert!(
@@ -570,6 +598,23 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn emit_component_bundle_writes_when_nonempty_and_skips_when_empty() {
+        let tmp = tempfile::tempdir().unwrap();
+        emit_component_bundle(
+            tmp.path(),
+            ".docgen-callout{}",
+            "Alpine.data('x',()=>({}))",
+        )
+        .unwrap();
+        assert!(tmp.path().join("components.css").is_file());
+        assert!(tmp.path().join("components.js").is_file());
+        let tmp2 = tempfile::tempdir().unwrap();
+        emit_component_bundle(tmp2.path(), "", "").unwrap();
+        assert!(!tmp2.path().join("components.css").exists());
+        assert!(!tmp2.path().join("components.js").exists());
     }
 
     // ---- A-6: emit() + assets_for() planner ----
@@ -678,6 +723,7 @@ mod tests {
             include_katex_runtime: true,
             include_mermaid: true,
             include_graph: true,
+            ..Default::default()
         });
     }
 }
