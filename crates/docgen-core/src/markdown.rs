@@ -25,6 +25,10 @@ pub fn comrak_options() -> Options<'static> {
     options.extension.tasklist = true;
     options.extension.autolink = true;
     options.extension.footnotes = true;
+    // Math: `$inline$` / `$$display$$` and the `` $`inline`$ `` code-math form.
+    // The AST math pass (Cluster B) renders these to KaTeX HTML at build time.
+    options.extension.math_dollars = true;
+    options.extension.math_code = true;
     // Allow raw inline HTML through: the wikilink AST pass injects `HtmlInline`
     // nodes (resolved anchors / broken spans) that must render, not be omitted.
     options.render.r#unsafe = true;
@@ -110,6 +114,13 @@ mod tests {
         let html = render_markdown(md);
         assert!(html.contains("<pre"));
         assert!(html.contains("plain text"));
+    }
+
+    #[test]
+    fn math_extension_is_enabled_in_shared_options() {
+        let opts = comrak_options();
+        assert!(opts.extension.math_dollars);
+        assert!(opts.extension.math_code);
     }
 
     #[test]
