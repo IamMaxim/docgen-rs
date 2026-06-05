@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ title }}</title>
+  <link rel="stylesheet" href="/docgen.css" />
 </head>
 <body>
   <nav class="docgen-sidebar">
@@ -22,6 +23,20 @@
   </nav>
   <main class="docgen-content">
     {{ body | safe }}
+    {% if backlinks %}
+    <section class="docgen-backlinks">
+      <h2>Backlinks</h2>
+      <ul>
+        {% for bl in backlinks %}
+          <li><a href="/{{ bl.slug | safe }}">{{ bl.title }}</a></li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
   </main>
+  {% if search_enabled %}
+  <button class="docgen-search-trigger" data-docgen-search>Search <kbd>Ctrl K</kbd></button>
+  <script src="/search.js" defer></script>
+  {% endif %}
 </body>
 </html>

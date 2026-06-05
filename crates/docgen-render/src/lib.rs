@@ -1,4 +1,4 @@
-use docgen_core::model::TreeNode;
+use docgen_core::model::{Backlink, TreeNode};
 use minijinja::{context, Environment};
 use serde::Serialize;
 
@@ -11,6 +11,7 @@ pub struct PageContext<'a> {
     pub title: &'a str,
     pub body_html: &'a str,
     pub tree: &'a [TreeNode],
+    pub backlinks: &'a [Backlink],
 }
 
 /// Owns a configured minijinja environment with the `page` template registered.
@@ -36,6 +37,8 @@ impl Renderer {
             title => ctx.title,
             body => ctx.body_html,
             tree => ctx.tree,
+            backlinks => ctx.backlinks,
+            search_enabled => true,
         })
     }
 }
@@ -56,6 +59,7 @@ mod tests {
                 title: "My Page",
                 body_html: "<p>hello</p>",
                 tree: &[],
+                backlinks: &[],
             })
             .unwrap();
         assert!(html.contains("<title>My Page</title>"));
@@ -70,7 +74,7 @@ mod tests {
             title: "Intro".into(),
         }];
         let html = renderer()
-            .render_page(&PageContext { title: "X", body_html: "", tree: &tree })
+            .render_page(&PageContext { title: "X", body_html: "", tree: &tree, backlinks: &[] })
             .unwrap();
         assert!(html.contains(r#"href="/guide/intro""#));
         assert!(html.contains(">Intro</a>"));
@@ -88,6 +92,7 @@ mod tests {
                 title: "Tom & Jerry <script>",
                 body_html: "<p>raw & ok</p>",
                 tree: &tree,
+                backlinks: &[],
             })
             .unwrap();
         // Title is HTML-escaped.
@@ -97,5 +102,30 @@ mod tests {
         assert!(html.contains("A &amp; B &lt;x&gt;"));
         // Body marked `| safe` is emitted raw.
         assert!(html.contains("<p>raw & ok</p>"));
+    }
+
+    #[test]
+    fn renders_backlinks_section() {
+        use docgen_core::model::Backlink;
+        let backlinks = vec![Backlink { slug: "a".into(), title: "Page A".into() }];
+        let html = renderer()
+            .render_page(&PageContext {
+                title: "X",
+                body_html: "",
+                tree: &[],
+                backlinks: &backlinks,
+            })
+            .unwrap();
+        assert!(html.contains("Backlinks"));
+        assert!(html.contains(r#"href="/a""#));
+        assert!(html.contains(">Page A</a>"));
+    }
+
+    #[test]
+    fn omits_backlinks_section_when_empty() {
+        let html = renderer()
+            .render_page(&PageContext { title: "X", body_html: "", tree: &[], backlinks: &[] })
+            .unwrap();
+        assert!(!html.contains("Backlinks"));
     }
 }
