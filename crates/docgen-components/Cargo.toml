@@ -1,0 +1,14 @@
+[package]
+name = "docgen-components"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+minijinja = "2.20.0"
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.18"
+include_dir = "0.7"
+
+[dev-dependencies]
+tempfile = "3"

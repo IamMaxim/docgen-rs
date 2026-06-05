@@ -584,6 +584,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "docgen-components"
+version = "0.0.0"
+dependencies = [
+ "include_dir",
+ "minijinja",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "docgen-config"
 version = "0.0.0"
 dependencies = [
