@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>History: {{ title }}</title>
+  <link rel="stylesheet" href="/docgen.css" />
+</head>
+<body>
+  <nav class="docgen-sidebar">
+    {% macro render_nodes(nodes) %}
+    <ul>
+      {% for node in nodes %}
+        {% if node.kind == "dir" %}
+          <li class="docgen-dir"><span>{{ node.name }}</span>{{ render_nodes(node.children) }}</li>
+        {% else %}
+          <li class="docgen-doc"><a href="/{{ node.slug | safe }}">{{ node.title }}</a></li>
+        {% endif %}
+      {% endfor %}
+    </ul>
+    {% endmacro %}
+    {{ render_nodes(tree) }}
+  </nav>
+  <main class="docgen-content docgen-history">
+    <p><a href="/{{ slug | safe }}">&larr; Back to {{ title }}</a></p>
+    <h1>History: {{ title }}</h1>
+    {% for bucket in buckets %}
+      <section class="docgen-timeline-bucket">
+        <h2>{{ bucket.label }}</h2>
+        {% for p in bucket.points %}
+          <article class="docgen-commit">
+            <header>
+              <code class="docgen-commit__hash">{{ p.short_hash }}</code>
+              <span class="docgen-commit__subject">{{ p.subject }}</span>
+              {% if p.author %}<span class="docgen-commit__author">{{ p.author }}</span>{% endif %}
+              {% if p.date %}<time>{{ p.date }}</time>{% endif %}
+              <span class="docgen-commit__stat">+{{ p.added_lines }} &minus;{{ p.removed_lines }}</span>
+            </header>
+            {% for f in p.files %}
+              <div class="docgen-diff-file">
+                <div class="docgen-diff-file__path docgen-diff-file--{{ f.status }}">{{ f.path }}</div>
+                {% for h in f.hunks %}<pre class="docgen-diff-hunk">{% for line in h.lines %}<span class="docgen-diff-line docgen-diff-line--{{ line.kind }}">{{ line.text }}</span>
+{% endfor %}</pre>{% endfor %}
+              </div>
+            {% endfor %}
+          </article>
+        {% endfor %}
+      </section>
+    {% endfor %}
+  </main>
+</body>
+</html>

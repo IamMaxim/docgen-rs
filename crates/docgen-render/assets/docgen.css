@@ -13,3 +13,24 @@
 .docgen-search-results { list-style: none; margin: .5rem 0 0; padding: 0; max-height: 50vh; overflow: auto; }
 .docgen-search-result a { display: block; padding: .4rem .5rem; text-decoration: none; color: inherit; }
 .docgen-search-result.is-selected { background: #eef; }
+
+/* docgen P2 styles: diff timeline / history page. */
+.docgen-timeline-bucket { margin-bottom: 2rem; }
+.docgen-timeline-bucket h2 { font-size: 1.1rem; border-bottom: 1px solid #ddd; padding-bottom: .25rem; }
+.docgen-commit { margin: 1rem 0; padding: .75rem; border: 1px solid #e5e5e5; border-radius: 6px; }
+.docgen-commit header { display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap; }
+.docgen-commit__hash { font-family: monospace; color: #555; }
+.docgen-commit__subject { font-weight: 600; }
+.docgen-commit__author { color: #777; }
+.docgen-commit__stat { color: #555; font-family: monospace; }
+.docgen-diff-file { margin-top: .6rem; }
+.docgen-diff-file__path { font-family: monospace; font-size: .85rem; color: #444; }
+.docgen-diff-file--added { color: #1a7f37; }
+.docgen-diff-file--removed,
+.docgen-diff-file--deleted { color: #b00020; }
+.docgen-diff-file--renamed { color: #9a6700; }
+.docgen-diff-hunk { margin: .3rem 0; padding: .4rem; background: #fafafa; border-radius: 4px; overflow-x: auto; }
+.docgen-diff-line { display: block; white-space: pre; font-family: monospace; }
+.docgen-diff-line--context { color: #444; }
+.docgen-diff-line--added { background: #e6ffec; color: #1a7f37; }
+.docgen-diff-line--removed { background: #ffebe9; color: #b00020; }

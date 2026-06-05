@@ -11,6 +11,61 @@ pub const SEARCH_JS: &str = include_str!("../assets/search.js");
 /// Minimal stylesheet for wikilinks/backlinks/search, emitted to `dist/docgen.css`.
 pub const DOCGEN_CSS: &str = include_str!("../assets/docgen.css");
 
+/// The built-in per-doc history-timeline template, embedded at compile time.
+pub const DEFAULT_HISTORY_TEMPLATE: &str = include_str!("../templates/history.html");
+
+/// One diff line, render-friendly. `kind`/line numbers are pre-stringified by
+/// the caller so `docgen-render` stays free of the `docgen-diff` domain types.
+#[derive(Serialize)]
+pub struct LineView {
+    pub kind: String,
+    pub text: String,
+    pub old_line: Option<u32>,
+    pub new_line: Option<u32>,
+}
+
+/// A contiguous diff hunk (run of lines).
+#[derive(Serialize)]
+pub struct HunkView {
+    pub lines: Vec<LineView>,
+}
+
+/// One changed file within a timeline point.
+#[derive(Serialize)]
+pub struct FileView {
+    pub path: String,
+    pub status: String,
+    pub hunks: Vec<HunkView>,
+}
+
+/// One commit in the timeline (render-friendly projection of a `DocDiffTimelinePoint`).
+#[derive(Serialize)]
+pub struct TimelinePointView {
+    pub short_hash: String,
+    pub subject: String,
+    pub author: Option<String>,
+    pub date: Option<String>,
+    pub added_lines: u32,
+    pub removed_lines: u32,
+    pub files: Vec<FileView>,
+}
+
+/// A labelled bucket of timeline points (e.g. "Today").
+#[derive(Serialize)]
+pub struct TimelineBucketView {
+    pub label: String,
+    pub points: Vec<TimelinePointView>,
+}
+
+/// Everything the history page render needs.
+#[derive(Serialize)]
+pub struct HistoryContext<'a> {
+    pub title: &'a str,
+    pub slug: &'a str,
+    pub tree: &'a [TreeNode],
+    pub buckets: &'a [TimelineBucketView],
+}
+
 /// Everything a single page render needs.
 #[derive(Serialize)]
 pub struct PageContext<'a> {
@@ -33,6 +88,7 @@ impl Renderer {
         // enables HTML escaping for `{{ title }}`, `{{ node.name }}`, `{{ node.title }}`.
         // `{{ body | safe }}` remains raw, as intended for already-rendered markdown.
         env.add_template_owned("page.html", page_template.to_string())?;
+        env.add_template_owned("history.html", DEFAULT_HISTORY_TEMPLATE.to_string())?;
         Ok(Self { env })
     }
 
@@ -45,6 +101,17 @@ impl Renderer {
             tree => ctx.tree,
             backlinks => ctx.backlinks,
             search_enabled => true,
+        })
+    }
+
+    /// Render one doc's history timeline to a full HTML document.
+    pub fn render_history(&self, ctx: &HistoryContext) -> Result<String, minijinja::Error> {
+        let tmpl = self.env.get_template("history.html")?;
+        tmpl.render(context! {
+            title => ctx.title,
+            slug => ctx.slug,
+            tree => ctx.tree,
+            buckets => ctx.buckets,
         })
     }
 }
@@ -141,5 +208,109 @@ mod tests {
         assert!(SEARCH_JS.contains("metaKey"));
         assert!(!SEARCH_JS.contains("import ")); // no module imports / npm
         assert!(DOCGEN_CSS.contains("docgen-search-modal"));
+    }
+
+    #[test]
+    fn ships_diff_timeline_styles() {
+        assert!(DOCGEN_CSS.contains("docgen-diff-line--added"));
+        assert!(DOCGEN_CSS.contains("docgen-diff-line--removed"));
+    }
+
+    fn sample_buckets() -> Vec<TimelineBucketView> {
+        vec![TimelineBucketView {
+            label: "Today".into(),
+            points: vec![TimelinePointView {
+                short_hash: "abc1234".into(),
+                subject: "edit a".into(),
+                author: Some("docgen test".into()),
+                date: Some("2026-05-15".into()),
+                added_lines: 1,
+                removed_lines: 1,
+                files: vec![FileView {
+                    path: "docs/a.md".into(),
+                    status: "modified".into(),
+                    hunks: vec![HunkView {
+                        lines: vec![
+                            LineView {
+                                kind: "context".into(),
+                                text: "# A".into(),
+                                old_line: Some(1),
+                                new_line: Some(1),
+                            },
+                            LineView {
+                                kind: "removed".into(),
+                                text: "first".into(),
+                                old_line: Some(2),
+                                new_line: None,
+                            },
+                            LineView {
+                                kind: "added".into(),
+                                text: "second".into(),
+                                old_line: None,
+                                new_line: Some(2),
+                            },
+                        ],
+                    }],
+                }],
+            }],
+        }]
+    }
+
+    #[test]
+    fn renders_history_timeline_with_buckets_and_diff_lines() {
+        let buckets = sample_buckets();
+        let html = renderer()
+            .render_history(&HistoryContext {
+                title: "A",
+                slug: "a",
+                tree: &[],
+                buckets: &buckets,
+            })
+            .unwrap();
+        assert!(html.contains("<title>History: A</title>"));
+        assert!(html.contains("Today"));
+        assert!(html.contains("edit a"));
+        assert!(html.contains("abc1234"));
+        assert!(html.contains("docgen-diff-line--removed"));
+        assert!(html.contains("docgen-diff-line--added"));
+        assert!(html.contains("first"));
+        assert!(html.contains(r#"href="/a""#));
+    }
+
+    #[test]
+    fn history_escapes_diff_text() {
+        let buckets = vec![TimelineBucketView {
+            label: "Today".into(),
+            points: vec![TimelinePointView {
+                short_hash: "abc1234".into(),
+                subject: "edit".into(),
+                author: None,
+                date: None,
+                added_lines: 1,
+                removed_lines: 0,
+                files: vec![FileView {
+                    path: "docs/a.md".into(),
+                    status: "modified".into(),
+                    hunks: vec![HunkView {
+                        lines: vec![LineView {
+                            kind: "added".into(),
+                            text: "<script>alert(1)</script>".into(),
+                            old_line: None,
+                            new_line: Some(1),
+                        }],
+                    }],
+                }],
+            }],
+        }];
+        let html = renderer()
+            .render_history(&HistoryContext {
+                title: "A",
+                slug: "a",
+                tree: &[],
+                buckets: &buckets,
+            })
+            .unwrap();
+        assert!(html.contains("&lt;script&gt;alert(1)&lt;&#x2f;script&gt;"));
+        assert!(!html.contains("<script>alert(1)</script>"));
     }
 }
