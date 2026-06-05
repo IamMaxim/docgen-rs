@@ -20,6 +20,12 @@ pub fn spawn_watcher(
         std::time::Duration::from_millis(200),
         move |res: DebounceEventResult| match res {
             Ok(_events) => {
+                // Skip the echo of an editor save: put_source already rebuilt +
+                // reloaded for this exact change, so avoid a double rebuild/reload.
+                if state.take_self_write_suppression() {
+                    tracing::debug!("skipping watcher rebuild: editor-initiated write");
+                    return;
+                }
                 if let Err(e) = rebuild_and_reload(&state) {
                     tracing::error!("rebuild after fs change failed: {e:#}");
                 }

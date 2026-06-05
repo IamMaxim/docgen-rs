@@ -15,6 +15,10 @@ window.docgen.island('docgenEditor', function (Alpine) {
       status: '',
       init() {
         var self = this;
+        // Start hidden from a single source of truth (the `open` flag): once
+        // Alpine strips x-cloak on load, the empty panel would otherwise flash
+        // visible until the first Edit click. toggle() drives visibility after.
+        this.$el.style.display = 'none';
         document.querySelectorAll('[data-docgen-edit]').forEach(function (b) {
           b.addEventListener('click', function () {
             self.toggle();
