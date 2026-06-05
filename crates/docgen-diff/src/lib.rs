@@ -8,6 +8,7 @@
 
 pub mod block_diff;
 pub mod error;
+pub mod file_tree;
 pub mod git_parsing;
 pub mod git_refs;
 pub mod history;
@@ -19,6 +20,7 @@ mod testutil;
 
 pub use block_diff::{build_block_diff, split_markdown_blocks, strip_invisible_document_parts};
 pub use error::DiffError;
+pub use file_tree::build_file_tree;
 pub use git_parsing::{parse_name_status, parse_untracked_docs, NameStatusEntry};
 pub use git_refs::{base_ref_for_commit_parents, EMPTY_TREE_REF};
 pub use history::{discover_repo, doc_revisions, CommitMeta, RevisionContent};
