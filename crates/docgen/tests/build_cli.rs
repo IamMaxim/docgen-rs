@@ -95,3 +95,65 @@ fn builds_fixture_site() {
 
     let _ = fs::remove_dir_all(&tmp);
 }
+
+/// Build-time KaTeX: a doc with inline + display math renders to math HTML in
+/// the built page, the KaTeX css + fonts are emitted, and NO runtime KaTeX JS
+/// ships (the default build-time path).
+#[test]
+fn builds_math_page_with_build_time_katex() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let workspace = manifest.parent().unwrap().parent().unwrap();
+    let fixture = workspace.join("fixtures/site-basic");
+
+    let tmp =
+        std::env::temp_dir().join(format!("docgen_build_cli_math_test_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&tmp);
+    fs::create_dir_all(tmp.join("docs")).unwrap();
+    fs::copy(fixture.join("docs/math.md"), tmp.join("docs/math.md")).unwrap();
+
+    let status = Command::new(env!("CARGO_BIN_EXE_docgen"))
+        .arg("build")
+        .arg(&tmp)
+        .status()
+        .unwrap();
+    assert!(status.success());
+
+    let math = fs::read_to_string(tmp.join("dist/math/index.html")).unwrap();
+    // Build-time KaTeX HTML present (both inline and display).
+    assert!(math.contains("class=\"katex\""), "no katex html: {math}");
+    assert!(math.contains("katex-display"), "no display math: {math}");
+    // Raw `$`-delimiters are gone — math was rendered, not passed through.
+    // (KaTeX preserves the LaTeX source inside a MathML <annotation>, so the
+    // expression text itself legitimately survives; the delimiters do not.)
+    assert!(!math.contains("$E=mc^2$"));
+    assert!(!math.contains("$$\\sum"));
+    // KaTeX keeps the source in a TeX annotation — proof it rendered, not raw md.
+    assert!(math.contains("application/x-tex"));
+    // The page links the KaTeX stylesheet (gated on has_math).
+    assert!(math.contains(r#"href="/vendor/katex/katex.min.css""#));
+
+    // CSS + fonts emitted under dist/vendor/katex/.
+    assert!(tmp.join("dist/vendor/katex/katex.min.css").is_file());
+    assert!(tmp
+        .join("dist/vendor/katex/fonts/KaTeX_Main-Regular.woff2")
+        .is_file());
+    // 16 woff2 fonts shipped.
+    let fonts = fs::read_dir(tmp.join("dist/vendor/katex/fonts"))
+        .unwrap()
+        .filter(|e| {
+            e.as_ref()
+                .unwrap()
+                .path()
+                .extension()
+                .map(|x| x == "woff2")
+                .unwrap_or(false)
+        })
+        .count();
+    assert_eq!(fonts, 16, "expected 16 katex fonts");
+
+    // Build-time path: NO runtime KaTeX JS anywhere in dist.
+    assert!(!tmp.join("dist/vendor/katex/katex.min.js").exists());
+    assert!(!tmp.join("dist/vendor/katex/auto-render.min.js").exists());
+
+    let _ = fs::remove_dir_all(&tmp);
+}
