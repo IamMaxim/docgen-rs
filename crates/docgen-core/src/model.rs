@@ -24,6 +24,9 @@ pub struct Doc {
     pub has_math: bool,
     /// Whether this doc contains a mermaid diagram (drives the lazy island load).
     pub has_mermaid: bool,
+    /// Names of custom components rendered on this page (drives per-page island load).
+    #[serde(default)]
+    pub components_used: std::collections::BTreeSet<String>,
 }
 
 /// A node in the sidebar tree.

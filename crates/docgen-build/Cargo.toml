@@ -7,6 +7,7 @@ version.workspace = true
 [dependencies]
 anyhow = "1.0.102"
 docgen-config = { path = "../docgen-config" }
+docgen-components = { path = "../docgen-components" }
 chrono = { version = "0.4.41", default-features = false, features = ["clock"] }
 docgen-core = { path = "../docgen-core" }
 docgen-diff = { path = "../docgen-diff" }

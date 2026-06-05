@@ -11,9 +11,13 @@ pub fn slug_for(rel_path: &str) -> String {
 /// broken here — full resolution happens via `pipeline::render_docs`.
 pub fn assemble(raw: RawDoc) -> Doc {
     let prepared = prepare(raw);
-    render_docs(vec![prepared], &docgen_config::SiteConfig::default())
-        .docs
-        .pop()
+    render_docs(
+        vec![prepared],
+        &docgen_config::SiteConfig::default(),
+        &docgen_components::Registry::empty(),
+    )
+    .docs
+    .pop()
         .expect("one doc in, one doc out")
 }
 

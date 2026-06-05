@@ -576,6 +576,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "docgen-assets",
+ "docgen-components",
  "docgen-config",
  "docgen-core",
  "docgen-diff",

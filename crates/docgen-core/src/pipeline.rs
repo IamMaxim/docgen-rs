@@ -26,6 +26,8 @@ pub struct SiteBuild {
     /// True if any doc contains a mermaid diagram. Lets the build subcommand flip
     /// `EmitOptions.include_mermaid` once for the whole site.
     pub any_mermaid: bool,
+    /// True if any doc used ≥1 custom component (gates the components asset slice).
+    pub any_components: bool,
 }
 
 impl SiteBuild {
@@ -68,11 +70,41 @@ pub fn prepare(raw: RawDoc) -> PreparedDoc {
     PreparedDoc { rel_path: raw.rel_path, slug, title, body_md: parsed.body }
 }
 
+/// Render a markdown fragment (a block directive's inner content) to inner HTML,
+/// running the full directive + AST pipeline but emitting no page chrome.
+///
+/// Inner fragments are rendered without the site slug set, so wikilinks inside a
+/// directive body resolve against an empty set (broken-span styling) — an
+/// accepted P6 limitation; wikilinks *outside* directives are unaffected. The
+/// nested-directive case works because `substitute` recurses through this fn.
+pub fn render_block_markdown(
+    md: &str,
+    config: &docgen_config::SiteConfig,
+    registry: &docgen_components::Registry,
+) -> String {
+    let (rewritten, instances) = crate::directivepass::extract(md);
+    let options = comrak_options();
+    let arena = Arena::new();
+    let root = parse_document(&arena, &rewritten, &options);
+    if config.features.math {
+        crate::mathpass::transform_math(root);
+    }
+    if config.features.mermaid {
+        crate::mermaidpass::transform_mermaid(root);
+    }
+    let inner_html = format_ast(root, &options);
+    let render_inner = |m: &str| render_block_markdown(m, config, registry);
+    let (out, _used) =
+        crate::directivepass::substitute(&inner_html, &instances, registry, &render_inner);
+    out
+}
+
 /// Pass 2: build the slug set, run the wikilink pass + syntect highlight per doc,
 /// assemble the link graph + search index. Input order preserved.
 pub fn render_docs(
     prepared: Vec<PreparedDoc>,
     config: &docgen_config::SiteConfig,
+    registry: &docgen_components::Registry,
 ) -> SiteBuild {
     let slugs: SlugSet = prepared.iter().map(|p| p.slug.clone()).collect();
     let doc_meta: Vec<(String, String)> =
@@ -84,10 +116,14 @@ pub fn render_docs(
     let mut search = Vec::with_capacity(prepared.len());
 
     for p in &prepared {
-        // Parse the body once. Extract search plaintext from the pristine AST
-        // *before* the wikilink pass rewrites `[[...]]` Text nodes into anchors.
+        // Directive pre-pass: rewrite the raw body, replacing each `:::`/`:leaf`
+        // directive with an HTML-comment sentinel that survives comrak verbatim.
+        let (rewritten, instances) = crate::directivepass::extract(&p.body_md);
+
+        // Parse the (directive-free) body once. Extract search plaintext from the
+        // pristine AST *before* the wikilink pass rewrites `[[...]]` Text nodes.
         let arena = Arena::new();
-        let root = parse_document(&arena, &p.body_md, &options);
+        let root = parse_document(&arena, &rewritten, &options);
 
         search.push(SearchEntry {
             slug: p.slug.clone(),
@@ -110,7 +146,14 @@ pub fn render_docs(
         } else {
             0
         };
-        let body_html = format_ast(root, &options);
+        let formatted = format_ast(root, &options);
+
+        // Directive post-pass: substitute each sentinel with the component's
+        // rendered HTML; block inner content is rendered by the full recursive
+        // pipeline. `used` drives per-page island/style gating.
+        let render_inner = |m: &str| render_block_markdown(m, config, registry);
+        let (body_html, used) =
+            crate::directivepass::substitute(&formatted, &instances, registry, &render_inner);
 
         docs.push(Doc {
             rel_path: p.rel_path.clone(),
@@ -119,12 +162,14 @@ pub fn render_docs(
             body_html,
             has_math: math_count > 0,
             has_mermaid: mermaid_count > 0,
+            components_used: used,
         });
     }
 
     let graph = build_link_graph(&doc_meta, &outbound);
     let any_mermaid = docs.iter().any(|d| d.has_mermaid);
-    SiteBuild { docs, graph, search, any_mermaid }
+    let any_components = docs.iter().any(|d| !d.components_used.is_empty());
+    SiteBuild { docs, graph, search, any_mermaid, any_components }
 }
 
 #[cfg(test)]
@@ -151,7 +196,7 @@ mod tests {
             prepare(raw("index.md", "# Home\nGo to [[guide/intro]].\n")),
             prepare(raw("guide/intro.md", "# Intro\n```rust\nfn x(){}\n```\nBack to [[index]] and [[ghost]].\n")),
         ];
-        let site = render_docs(prepared, &docgen_config::SiteConfig::default());
+        let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &docgen_components::Registry::empty());
 
         // Doc order preserved.
         assert_eq!(site.docs[0].slug, "index");
@@ -183,7 +228,7 @@ mod tests {
     #[test]
     fn render_docs_renders_math_at_build_time() {
         let prepared = vec![prepare(raw("m.md", "# M\nmass: $E=mc^2$\n"))];
-        let site = render_docs(prepared, &docgen_config::SiteConfig::default());
+        let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &docgen_components::Registry::empty());
         assert!(site.docs[0].body_html.contains("katex"));
         assert!(site.docs[0].has_math);
         assert!(!site.docs[0].body_html.contains("$E=mc^2$"));
@@ -194,7 +239,7 @@ mod tests {
         let prepared = vec![prepare(raw("m.md", "# M\n$E=mc^2$\n"))];
         let mut cfg = docgen_config::SiteConfig::default();
         cfg.features.math = false;
-        let site = render_docs(prepared, &cfg);
+        let site = render_docs(prepared, &cfg, &docgen_components::Registry::empty());
         assert!(!site.docs[0].has_math);
         assert!(!site.docs[0].body_html.contains("katex"));
     }
@@ -204,7 +249,7 @@ mod tests {
         let prepared = vec![prepare(raw("d.md", "# D\n```mermaid\ngraph TD;A-->B;\n```\n"))];
         let mut cfg = docgen_config::SiteConfig::default();
         cfg.features.mermaid = false;
-        let site = render_docs(prepared, &cfg);
+        let site = render_docs(prepared, &cfg, &docgen_components::Registry::empty());
         assert!(!site.docs[0].has_mermaid);
         assert!(!site.any_mermaid);
     }
@@ -215,7 +260,7 @@ mod tests {
             prepare(raw("d.md", "# D\n```mermaid\ngraph TD;A-->B;\n```\n")),
             prepare(raw("p.md", "# P\nplain\n")),
         ];
-        let site = render_docs(prepared, &docgen_config::SiteConfig::default());
+        let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &docgen_components::Registry::empty());
         assert!(site.docs[0].has_mermaid && site.docs[0].body_html.contains("docgen-mermaid"));
         assert!(!site.docs[1].has_mermaid);
         assert!(site.any_mermaid);
@@ -227,7 +272,7 @@ mod tests {
             prepare(raw("index.md", "# Home\nGo to [[guide/intro]].\n")),
             prepare(raw("guide/intro.md", "# Intro\nBack to [[index]].\n")),
         ];
-        let site = render_docs(prepared, &docgen_config::SiteConfig::default());
+        let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &docgen_components::Registry::empty());
         let gd = site.graph_data(crate::graphlayout::LayoutParams::default());
         assert_eq!(gd.nodes.len(), 2);
         assert!(gd.nodes.iter().any(|n| n.slug == "index" && n.title == "Home"));
@@ -244,8 +289,58 @@ mod tests {
     #[test]
     fn render_docs_without_mermaid_clears_site_flag() {
         let prepared = vec![prepare(raw("p.md", "# P\nplain\n"))];
-        let site = render_docs(prepared, &docgen_config::SiteConfig::default());
+        let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &docgen_components::Registry::empty());
         assert!(!site.any_mermaid);
+    }
+
+    #[test]
+    fn render_docs_renders_callout_directive_with_inner_markdown() {
+        let mut reg = docgen_components::Registry::empty();
+        reg.insert(docgen_components::Component::from_parts(
+            "callout",
+            "<aside class=\"docgen-callout--{{ attrs.type | default('note') }}\">{{ content | safe }}</aside>",
+            None,
+            None,
+        ));
+        let prepared = vec![prepare(raw(
+            "d.md",
+            "# D\n\n:::callout{type=warning}\nBe **careful**.\n:::\n",
+        ))];
+        let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &reg);
+        let h = &site.docs[0].body_html;
+        assert!(h.contains("docgen-callout--warning"));
+        assert!(h.contains("<strong>careful</strong>")); // inner markdown rendered
+        assert!(site.docs[0].components_used.contains("callout"));
+        assert!(site.any_components);
+    }
+
+    #[test]
+    fn unknown_directive_in_doc_yields_error_span_not_crash() {
+        let prepared = vec![prepare(raw("d.md", "# D\n\n:nope[x]{}\n"))];
+        let site = render_docs(
+            prepared,
+            &docgen_config::SiteConfig::default(),
+            &docgen_components::Registry::empty(),
+        );
+        assert!(site.docs[0].body_html.contains("docgen-directive-error"));
+        assert!(!site.any_components);
+    }
+
+    #[test]
+    fn wikilink_outside_directive_still_resolves() {
+        let mut reg = docgen_components::Registry::empty();
+        reg.insert(docgen_components::Component::from_parts(
+            "callout",
+            "<aside>{{ content | safe }}</aside>",
+            None,
+            None,
+        ));
+        let prepared = vec![
+            prepare(raw("index.md", "# Home\nSee [[guide]].\n\n:::callout{}\nx\n:::\n")),
+            prepare(raw("guide.md", "# Guide\n")),
+        ];
+        let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &reg);
+        assert!(site.docs[0].body_html.contains(r#"href="/guide""#));
     }
 
     #[test]
@@ -253,7 +348,7 @@ mod tests {
         // A doc that links to its own slug renders a resolved anchor, but the
         // self-edge is dropped from the graph (no self-backlink).
         let prepared = vec![prepare(raw("index.md", "# Home\nBack to [[index]].\n"))];
-        let site = render_docs(prepared, &docgen_config::SiteConfig::default());
+        let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &docgen_components::Registry::empty());
 
         assert!(site.docs[0].body_html.contains(r#"href="/index""#));
         assert!(!site.graph.edges.iter().any(|e| e.from == "index" && e.to == "index"));

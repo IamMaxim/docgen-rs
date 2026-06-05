@@ -119,7 +119,9 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
     // Load `docgen.toml` (absent → defaults reproduce pre-P6 behaviour).
     let config = docgen_config::load(opts.project_root)
         .with_context(|| format!("loading docgen.toml from {}", opts.project_root.display()))?;
-    let site = render_docs(prepared, &config);
+    // Build the component registry (B-8 wires project discovery + builtins here).
+    let registry = docgen_components::Registry::empty();
+    let site = render_docs(prepared, &config, &registry);
     let tree = build_tree(&site.docs);
 
     let renderer = Renderer::new(DEFAULT_PAGE_TEMPLATE)?;
