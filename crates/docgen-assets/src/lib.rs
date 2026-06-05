@@ -97,12 +97,23 @@ pub fn katex_css_assets() -> Vec<Asset> {
     ]
 }
 
-/// Runtime KaTeX (`katex.min.js` + `auto-render.min.js`). Fallback path only,
-/// gated by [`EmitOptions::include_katex_runtime`].
-///
-/// Stub for Cluster A; filled in Cluster B (B-8).
+/// Runtime KaTeX (`katex.min.js` + `auto-render.min.js`). Emitted ONLY when
+/// [`EmitOptions::include_katex_runtime`] is set — the documented fallback if
+/// the build-time `katex` crate ever cannot compile on a host. The default
+/// build renders math at build time and ships **zero** runtime JS for math.
 pub fn katex_runtime_assets() -> Vec<Asset> {
-    vec![]
+    vec![
+        embed(
+            "vendor/katex/katex.min.js",
+            "vendor/katex/katex.min.js",
+            AssetKind::Js,
+        ),
+        embed(
+            "vendor/katex/auto-render.min.js",
+            "vendor/katex/auto-render.min.js",
+            AssetKind::Js,
+        ),
+    ]
 }
 
 /// Mermaid library + island glue. Emitted only when a page used a diagram.
@@ -289,6 +300,31 @@ mod tests {
             base.iter().filter(|a| a.kind == AssetKind::Font).count(),
             16
         );
+    }
+
+    // ---- B-8: katex_runtime_assets() fallback ----
+
+    #[test]
+    fn katex_runtime_slice_has_both_scripts_but_is_off_by_default() {
+        let rt = katex_runtime_assets();
+        assert!(rt.iter().any(|a| a.path.ends_with("katex.min.js")));
+        assert!(rt.iter().any(|a| a.path.ends_with("auto-render.min.js")));
+        for a in &rt {
+            assert!(!a.bytes.is_empty(), "{} empty", a.path);
+        }
+        assert!(!assets_for(&EmitOptions::default())
+            .iter()
+            .any(|a| a.path.ends_with("katex.min.js")));
+    }
+
+    #[test]
+    fn katex_runtime_emitted_when_flag_set() {
+        let full = assets_for(&EmitOptions {
+            include_katex_runtime: true,
+            ..Default::default()
+        });
+        assert!(full.iter().any(|a| a.path.ends_with("katex.min.js")));
+        assert!(full.iter().any(|a| a.path.ends_with("auto-render.min.js")));
     }
 
     #[test]
