@@ -37,3 +37,10 @@
 - ARCHITECT VERIFICATION: re-ran cargo test (144/12 binaries), clippy clean, built fixture, validated LIVE in Chrome — /math/ shows typeset E=mc^2, display sum, Euler's identity; /diagram/ shows a rendered Mermaid SVG flowchart (Start→Choice→yes/no→Do thing/Skip). Both confirmed.
 - FLAGGED DECISION (see REPORT): build-time KaTeX needs a C toolchain to COMPILE docgen from source (QuickJS). Prebuilt-binary users (P6) are unaffected (engine embedded); runtime-JS fallback exists behind a seam. Defensible + spec-sanctioned.
 - Next: P4 (graph view — consumes existing graph::LinkGraph.edges).
+
+## 2026-06-05 18:05 MSK — P4 GREEN
+- Workflow w6dxrwrci (~22 min): plan → 2 TDD clusters (Rust force-layout / SVG island+page+wire) → gate → 4 reviews → fix → verify.
+- graphlayout.rs: deterministic spring layout (port of original graph.ts), consumes existing graph::LinkGraph (no relink), emits GraphData{nodes[x,y,degree],edges} as compact JSON embedded in /graph/ page. Pure-SVG Alpine island docgenGraph (no d3): hover-highlight neighbors, click-navigate, pan/zoom.
+- Result: 168 tests green, clippy clean. Review 8 findings, ALL applied (2 major: cross-machine determinism — quantize libm sin/cos seed to 2dp grid + pinned golden-snapshot test; reciprocal links double-counting → collapse to single undirected edge), 1 self-rejected (correct as-is).
+- ARCHITECT VERIFICATION: cargo test 168/12 binaries, clippy clean, built fixture (5 pages + /graph/), validated LIVE in Chrome — graph renders 5 nodes + index↔intro edge from Rust coords; hovering a node highlights it+neighbor+edge green; disconnected nodes stay blue. Confirmed.
+- Next: P5 (dev server axum+notify+live-reload + CodeMirror editor island).
