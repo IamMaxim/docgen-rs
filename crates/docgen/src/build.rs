@@ -42,7 +42,14 @@ pub fn build(project_root: &Path) -> Result<()> {
         fs::write(out_dir.join("index.html"), html)?;
     }
 
-    // Cluster C adds: emit search-index.json, search.js, docgen.css here.
+    // Static search index + vendored client assets.
+    fs::write(
+        dist_dir.join("search-index.json"),
+        docgen_core::search::index_json(&site.search),
+    )?;
+    fs::write(dist_dir.join("search.js"), docgen_render::SEARCH_JS)?;
+    fs::write(dist_dir.join("docgen.css"), docgen_render::DOCGEN_CSS)?;
+
     println!("Built {} page(s) -> {}", site.docs.len(), dist_dir.display());
     Ok(())
 }
