@@ -24,6 +24,9 @@ pub const DOCGEN_CSS: &str = include_str!("../assets/docgen.css");
 /// The built-in per-doc history-timeline template, embedded at compile time.
 pub const DEFAULT_HISTORY_TEMPLATE: &str = include_str!("../templates/history.html");
 
+/// The built-in `/graph/` doc-link-graph template, embedded at compile time.
+pub const DEFAULT_GRAPH_TEMPLATE: &str = include_str!("../templates/graph.html");
+
 /// One diff line, render-friendly. `kind`/line numbers are pre-stringified by
 /// the caller so `docgen-render` stays free of the `docgen-diff` domain types.
 #[derive(Serialize)]
@@ -76,6 +79,16 @@ pub struct HistoryContext<'a> {
     pub buckets: &'a [TimelineBucketView],
 }
 
+/// Everything the `/graph/` page render needs. `graph_json` is the serialized
+/// `GraphData` embedded verbatim into a `<script type="application/json">` tag.
+#[derive(Serialize)]
+pub struct GraphContext<'a> {
+    pub tree: &'a [TreeNode],
+    pub graph_json: &'a str,
+    pub node_count: usize,
+    pub edge_count: usize,
+}
+
 /// Everything a single page render needs.
 #[derive(Serialize)]
 pub struct PageContext<'a> {
@@ -106,6 +119,7 @@ impl Renderer {
         // `{{ body | safe }}` remains raw, as intended for already-rendered markdown.
         env.add_template_owned("page.html", page_template.to_string())?;
         env.add_template_owned("history.html", DEFAULT_HISTORY_TEMPLATE.to_string())?;
+        env.add_template_owned("graph.html", DEFAULT_GRAPH_TEMPLATE.to_string())?;
         Ok(Self { env })
     }
 
@@ -121,6 +135,24 @@ impl Renderer {
             has_history => ctx.has_history,
             has_mermaid => ctx.has_mermaid,
             has_math => ctx.has_math,
+            search_enabled => true,
+        })
+    }
+
+    /// Render the `/graph/` doc-link-graph page to a full HTML document.
+    ///
+    /// `graph_json` is injected raw (the island's `JSON.parse` needs valid JSON,
+    /// not HTML-escaped text). To stop a literal `</script>` inside a doc title
+    /// from breaking out of the embedding `<script type="application/json">` tag,
+    /// `</` is rewritten to `<\/` first — still valid JSON, inert as markup.
+    pub fn render_graph(&self, ctx: &GraphContext) -> Result<String, minijinja::Error> {
+        let tmpl = self.env.get_template("graph.html")?;
+        let safe_json = ctx.graph_json.replace("</", "<\\/");
+        tmpl.render(context! {
+            tree => ctx.tree,
+            graph_json => safe_json,
+            node_count => ctx.node_count,
+            edge_count => ctx.edge_count,
             search_enabled => true,
         })
     }
@@ -405,6 +437,98 @@ mod tests {
                 }],
             }],
         }]
+    }
+
+    // ---- P4 B-4: /graph/ page ----
+
+    #[test]
+    fn renders_graph_page_with_embedded_json_and_island() {
+        let r = Renderer::new(DEFAULT_PAGE_TEMPLATE).unwrap();
+        let json = r#"{"nodes":[{"slug":"a","title":"A","x":1.0,"y":2.0,"degree":0}],"edges":[]}"#;
+        let html = r
+            .render_graph(&GraphContext {
+                tree: &[],
+                graph_json: json,
+                node_count: 1,
+                edge_count: 0,
+            })
+            .unwrap();
+        assert!(html.contains("<title>Graph</title>"));
+        assert!(html.contains(r#"id="docgen-graph-data""#));
+        assert!(html.contains(r#"type="application/json""#));
+        assert!(html.contains(json)); // JSON embedded verbatim, NOT escaped
+        assert!(html.contains(r#"x-data="docgenGraph""#));
+        assert!(html.contains(r#"src="/islands/graph.js""#));
+        assert!(html.contains(r#"src="/bootstrap.js""#));
+        assert!(html.contains(r#"src="/vendor/alpine/alpine.min.js""#));
+        assert!(html.contains("1 nodes")); // meta caption
+    }
+
+    #[test]
+    fn graph_page_renders_sidebar_tree() {
+        let r = Renderer::new(DEFAULT_PAGE_TEMPLATE).unwrap();
+        let tree = vec![docgen_core::model::TreeNode::Doc {
+            name: "intro".into(),
+            slug: "guide/intro".into(),
+            title: "Intro".into(),
+        }];
+        let html = r
+            .render_graph(&GraphContext {
+                tree: &tree,
+                graph_json: r#"{"nodes":[],"edges":[]}"#,
+                node_count: 0,
+                edge_count: 0,
+            })
+            .unwrap();
+        assert!(html.contains(r#"href="/guide/intro""#));
+    }
+
+    #[test]
+    fn embedded_json_neutralizes_script_close() {
+        let r = Renderer::new(DEFAULT_PAGE_TEMPLATE).unwrap();
+        let json =
+            r#"{"nodes":[{"slug":"x","title":"a</script>b","x":0.0,"y":0.0,"degree":0}],"edges":[]}"#;
+        let html = r
+            .render_graph(&GraphContext {
+                tree: &[],
+                graph_json: json,
+                node_count: 1,
+                edge_count: 0,
+            })
+            .unwrap();
+        assert!(!html.contains("a</script>b")); // raw close-tag must not survive
+        assert!(html.contains(r#"a<\/script>b"#)); // escaped form present
+    }
+
+    #[test]
+    fn graph_page_has_graph_nav_link() {
+        let r = Renderer::new(DEFAULT_PAGE_TEMPLATE).unwrap();
+        let html = r
+            .render_graph(&GraphContext {
+                tree: &[],
+                graph_json: r#"{"nodes":[],"edges":[]}"#,
+                node_count: 0,
+                edge_count: 0,
+            })
+            .unwrap();
+        assert!(html.contains(r#"href="/graph""#));
+    }
+
+    #[test]
+    fn page_has_graph_nav_link() {
+        let html = renderer()
+            .render_page(&PageContext {
+                title: "X",
+                slug: "x",
+                body_html: "",
+                tree: &[],
+                backlinks: &[],
+                has_history: false,
+                has_mermaid: false,
+                has_math: false,
+            })
+            .unwrap();
+        assert!(html.contains(r#"href="/graph""#));
     }
 
     #[test]

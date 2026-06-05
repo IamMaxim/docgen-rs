@@ -3,9 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{ title }}</title>
+  <title>Graph</title>
   <link rel="stylesheet" href="/docgen.css" />
-  {% if has_math %}<link rel="stylesheet" href="/vendor/katex/katex.min.css" />{% endif %}
 </head>
 <body>
   <nav class="docgen-sidebar">
@@ -23,29 +22,21 @@
     {% endmacro %}
     {{ render_nodes(tree) }}
   </nav>
-  <main class="docgen-content">
-    {% if has_history %}
-    <p class="docgen-history-link"><a href="/{{ slug | safe }}/history">History</a></p>
-    {% endif %}
-    {{ body | safe }}
-    {% if backlinks %}
-    <section class="docgen-backlinks">
-      <h2>Backlinks</h2>
-      <ul>
-        {% for bl in backlinks %}
-          <li><a href="/{{ bl.slug | safe }}">{{ bl.title }}</a></li>
-        {% endfor %}
-      </ul>
-    </section>
-    {% endif %}
+  <main class="docgen-content docgen-graph-page">
+    <h1>Doc graph</h1>
+    <p class="docgen-graph__meta">{{ node_count }} nodes &middot; {{ edge_count }} links</p>
+    <div class="docgen-graph" x-data="docgenGraph" x-init="init()">
+      <svg class="docgen-graph__svg" viewBox="0 0 1420 760" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Document link graph"></svg>
+    </div>
+    <script type="application/json" id="docgen-graph-data">{{ graph_json | safe }}</script>
   </main>
   {% if search_enabled %}
   <button class="docgen-search-trigger" data-docgen-search>Search <kbd>Ctrl K</kbd></button>
   <script src="/search.js" defer></script>
   {% endif %}
-  <!-- island infra: bootstrap defines the registry; islands self-register; Alpine starts last -->
+  <!-- island infra: bootstrap defines the registry; the graph island self-registers; Alpine starts last -->
   <script src="/bootstrap.js"></script>
-  {% if has_mermaid %}<script src="/islands/mermaid.js"></script>{% endif %}
+  <script src="/islands/graph.js"></script>
   <script src="/vendor/alpine/alpine.min.js" defer></script>
 </body>
 </html>
