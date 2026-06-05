@@ -133,17 +133,51 @@ pub fn graph_assets() -> Vec<Asset> {
 
 /// DEV-ONLY assets, served by `docgen dev` ONLY. NEVER returned by [`assets_for`]
 /// and NEVER emitted by `docgen build`. Dist paths are namespaced under
-/// `__docgen/` (and, once CodeMirror is vendored in Cluster B, `__codemirror/`)
-/// so they cannot collide with doc slugs.
+/// `__docgen/` and `__codemirror/` so they cannot collide with doc slugs.
 ///
-/// Cluster A ships the live-reload client; Cluster B extends this slice with the
-/// vendored CodeMirror UMD + the editor island + editor css.
+/// Contents: the vendored CodeMirror 5 UMD (`codemirror.js` + css), its markdown
+/// mode and the `xml` mode + `overlay` addon that markdown mode depends on, the
+/// editor island JS + css, and the live-reload client. All loadable as plain
+/// `<script>`/`<link>` tags with no bundler/import resolution.
 pub fn dev_assets() -> Vec<Asset> {
-    vec![embed(
-        "docgen/dev/livereload.js",
-        "__docgen/livereload.js",
-        AssetKind::Js,
-    )]
+    vec![
+        embed(
+            "vendor/codemirror/codemirror.js",
+            "__codemirror/codemirror.js",
+            AssetKind::Js,
+        ),
+        embed(
+            "vendor/codemirror/codemirror.css",
+            "__codemirror/codemirror.css",
+            AssetKind::Css,
+        ),
+        embed(
+            "vendor/codemirror/markdown.js",
+            "__codemirror/markdown.js",
+            AssetKind::Js,
+        ),
+        embed(
+            "vendor/codemirror/xml.js",
+            "__codemirror/xml.js",
+            AssetKind::Js,
+        ),
+        embed(
+            "vendor/codemirror/overlay.js",
+            "__codemirror/overlay.js",
+            AssetKind::Js,
+        ),
+        embed("docgen/dev/editor.js", "__docgen/editor.js", AssetKind::Js),
+        embed(
+            "docgen/dev/editor.css",
+            "__docgen/editor.css",
+            AssetKind::Css,
+        ),
+        embed(
+            "docgen/dev/livereload.js",
+            "__docgen/livereload.js",
+            AssetKind::Js,
+        ),
+    ]
 }
 
 /// Flags driving which conditional asset slices a build emits.
@@ -392,6 +426,56 @@ mod tests {
         let js = std::str::from_utf8(reload.bytes).unwrap();
         assert!(js.contains("EventSource('/__docgen/livereload')"));
         assert!(js.contains("location.reload"));
+    }
+
+    #[test]
+    fn dev_assets_has_codemirror_and_editor_and_reload() {
+        let paths: Vec<&str> = dev_assets().iter().map(|a| a.path).collect();
+        for p in [
+            "__codemirror/codemirror.js",
+            "__codemirror/codemirror.css",
+            "__codemirror/markdown.js",
+            "__codemirror/xml.js",
+            "__codemirror/overlay.js",
+            "__docgen/editor.js",
+            "__docgen/editor.css",
+            "__docgen/livereload.js",
+        ] {
+            assert!(paths.contains(&p), "dev_assets missing {p}");
+        }
+        for a in dev_assets() {
+            assert!(!a.bytes.is_empty(), "{} empty", a.path);
+        }
+    }
+
+    #[test]
+    fn codemirror_is_umd_not_esm() {
+        // Locks the no-bundler invariant: CM5 is classic UMD, never bare-ESM.
+        let cm = dev_assets()
+            .into_iter()
+            .find(|a| a.path == "__codemirror/codemirror.js")
+            .expect("codemirror.js present");
+        let js = std::str::from_utf8(cm.bytes).unwrap();
+        for line in js.lines() {
+            assert!(
+                !line.trim_start().starts_with("import "),
+                "codemirror.js has a bare ESM import (needs a bundler): {line}"
+            );
+        }
+    }
+
+    #[test]
+    fn editor_island_registers_without_esm() {
+        let ed = dev_assets()
+            .into_iter()
+            .find(|a| a.path == "__docgen/editor.js")
+            .expect("editor.js present");
+        let js = std::str::from_utf8(ed.bytes).unwrap();
+        assert!(js.contains("docgen.island"));
+        assert!(js.contains("docgenEditor"));
+        assert!(js.contains("/__docgen/source"));
+        assert!(js.contains("window.CodeMirror"));
+        assert!(!js.contains("import ")); // no ESM / npm
     }
 
     #[test]
