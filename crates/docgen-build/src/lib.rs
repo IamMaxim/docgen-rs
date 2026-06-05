@@ -119,10 +119,56 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
     // Load `docgen.toml` (absent → defaults reproduce pre-P6 behaviour).
     let config = docgen_config::load(opts.project_root)
         .with_context(|| format!("loading docgen.toml from {}", opts.project_root.display()))?;
-    // Build the component registry (B-8 wires project discovery + builtins here).
-    let registry = docgen_components::Registry::empty();
+    // Build the component registry: embedded built-ins first, then project
+    // `components/<name>/` (which override a built-in of the same name).
+    let builtins: Vec<docgen_components::Component> = docgen_assets::builtin_components()
+        .into_iter()
+        .map(|b| {
+            docgen_components::Component::from_parts(
+                b.name,
+                b.template,
+                b.island_js.map(str::to_string),
+                b.style_css.map(str::to_string),
+            )
+        })
+        .collect();
+    let components_dir = opts.project_root.join(&config.components.dir);
+    let registry = docgen_components::build_registry(builtins, &components_dir)
+        .with_context(|| format!("discovering components in {}", components_dir.display()))?;
     let site = render_docs(prepared, &config, &registry);
     let tree = build_tree(&site.docs);
+
+    // Concatenate the component asset bundle. `components.css` carries every
+    // registry component's style (small + cacheable, linked on every page that
+    // has any style); `components.js` carries only the island.js of components
+    // actually *used* across the site (per-page link gating below decides which
+    // pages reference it). Name-sorted for deterministic output.
+    let has_components_css = !registry.styles().is_empty();
+    let used_components: std::collections::BTreeSet<&str> = site
+        .docs
+        .iter()
+        .flat_map(|d| d.components_used.iter().map(String::as_str))
+        .collect();
+    let component_css: String = registry
+        .styles()
+        .iter()
+        .filter_map(|c| c.style_css.as_deref())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let component_js: String = registry
+        .islands()
+        .iter()
+        .filter(|c| used_components.contains(c.name.as_str()))
+        .filter_map(|c| c.island_js.as_deref())
+        .collect::<Vec<_>>()
+        .join("\n");
+    // Set of components that ship an island AND were used → drives per-page gating.
+    let island_components: std::collections::BTreeSet<String> = registry
+        .islands()
+        .iter()
+        .filter(|c| used_components.contains(c.name.as_str()))
+        .map(|c| c.name.clone())
+        .collect();
 
     let renderer = Renderer::new(DEFAULT_PAGE_TEMPLATE)?;
 
@@ -186,6 +232,11 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
             base: &config.base,
             site_title: config.title.as_deref().unwrap_or(""),
             search_enabled: config.features.search,
+            has_components_css,
+            has_component_island: doc
+                .components_used
+                .iter()
+                .any(|c| island_components.contains(c)),
         })?;
 
         // `guide/intro` -> `dist/guide/intro/index.html` (clean URLs).
@@ -246,6 +297,10 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
         include_component_js: false,
     };
     docgen_assets::emit(&docgen_assets::assets_for(&emit_opts), dist_dir)?;
+
+    // Authored component bundle (dynamic bytes concatenated from the registry).
+    // Empty strings skip their file.
+    docgen_assets::emit_component_bundle(dist_dir, &component_css, &component_js)?;
 
     // Everything rendered cleanly: atomically swap staging into place. Only now
     // is the previously-served `final_dir` replaced.

@@ -6,6 +6,7 @@
   {% if base %}<base href="{{ base | safe }}/" />{% endif %}
   <title>{% if site_title %}{{ title }} — {{ site_title }}{% else %}{{ title }}{% endif %}</title>
   <link rel="stylesheet" href="/docgen.css" />
+  {% if has_components_css %}<link rel="stylesheet" href="/components.css" />{% endif %}
   {% if has_math %}<link rel="stylesheet" href="/vendor/katex/katex.min.css" />{% endif %}
 </head>
 <body>
@@ -47,6 +48,7 @@
   <!-- island infra: bootstrap defines the registry; islands self-register; Alpine starts last -->
   <script src="/bootstrap.js"></script>
   {% if has_mermaid %}<script src="/islands/mermaid.js"></script>{% endif %}
+  {% if has_component_island %}<script src="/components.js"></script>{% endif %}
   <script src="/vendor/alpine/alpine.min.js" defer></script>
 </body>
 </html>

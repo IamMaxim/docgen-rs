@@ -119,6 +119,13 @@ pub struct PageContext<'a> {
     pub site_title: &'a str,
     /// Whether the search UI ships (gates the trigger + `search.js`).
     pub search_enabled: bool,
+    /// Whether any component shipped a `style.css` (links `/components.css`). The
+    /// component stylesheet is small + cacheable, so it links on every page when
+    /// present rather than per-page.
+    pub has_components_css: bool,
+    /// Whether this page used ≥1 component with an `island.js` (links
+    /// `/components.js`, gated per-page like the mermaid island).
+    pub has_component_island: bool,
 }
 
 /// Owns a configured minijinja environment with the `page` template registered.
@@ -154,6 +161,8 @@ impl Renderer {
             base => ctx.base,
             site_title => ctx.site_title,
             search_enabled => ctx.search_enabled,
+            has_components_css => ctx.has_components_css,
+            has_component_island => ctx.has_component_island,
         })
     }
 
@@ -215,10 +224,55 @@ mod tests {
                 base: "",
                 site_title: "",
                 search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
             })
             .unwrap();
         assert!(html.contains("<title>My Page</title>"));
         assert!(html.contains("<p>hello</p>"));
+    }
+
+    #[test]
+    fn component_asset_links_are_gated() {
+        let off = renderer()
+            .render_page(&PageContext {
+                title: "P",
+                slug: "p",
+                body_html: "",
+                tree: &[],
+                backlinks: &[],
+                has_history: false,
+                has_mermaid: false,
+                has_math: false,
+                base: "",
+                site_title: "",
+                search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
+            })
+            .unwrap();
+        assert!(!off.contains("/components.css"));
+        assert!(!off.contains("/components.js"));
+
+        let on = renderer()
+            .render_page(&PageContext {
+                title: "P",
+                slug: "p",
+                body_html: "",
+                tree: &[],
+                backlinks: &[],
+                has_history: false,
+                has_mermaid: false,
+                has_math: false,
+                base: "",
+                site_title: "",
+                search_enabled: true,
+                has_components_css: true,
+                has_component_island: true,
+            })
+            .unwrap();
+        assert!(on.contains(r#"<link rel="stylesheet" href="/components.css" />"#));
+        assert!(on.contains(r#"<script src="/components.js"></script>"#));
     }
 
     #[test]
@@ -228,6 +282,8 @@ mod tests {
                 title: "Intro",
                 site_title: "My Docs",
                 search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
                 base: "",
                 slug: "x",
                 body_html: "",
@@ -248,6 +304,8 @@ mod tests {
                 title: "Intro",
                 site_title: "",
                 search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
                 base: "",
                 slug: "x",
                 body_html: "",
@@ -269,6 +327,8 @@ mod tests {
                 title: "X",
                 site_title: "",
                 search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
                 base: "",
                 slug: "x",
                 body_html: "",
@@ -286,6 +346,8 @@ mod tests {
                 title: "X",
                 site_title: "",
                 search_enabled: false,
+                has_components_css: false,
+                has_component_island: false,
                 base: "",
                 slug: "x",
                 body_html: "",
@@ -307,6 +369,8 @@ mod tests {
                 title: "X",
                 site_title: "",
                 search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
                 base: "/docs",
                 slug: "x",
                 body_html: "",
@@ -340,6 +404,8 @@ mod tests {
                 base: "",
                 site_title: "",
                 search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
             })
             .unwrap();
         assert!(html.contains(r#"href="/guide/intro""#));
@@ -366,6 +432,8 @@ mod tests {
                 base: "",
                 site_title: "",
                 search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
             })
             .unwrap();
         // Title is HTML-escaped.
@@ -397,6 +465,8 @@ mod tests {
                 base: "",
                 site_title: "",
                 search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
             })
             .unwrap();
         assert!(html.contains("Backlinks"));
@@ -419,6 +489,8 @@ mod tests {
                 base: "",
                 site_title: "",
                 search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
             })
             .unwrap();
         assert!(!html.contains("Backlinks"));
@@ -439,6 +511,8 @@ mod tests {
                 base: "",
                 site_title: "",
                 search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
             })
             .unwrap();
         assert!(with.contains(r#"href="/guide/intro/history""#));
@@ -456,6 +530,8 @@ mod tests {
                 base: "",
                 site_title: "",
                 search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
             })
             .unwrap();
         assert!(!without.contains(r#"href="/guide/intro/history""#));
@@ -476,6 +552,8 @@ mod tests {
                 base: "",
                 site_title: "",
                 search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
             })
             .unwrap();
         assert!(html.contains(r#"src="/bootstrap.js""#));
@@ -495,6 +573,8 @@ mod tests {
                 base: "",
                 site_title: "",
                 search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
             })
             .unwrap();
         assert!(withm.contains(r#"src="/islands/mermaid.js""#));
@@ -515,6 +595,8 @@ mod tests {
                 base: "",
                 site_title: "",
                 search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
             })
             .unwrap();
         assert!(!no_math.contains("katex.min.css"));
@@ -532,6 +614,8 @@ mod tests {
                 base: "",
                 site_title: "",
                 search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
             })
             .unwrap();
         assert!(with_math.contains(r#"href="/vendor/katex/katex.min.css""#));
@@ -695,6 +779,8 @@ mod tests {
                 base: "",
                 site_title: "",
                 search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
             })
             .unwrap();
         assert!(html.contains(r#"href="/graph""#));
