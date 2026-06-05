@@ -1,39 +1,17 @@
-use crate::frontmatter::parse_frontmatter;
-use crate::markdown::render_markdown;
 use crate::model::{Doc, RawDoc};
+use crate::pipeline::{prepare, render_docs};
 
 /// Derive a URL slug from a docs-relative path: strip a trailing `.md`.
 pub fn slug_for(rel_path: &str) -> String {
     rel_path.strip_suffix(".md").unwrap_or(rel_path).to_string()
 }
 
-/// Extract the text of the first ATX `# ` heading, if any.
-fn first_h1(body: &str) -> Option<String> {
-    body.lines()
-        .find_map(|line| line.strip_prefix("# ").map(|h| h.trim().to_string()))
-}
-
-/// Process a RawDoc into a renderable Doc.
+/// Process a single RawDoc into a renderable Doc (back-compat single-doc path).
+/// Wikilinks resolve only against this one doc's slug, so cross-doc links render
+/// broken here — full resolution happens via `pipeline::render_docs`.
 pub fn assemble(raw: RawDoc) -> Doc {
-    let parsed = parse_frontmatter(&raw.raw);
-    let slug = slug_for(&raw.rel_path);
-
-    let fm_title = parsed
-        .frontmatter
-        .get("title")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-    let title = fm_title
-        .or_else(|| first_h1(&parsed.body))
-        .unwrap_or_else(|| {
-            // Last path segment of the slug as a final fallback.
-            // `rsplit` always yields at least one segment, so `next()` is never None.
-            slug.rsplit('/').next().unwrap_or("").to_string()
-        });
-
-    let body_html = render_markdown(&parsed.body);
-
-    Doc { rel_path: raw.rel_path, slug, title, body_html }
+    let prepared = prepare(raw);
+    render_docs(vec![prepared]).docs.pop().expect("one doc in, one doc out")
 }
 
 #[cfg(test)]
