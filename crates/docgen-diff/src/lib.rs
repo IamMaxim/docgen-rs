@@ -9,9 +9,14 @@
 pub mod error;
 pub mod git_parsing;
 pub mod git_refs;
+pub mod history;
 pub mod types;
+
+#[cfg(test)]
+mod testutil;
 
 pub use error::DiffError;
 pub use git_parsing::{parse_name_status, parse_untracked_docs, NameStatusEntry};
 pub use git_refs::{base_ref_for_commit_parents, EMPTY_TREE_REF};
+pub use history::{discover_repo, doc_revisions, CommitMeta, RevisionContent};
 pub use types::*;
