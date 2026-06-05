@@ -31,6 +31,33 @@ runtime JS. Scope and limitations:
 
 See `docs/superpowers/plans/` for the roadmap.
 
+## Install
+
+### Prebuilt binary (recommended — no toolchain)
+
+With [cargo-binstall](https://github.com/cargo-bins/cargo-binstall):
+
+    cargo binstall docgen
+
+Or download an archive for your platform from the
+[Releases](https://github.com/iammaxim/docgen-rs/releases) page and put `docgen`
+on your `PATH`.
+
+### From source
+
+    cargo install --path crates/docgen
+
+## Quick start
+
+    docgen init my-docs
+    cd my-docs
+    docgen dev          # http://localhost:4321 with live reload
+    docgen build        # static site in ./dist
+
+`docgen init` scaffolds a buildable site: a `docgen.toml`, a `docs/` tree with
+sample content exercising wikilinks, math and mermaid, a sample custom component
+under `components/`, and a `.gitignore`.
+
 ## Usage
 
 ```sh

@@ -3,6 +3,16 @@ name = "docgen"
 edition.workspace = true
 license.workspace = true
 version.workspace = true
+description = "Cargo-only static documentation-site generator"
+repository = "https://github.com/iammaxim/docgen-rs"
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/docgen-{ target }{ archive-suffix }"
+bin-dir = "docgen-{ target }/{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
 
 [dependencies]
 anyhow = "1.0.102"
