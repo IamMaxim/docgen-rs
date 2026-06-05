@@ -76,6 +76,8 @@ pub struct PageContext<'a> {
     pub backlinks: &'a [Backlink],
     /// Whether this doc has an emitted `/<slug>/history/` page (drives the nav link).
     pub has_history: bool,
+    /// Whether this page contains a mermaid diagram (gates the mermaid island script).
+    pub has_mermaid: bool,
 }
 
 /// Owns a configured minijinja environment with the `page` template registered.
@@ -105,6 +107,7 @@ impl Renderer {
             tree => ctx.tree,
             backlinks => ctx.backlinks,
             has_history => ctx.has_history,
+            has_mermaid => ctx.has_mermaid,
             search_enabled => true,
         })
     }
@@ -140,6 +143,7 @@ mod tests {
                 tree: &[],
                 backlinks: &[],
                 has_history: false,
+                has_mermaid: false,
             })
             .unwrap();
         assert!(html.contains("<title>My Page</title>"));
@@ -161,6 +165,7 @@ mod tests {
                 tree: &tree,
                 backlinks: &[],
                 has_history: false,
+                has_mermaid: false,
             })
             .unwrap();
         assert!(html.contains(r#"href="/guide/intro""#));
@@ -182,6 +187,7 @@ mod tests {
                 tree: &tree,
                 backlinks: &[],
                 has_history: false,
+                has_mermaid: false,
             })
             .unwrap();
         // Title is HTML-escaped.
@@ -208,6 +214,7 @@ mod tests {
                 tree: &[],
                 backlinks: &backlinks,
                 has_history: false,
+                has_mermaid: false,
             })
             .unwrap();
         assert!(html.contains("Backlinks"));
@@ -225,6 +232,7 @@ mod tests {
                 tree: &[],
                 backlinks: &[],
                 has_history: false,
+                has_mermaid: false,
             })
             .unwrap();
         assert!(!html.contains("Backlinks"));
@@ -240,6 +248,7 @@ mod tests {
                 tree: &[],
                 backlinks: &[],
                 has_history: true,
+                has_mermaid: false,
             })
             .unwrap();
         assert!(with.contains(r#"href="/guide/intro/history""#));
@@ -252,9 +261,41 @@ mod tests {
                 tree: &[],
                 backlinks: &[],
                 has_history: false,
+                has_mermaid: false,
             })
             .unwrap();
         assert!(!without.contains(r#"href="/guide/intro/history""#));
+    }
+
+    #[test]
+    fn page_loads_bootstrap_and_alpine_and_gates_mermaid_island() {
+        let html = renderer()
+            .render_page(&PageContext {
+                title: "X",
+                slug: "x",
+                body_html: "",
+                tree: &[],
+                backlinks: &[],
+                has_history: false,
+                has_mermaid: false,
+            })
+            .unwrap();
+        assert!(html.contains(r#"src="/bootstrap.js""#));
+        assert!(html.contains(r#"src="/vendor/alpine/alpine.min.js""#));
+        assert!(!html.contains("islands/mermaid.js")); // gated off
+
+        let withm = renderer()
+            .render_page(&PageContext {
+                title: "X",
+                slug: "x",
+                body_html: "",
+                tree: &[],
+                backlinks: &[],
+                has_history: false,
+                has_mermaid: true,
+            })
+            .unwrap();
+        assert!(withm.contains(r#"src="/islands/mermaid.js""#));
     }
 
     #[test]

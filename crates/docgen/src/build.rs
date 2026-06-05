@@ -109,6 +109,7 @@ pub fn build(project_root: &Path) -> Result<()> {
             tree: &tree,
             backlinks,
             has_history: docs_with_history.contains(&doc.slug),
+            has_mermaid: false,
         })?;
 
         // `guide/intro` -> `dist/guide/intro/index.html` (clean URLs).

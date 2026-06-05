@@ -41,5 +41,9 @@
   <button class="docgen-search-trigger" data-docgen-search>Search <kbd>Ctrl K</kbd></button>
   <script src="/search.js" defer></script>
   {% endif %}
+  <!-- island infra: bootstrap defines the registry; islands self-register; Alpine starts last -->
+  <script src="/bootstrap.js"></script>
+  {% if has_mermaid %}<script src="/islands/mermaid.js"></script>{% endif %}
+  <script src="/vendor/alpine/alpine.min.js" defer></script>
 </body>
 </html>
