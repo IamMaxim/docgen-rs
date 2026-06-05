@@ -128,14 +128,9 @@ async fn dev_serve_injects_editor_and_reload() {
     let body = resp.into_body().collect().await.unwrap().to_bytes();
     let html = String::from_utf8(body.to_vec()).unwrap();
 
-    // The serve-time injection added the dev surface to the SAME built bytes.
-    for m in [
-        "__docgen/livereload.js",
-        "__docgen/editor.js",
-        "__codemirror/codemirror.js",
-        "docgenEditor",
-        "data-docgen-edit",
-    ] {
+    // The serve-time injection added the dev surface to the SAME built bytes:
+    // the live-reload client + the edit pencil linking to the /edit/<slug> editor.
+    for m in ["__docgen/livereload.js", "docgen-ctl--edit", "/edit/"] {
         assert!(html.contains(m), "dev serve missing injected marker {m}");
     }
 }

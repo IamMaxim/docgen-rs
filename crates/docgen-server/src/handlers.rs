@@ -8,14 +8,14 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use axum::{
-    extract::{DefaultBodyLimit, Query, Request, State},
+    extract::{DefaultBodyLimit, Path as AxumPath, Query, Request, State},
     http::{header, Method, StatusCode},
     middleware::{self, Next},
     response::{
         sse::{Event, KeepAlive, Sse},
         IntoResponse, Response,
     },
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use futures::stream::{Stream, StreamExt};
@@ -56,6 +56,22 @@ pub struct SourceResponse {
     pub path: String,
     pub source: String,
     pub disk_hash: String,
+    /// The file's content at git HEAD, for the editor's merge-against-HEAD
+    /// gutter. `""` outside a repo / untracked file.
+    pub head_source: String,
+}
+
+#[derive(Deserialize)]
+pub struct PreviewRequest {
+    /// docs-relative path (used only to validate the edit target exists).
+    pub path: String,
+    pub source: String,
+}
+
+#[derive(Serialize)]
+pub struct PreviewResponse {
+    /// Rendered markdown HTML for the live preview pane.
+    pub html: String,
 }
 
 #[derive(Serialize)]
@@ -112,8 +128,12 @@ pub fn router(state: AppState) -> Router {
                 .put(put_source)
                 .layer(DefaultBodyLimit::max(MAX_SOURCE_BODY)),
         )
-        .route("/__codemirror/*file", get(serve_dev_asset))
-        .route("/__docgen/editor.js", get(serve_dev_asset))
+        .route(
+            "/__docgen/preview",
+            post(post_preview).layer(DefaultBodyLimit::max(MAX_SOURCE_BODY)),
+        )
+        .route("/edit/*slug", get(serve_editor_page))
+        .route("/__docgen/editor-cm6.js", get(serve_dev_asset))
         .route("/__docgen/editor.css", get(serve_dev_asset))
         .route("/__docgen/livereload.js", get(serve_dev_asset))
         .fallback(serve_site)
@@ -195,11 +215,87 @@ async fn get_source(
         )
     })?;
     let disk_hash = sha256_hex(&source);
+    let head_source = docgen_diff::head_source(&state.docs_dir, &q.path).unwrap_or_default();
     Ok(Json(SourceResponse {
         path: q.path,
         source,
         disk_hash,
+        head_source,
     }))
+}
+
+/// Render markdown to HTML for the editor's live preview pane. No disk write —
+/// the body's `source` is rendered as-is through the same core pipeline the
+/// build uses. (The path is validated so only editable docs can be previewed.)
+async fn post_preview(
+    State(state): State<AppState>,
+    Json(req): Json<PreviewRequest>,
+) -> Result<Json<PreviewResponse>, (StatusCode, Json<ApiError>)> {
+    resolve_doc_path(&state.docs_dir, &req.path).map_err(guard_response)?;
+    let html = docgen_core::markdown::render_markdown(&req.source);
+    Ok(Json(PreviewResponse { html }))
+}
+
+/// Serve the dev-only full-page split editor at `/edit/<slug>`. The page is a
+/// thin shell: a mount element carrying the doc path/title + the vendored CM6
+/// editor bundle and its stylesheet. All data flows through the `source` /
+/// `preview` endpoints. 404s when the slug doesn't resolve to an editable doc.
+async fn serve_editor_page(
+    State(state): State<AppState>,
+    AxumPath(slug): AxumPath<String>,
+) -> Response {
+    let slug = slug.trim_matches('/');
+    let doc_path = format!("{slug}.md");
+    // Validate the target exists + stays under docs (same guard as the API).
+    let abs = match resolve_doc_path(&state.docs_dir, &doc_path) {
+        Ok(p) => p,
+        Err(_) => return not_found(),
+    };
+    // Title = the doc's first `# ` heading, else the slug's last segment.
+    let title = tokio::fs::read_to_string(&abs)
+        .await
+        .ok()
+        .and_then(|s| {
+            s.lines()
+                .find_map(|l| l.strip_prefix("# ").map(|t| t.trim().to_string()))
+        })
+        .unwrap_or_else(|| slug.rsplit('/').next().unwrap_or(slug).to_string());
+
+    let html = editor_page_html(slug, &doc_path, &title);
+    ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], html).into_response()
+}
+
+/// Build the editor page shell. Dev-only; never written by `docgen build`.
+fn editor_page_html(slug: &str, doc_path: &str, title: &str) -> String {
+    let esc = |s: &str| {
+        s.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+    };
+    let view_path = format!("/{slug}");
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Editing: {title} — docgen</title>
+<script>(function(){{try{{var s=localStorage.getItem('doc-theme');var t=s||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}}catch(e){{}}}})();</script>
+<link rel="stylesheet" href="/docgen.css" />
+<link rel="stylesheet" href="/code.css" />
+<link rel="stylesheet" href="/__docgen/editor.css" />
+</head>
+<body class="docgen-app">
+<div id="docgen-editor-app" data-doc-path="{doc_path}" data-view-path="{view_path}" data-title="{title}" data-base=""></div>
+<script src="/__docgen/editor-cm6.js"></script>
+</body>
+</html>
+"#,
+        title = esc(title),
+        doc_path = esc(doc_path),
+        view_path = esc(&view_path),
+    )
 }
 
 async fn put_source(

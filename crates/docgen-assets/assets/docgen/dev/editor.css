@@ -1,64 +1,348 @@
-/* Dev-only editor styling. Emitted ONLY by `docgen dev` (via dev_assets()), never
- * by `docgen build` — kept out of the production docgen.css so production stays
- * editor-free. Tokenized so the overlay looks right on both light and dark themed
- * pages (docgen.css, which defines the tokens, always loads first). Hard fallbacks
- * keep it usable even if a custom page template omits the token sheet. */
-[x-cloak] {
-  display: none !important;
+/* docgen-rs dev editor styles — standalone, served as /__docgen/editor.css.
+ *
+ * Ported faithfully from the original Svelte docgen editor components:
+ *   - DocEditorView.svelte    (shell, header, actions, workspace grid, panes)
+ *   - DocSourceEditor.svelte   (CodeMirror 6 host + autocomplete/wikilink popup)
+ *   - DocEditorPreview.svelte  (preview pane chrome)
+ *
+ * Svelte `:global(...)` wrappers stripped to bare inner selectors. The editor
+ * page is its own full-page shell (no `.docgen-` prefix). Theme-aware via the
+ * tokens defined at the top of docgen.css. Dev-only.
+ *
+ * Token substitutions: none — every referenced var exists in docgen-rs.
+ */
+
+/* ============================== DocEditorView ============================== */
+.doc-editor {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	min-width: 0;
+	height: calc(100vh - var(--topbar-height));
+	color: var(--text);
 }
 
-.docgen-edit-toggle {
-  position: fixed;
-  right: 1rem;
-  bottom: 1rem;
-  z-index: 1000;
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--border, #888);
-  border-radius: var(--r-md, 8px);
-  background: var(--bg-elev, #fff);
-  color: var(--text, #181712);
-  box-shadow: var(--shadow-md, 0 4px 16px rgba(0, 0, 0, 0.1));
-  cursor: pointer;
-  font: inherit;
-}
-.docgen-edit-toggle:hover {
-  border-color: var(--border-strong, #777);
+.editor-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 20px;
+	min-height: 82px;
+	padding: 14px 20px;
+	border-bottom: 1px solid var(--border);
+	background: var(--bg);
 }
 
-#docgen-editor {
-  position: fixed;
-  right: 1rem;
-  bottom: 4rem;
-  z-index: 1000;
-  width: min(42rem, 90vw);
-  max-height: 70vh;
-  overflow: auto;
-  padding: 0.75rem;
-  border: 1px solid var(--border-strong, #888);
-  border-radius: var(--r-lg, 12px);
-  background: var(--bg-elev, #fff);
-  color: var(--text, #181712);
-  box-shadow: var(--shadow-lg, 0 16px 48px rgba(0, 0, 0, 0.2));
+.eyebrow,
+.path,
+.editor-actions span {
+	margin: 0;
+	font-family: var(--font-mono);
+	font-size: 11px;
 }
 
-#docgen-editor .CodeMirror {
-  height: auto;
-  min-height: 20rem;
-  border: 1px solid var(--border, #ddd);
-  border-radius: var(--r-sm, 5px);
+.eyebrow {
+	color: var(--accent);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
 }
 
-.docgen-edit-save {
-  margin-top: 0.5rem;
-  padding: 0.4rem 0.9rem;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm, 6px);
-  background: var(--accent, #2d6cdf);
-  color: var(--bg-elev, #fff);
-  cursor: pointer;
-  font: inherit;
-  font-weight: 600;
+.doc-editor h1 {
+	margin: 2px 0;
+	font-size: 20px;
+	font-weight: 500;
+	line-height: 1.2;
 }
-.docgen-edit-save:hover {
-  filter: brightness(1.05);
+
+.path {
+	color: var(--text-mute);
+}
+
+.editor-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.editor-actions span {
+	color: var(--text-mute);
+	white-space: nowrap;
+}
+
+.editor-actions span.dirty {
+	color: var(--warn);
+}
+
+.editor-actions span.error {
+	color: var(--text-error);
+}
+
+.icon-text,
+.primary,
+.btn-strip a,
+.btn-strip button {
+	height: 32px;
+	padding: 0 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--r-md);
+	background: var(--surface);
+	color: var(--text);
+	text-decoration: none;
+}
+
+.icon-action {
+	position: relative;
+}
+
+.icon-action .tooltip {
+	position: absolute;
+	top: calc(100% + 6px);
+	right: 0;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 5px 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--r-sm);
+	background: var(--bg-elev);
+	color: var(--text);
+	font-size: 12px;
+	white-space: nowrap;
+	opacity: 0;
+	pointer-events: none;
+	transform: translateY(-2px);
+	transition:
+		opacity 80ms ease,
+		transform 80ms ease;
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+	z-index: 5;
+}
+
+.icon-action:hover:not(:disabled) .tooltip,
+.icon-action:focus-visible .tooltip {
+	opacity: 1;
+	transform: translateY(0);
+}
+
+.tooltip__kbd {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	color: var(--text-dim);
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	padding: 1px 5px;
+}
+
+.icon-text,
+.icon-only {
+	display: inline-flex;
+	align-items: center;
+}
+
+.is-primary,
+.primary {
+	background: var(--accent-soft);
+}
+
+.is-primary:disabled,
+.primary:disabled {
+	cursor: default;
+	opacity: 0.55;
+}
+
+.editor-error {
+	margin: 0 20px;
+	padding: 10px 12px;
+	border: 1px solid var(--text-error);
+	border-radius: var(--r-md);
+	color: var(--text-error);
+}
+
+.editor-workspace {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	min-height: 0;
+	flex: 1;
+}
+
+.pane {
+	min-width: 0;
+	min-height: 0;
+}
+
+.source-pane {
+	border-right: 1px solid var(--border);
+}
+
+.preview-pane {
+	overflow: auto;
+	background: var(--bg);
+}
+
+.loading {
+	padding: 20px;
+	color: var(--text-dim);
+}
+
+@media (max-width: 900px) {
+	.doc-editor {
+		height: auto;
+		min-height: calc(100vh - var(--topbar-height));
+	}
+
+	.editor-header {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.editor-workspace {
+		grid-template-columns: 1fr;
+	}
+
+	.source-pane {
+		height: 52vh;
+		border-right: 0;
+	}
+
+	.preview-pane {
+		min-height: 52vh;
+	}
+}
+
+/* ============================= DocSourceEditor ============================= */
+.source-editor {
+	height: 100%;
+	min-height: 0;
+	overflow: hidden;
+	background: var(--surface);
+}
+
+.source-editor .cm-editor {
+	height: 100%;
+}
+
+.source-editor .cm-tooltip.cm-tooltip-autocomplete {
+	border: 1px solid var(--border);
+	border-radius: var(--r-md);
+	background: var(--bg-elev);
+	color: var(--text);
+	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+	font-family: var(--font-mono);
+	font-size: 12px;
+}
+
+.source-editor .cm-tooltip-autocomplete ul {
+	max-height: 280px;
+	font-family: inherit;
+}
+
+.source-editor .cm-tooltip-autocomplete ul li {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 3px 8px;
+	line-height: 1.25;
+}
+
+.source-editor .cm-tooltip-autocomplete ul li[aria-selected] {
+	background: var(--accent-soft);
+	color: var(--text);
+}
+
+.source-editor .cm-tooltip-autocomplete .cm-completionLabel,
+.source-editor .cm-tooltip-autocomplete .cm-completionDetail,
+.source-editor .cm-tooltip-autocomplete .cm-completionIcon {
+	display: none;
+}
+
+.source-editor .cm-wikilink-suggestion {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	flex: 1;
+}
+
+.source-editor .cm-wikilink-suggestion__title {
+	color: var(--text);
+	font-size: 12.5px;
+	line-height: 1.2;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.source-editor .cm-wikilink-suggestion__path {
+	color: var(--text-mute);
+	font-size: 10.5px;
+	line-height: 1.15;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.source-editor .cm-wikilink-suggestion__match {
+	color: var(--accent);
+	font-weight: 600;
+}
+
+.source-editor .cm-tooltip-autocomplete .cm-completionInfo {
+	display: none;
+}
+
+/* ============================ DocEditorPreview ============================ */
+.doc-editor-preview {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+	min-width: 0;
+	padding: 28px 36px 64px;
+}
+
+.doc-header {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.doc-editor-preview .eyebrow {
+	margin: 0;
+	color: var(--accent);
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.doc-editor-preview h1,
+.doc-editor-preview p {
+	margin: 0;
+}
+
+.doc-editor-preview h1 {
+	color: var(--text);
+	font-size: 32px;
+	font-weight: 500;
+	line-height: 1.1;
+}
+
+.lede,
+.preview-muted {
+	color: var(--text-dim);
+}
+
+.preview-error {
+	padding: 12px 14px;
+	border: 1px solid var(--text-error);
+	border-radius: var(--r-md);
+	background: color-mix(in srgb, var(--text-error) 12%, transparent);
+	color: var(--text);
+}
+
+.preview-error pre {
+	margin: 8px 0 0;
+	white-space: pre-wrap;
+	color: var(--text-dim);
+	font-family: var(--font-mono);
+	font-size: 12px;
 }

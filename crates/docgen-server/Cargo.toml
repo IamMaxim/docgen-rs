@@ -22,6 +22,8 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 tempfile = "3"
 docgen-assets = { path = "../docgen-assets" }
 docgen-build = { path = "../docgen-build" }
+docgen-core = { path = "../docgen-core" }
+docgen-diff = { path = "../docgen-diff" }
 
 [dev-dependencies]
 http-body-util = "0.1"

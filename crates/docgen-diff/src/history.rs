@@ -182,6 +182,26 @@ pub fn doc_revisions(
     Ok(out)
 }
 
+/// The content of a doc at git HEAD, for the editor's merge-against-HEAD view.
+/// `docs_dir` is the absolute docs directory; `doc_rel_path` is docs-relative
+/// (e.g. `"guide/intro.md"`). Returns `None` outside a repo, for an untracked
+/// file, or on any read error — the editor then shows no merge gutter.
+pub fn head_source(docs_dir: &Path, doc_rel_path: &str) -> Option<String> {
+    let repo = Repository::discover(docs_dir).ok()?;
+    let workdir = repo.workdir()?.to_path_buf();
+    // Resolve the path as git sees it (repo-relative), tolerating the macOS
+    // /var vs /private/var symlink the same way `git_rel_path` does.
+    let abs = docs_dir.join(doc_rel_path).canonicalize().ok()?;
+    let work = workdir.canonicalize().ok()?;
+    let rel = abs.strip_prefix(&work).ok()?;
+    let rel_str = rel.to_str()?;
+    let tree = repo.head().ok()?.peel_to_tree().ok()?;
+    let entry = tree.get_path(Path::new(rel_str)).ok()?;
+    let object = entry.to_object(&repo).ok()?;
+    let blob = object.as_blob()?;
+    Some(String::from_utf8_lossy(blob.content()).into_owned())
+}
+
 /// One changed doc file within a single commit (the `new` side, plus its
 /// `old` content from the first parent). The global analogue of the per-file
 /// [`RevisionContent`].

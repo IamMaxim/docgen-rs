@@ -204,40 +204,21 @@ pub fn diff_assets() -> Vec<Asset> {
 
 /// DEV-ONLY assets, served by `docgen dev` ONLY. NEVER returned by [`assets_for`]
 /// and NEVER emitted by `docgen build`. Dist paths are namespaced under
-/// `__docgen/` and `__codemirror/` so they cannot collide with doc slugs.
+/// `__docgen/` so they cannot collide with doc slugs.
 ///
-/// Contents: the vendored CodeMirror 5 UMD (`codemirror.js` + css), its markdown
-/// mode and the `xml` mode + `overlay` addon that markdown mode depends on, the
-/// editor island JS + css, and the live-reload client. All loadable as plain
-/// `<script>`/`<link>` tags with no bundler/import resolution.
+/// Contents: the vendored CodeMirror 6 editor bundle (a self-contained esbuild
+/// IIFE — see `assets/editor-src/README.md`), its stylesheet, and the
+/// live-reload client. All loadable as plain `<script>`/`<link>` tags with no
+/// bundler/import resolution at load time.
 pub fn dev_assets() -> Vec<Asset> {
     vec![
+        // The vendored CodeMirror 6 editor bundle (esbuild IIFE of the editor
+        // app + CM6 packages). Powers the full-page /edit/<slug> split editor.
         embed(
-            "vendor/codemirror/codemirror.js",
-            "__codemirror/codemirror.js",
+            "docgen/dev/editor-cm6.js",
+            "__docgen/editor-cm6.js",
             AssetKind::Js,
         ),
-        embed(
-            "vendor/codemirror/codemirror.css",
-            "__codemirror/codemirror.css",
-            AssetKind::Css,
-        ),
-        embed(
-            "vendor/codemirror/markdown.js",
-            "__codemirror/markdown.js",
-            AssetKind::Js,
-        ),
-        embed(
-            "vendor/codemirror/xml.js",
-            "__codemirror/xml.js",
-            AssetKind::Js,
-        ),
-        embed(
-            "vendor/codemirror/overlay.js",
-            "__codemirror/overlay.js",
-            AssetKind::Js,
-        ),
-        embed("docgen/dev/editor.js", "__docgen/editor.js", AssetKind::Js),
         embed(
             "docgen/dev/editor.css",
             "__docgen/editor.css",
@@ -592,8 +573,8 @@ mod tests {
         )
         .unwrap();
         assert!(css.contains("var(--"), "dev editor css must use tokens");
-        // the production toggle/editor/save surfaces stay themed
-        for sel in [".docgen-edit-toggle", "#docgen-editor", ".docgen-edit-save"] {
+        // the split-editor + preview surfaces stay themed
+        for sel in [".doc-editor", ".editor-workspace", ".doc-editor-preview"] {
             assert!(css.contains(sel), "editor css missing {sel}");
         }
     }
@@ -758,15 +739,10 @@ mod tests {
     }
 
     #[test]
-    fn dev_assets_has_codemirror_and_editor_and_reload() {
+    fn dev_assets_has_editor_bundle_css_and_reload() {
         let paths: Vec<&str> = dev_assets().iter().map(|a| a.path).collect();
         for p in [
-            "__codemirror/codemirror.js",
-            "__codemirror/codemirror.css",
-            "__codemirror/markdown.js",
-            "__codemirror/xml.js",
-            "__codemirror/overlay.js",
-            "__docgen/editor.js",
+            "__docgen/editor-cm6.js",
             "__docgen/editor.css",
             "__docgen/livereload.js",
         ] {
@@ -778,33 +754,26 @@ mod tests {
     }
 
     #[test]
-    fn codemirror_is_umd_not_esm() {
-        // Locks the no-bundler invariant: CM5 is classic UMD, never bare-ESM.
-        let cm = dev_assets()
-            .into_iter()
-            .find(|a| a.path == "__codemirror/codemirror.js")
-            .expect("codemirror.js present");
-        let js = std::str::from_utf8(cm.bytes).unwrap();
-        for line in js.lines() {
-            assert!(
-                !line.trim_start().starts_with("import "),
-                "codemirror.js has a bare ESM import (needs a bundler): {line}"
-            );
-        }
-    }
-
-    #[test]
-    fn editor_island_registers_without_esm() {
+    fn editor_bundle_is_iife_not_bare_esm() {
+        // Locks the no-bundler invariant: the vendored CM6 editor is an esbuild
+        // IIFE — it must NOT contain top-level bare `import`/`export` statements
+        // (those would need an ESM resolver / bundler at load time).
         let ed = dev_assets()
             .into_iter()
-            .find(|a| a.path == "__docgen/editor.js")
-            .expect("editor.js present");
+            .find(|a| a.path == "__docgen/editor-cm6.js")
+            .expect("editor-cm6.js present");
         let js = std::str::from_utf8(ed.bytes).unwrap();
-        assert!(js.contains("docgen.island"));
-        assert!(js.contains("docgenEditor"));
+        for line in js.lines() {
+            let t = line.trim_start();
+            assert!(
+                !t.starts_with("import ") && !t.starts_with("export "),
+                "editor bundle has a bare ESM statement (needs a bundler): {line}"
+            );
+        }
+        // It is the real CM6 editor app talking to the dev endpoints.
+        assert!(js.contains("docgen-editor-app"));
         assert!(js.contains("/__docgen/source"));
-        assert!(js.contains("window.CodeMirror"));
-        assert!(!js.contains("import ")); // no ESM / npm
+        assert!(js.contains("/__docgen/preview"));
     }
 
     #[test]

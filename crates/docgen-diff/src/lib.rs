@@ -27,7 +27,7 @@ pub use file_tree::build_file_tree;
 pub use git_parsing::{parse_name_status, parse_untracked_docs, NameStatusEntry};
 pub use git_refs::{base_ref_for_commit_parents, base_ref_for_parents, EMPTY_TREE_REF};
 pub use history::{
-    discover_repo, doc_revisions, global_doc_revisions, CommitMeta, GlobalFileChange,
+    discover_repo, doc_revisions, global_doc_revisions, head_source, CommitMeta, GlobalFileChange,
     GlobalRevision, RevisionContent,
 };
 pub use line_diff::{build_line_hunks, build_line_hunks_default};

@@ -201,27 +201,21 @@ pub fn resolve_doc_path(docs_dir: &Path, rel: &str) -> Result<PathBuf, PathGuard
 /// registration lands before Alpine runs the registry. Injected ONLY by the dev
 /// server (`inject_dev_html`); never written to disk by `docgen build`.
 const DEV_HTML: &str = r#"
-<link rel="stylesheet" href="/__codemirror/codemirror.css" />
-<link rel="stylesheet" href="/__docgen/editor.css" />
 <script>(function(){
   var strip=document.querySelector('.docgen-btn-strip');
   if(!strip)return;
-  var b=document.createElement('button');
-  b.type='button';
-  b.className='icon-only docgen-ctl--edit';
-  b.setAttribute('data-docgen-edit','');
-  b.setAttribute('aria-label','Edit this page');
-  b.setAttribute('title','Edit this page (dev)');
-  b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+  // The full-page CM6 editor lives at /edit/<slug>; the pencil links to it.
+  var slug=location.pathname.replace(/^\/+|\/+$/g,'');
+  if(slug==='')slug='index';
+  var a=document.createElement('a');
+  a.className='icon-only docgen-ctl--edit';
+  a.setAttribute('href','/edit/'+slug);
+  a.setAttribute('aria-label','Edit this page');
+  a.setAttribute('title','Edit this page (dev)');
+  a.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
   var fw=strip.querySelector('.docgen-ctl--fullwidth');
-  if(fw)strip.insertBefore(b,fw);else strip.appendChild(b);
+  if(fw)strip.insertBefore(a,fw);else strip.appendChild(a);
 })();</script>
-<div id="docgen-editor" x-data="docgenEditor" x-cloak></div>
-<script src="/__codemirror/codemirror.js"></script>
-<script src="/__codemirror/xml.js"></script>
-<script src="/__codemirror/overlay.js"></script>
-<script src="/__codemirror/markdown.js"></script>
-<script src="/__docgen/editor.js"></script>
 <script src="/__docgen/livereload.js"></script>
 "#;
 
@@ -360,39 +354,24 @@ mod tests {
     #[test]
     fn inject_dev_html_inserts_before_body() {
         let out = inject_dev_html("<html><body><p>hi</p></body></html>");
-        // Reload client + editor island + CodeMirror are all injected.
-        for marker in [
-            "__docgen/livereload.js",
-            "docgenEditor",
-            "__codemirror/codemirror.js",
-            "__docgen/editor.js",
-            "data-docgen-edit",
-        ] {
+        // Reload client + the edit pencil (a link to the /edit/<slug> CM6 editor).
+        for marker in ["__docgen/livereload.js", "docgen-ctl--edit", "/edit/"] {
             assert!(out.contains(marker), "missing injected marker {marker}");
         }
         // Every injected marker precedes the closing body tag.
         let body = out.rfind("</body>").unwrap();
-        for marker in [
-            "__docgen/livereload.js",
-            "docgenEditor",
-            "__codemirror/codemirror.js",
-            "__docgen/editor.js",
-        ] {
+        for marker in ["__docgen/livereload.js", "docgen-ctl--edit"] {
             assert!(out.find(marker).unwrap() < body, "{marker} not before </body>");
         }
-        // CodeMirror loads in dependency order: core -> xml -> overlay -> markdown.
-        let core = out.find("__codemirror/codemirror.js").unwrap();
-        let xml = out.find("__codemirror/xml.js").unwrap();
-        let overlay = out.find("__codemirror/overlay.js").unwrap();
-        let markdown = out.find("__codemirror/markdown.js").unwrap();
-        assert!(core < xml && xml < overlay && overlay < markdown);
+        // The static build never contains the dev edit affordance.
+        assert!(!"<html><body></body></html>".contains("docgen-ctl--edit"));
     }
 
     #[test]
     fn inject_dev_html_no_body_appends() {
         let out = inject_dev_html("<p>no body tag here</p>");
         assert!(out.contains("__docgen/livereload.js"));
-        assert!(out.contains("docgenEditor"));
+        assert!(out.contains("docgen-ctl--edit"));
     }
 
     #[test]

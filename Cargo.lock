@@ -664,6 +664,8 @@ dependencies = [
  "axum",
  "docgen-assets",
  "docgen-build",
+ "docgen-core",
+ "docgen-diff",
  "futures",
  "http-body-util",
  "notify",
