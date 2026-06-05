@@ -7,9 +7,11 @@
 //! algorithms* (no git) and the *git-driven orchestrator*.
 
 pub mod error;
+pub mod git_parsing;
 pub mod git_refs;
 pub mod types;
 
 pub use error::DiffError;
+pub use git_parsing::{parse_name_status, parse_untracked_docs, NameStatusEntry};
 pub use git_refs::{base_ref_for_commit_parents, EMPTY_TREE_REF};
 pub use types::*;
