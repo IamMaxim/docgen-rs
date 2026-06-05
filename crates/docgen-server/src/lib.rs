@@ -132,10 +132,25 @@ pub fn resolve_doc_path(docs_dir: &Path, rel: &str) -> Result<PathBuf, PathGuard
     Ok(canonical)
 }
 
-/// The dev-only HTML injected before `</body>` of every served page. Cluster A
-/// injects the live-reload client; Cluster B extends this with the editor
-/// toggle/island + the vendored CodeMirror scripts/styles.
+/// The dev-only HTML injected before `</body>` of every served page: the editor
+/// css + toggle button + editor island element, the vendored CodeMirror UMD
+/// scripts (loaded in dependency order: core -> xml mode -> overlay addon ->
+/// markdown mode), the editor island JS, and the live-reload client.
+///
+/// These non-`defer` scripts execute at parse time — before the page's deferred
+/// Alpine script fires `alpine:init` — so `editor.js`'s `docgen.island(...)`
+/// registration lands before Alpine runs the registry. Injected ONLY by the dev
+/// server (`inject_dev_html`); never written to disk by `docgen build`.
 const DEV_HTML: &str = r#"
+<link rel="stylesheet" href="/__codemirror/codemirror.css" />
+<link rel="stylesheet" href="/__docgen/editor.css" />
+<button class="docgen-edit-toggle" data-docgen-edit>Edit</button>
+<div id="docgen-editor" x-data="docgenEditor" x-cloak></div>
+<script src="/__codemirror/codemirror.js"></script>
+<script src="/__codemirror/xml.js"></script>
+<script src="/__codemirror/overlay.js"></script>
+<script src="/__codemirror/markdown.js"></script>
+<script src="/__docgen/editor.js"></script>
 <script src="/__docgen/livereload.js"></script>
 "#;
 
@@ -270,16 +285,39 @@ mod tests {
     #[test]
     fn inject_dev_html_inserts_before_body() {
         let out = inject_dev_html("<html><body><p>hi</p></body></html>");
-        assert!(out.contains("__docgen/livereload.js"));
-        // Injected markers precede the closing body tag.
+        // Reload client + editor island + CodeMirror are all injected.
+        for marker in [
+            "__docgen/livereload.js",
+            "docgenEditor",
+            "__codemirror/codemirror.js",
+            "__docgen/editor.js",
+            "data-docgen-edit",
+        ] {
+            assert!(out.contains(marker), "missing injected marker {marker}");
+        }
+        // Every injected marker precedes the closing body tag.
         let body = out.rfind("</body>").unwrap();
-        assert!(out.find("__docgen/livereload.js").unwrap() < body);
+        for marker in [
+            "__docgen/livereload.js",
+            "docgenEditor",
+            "__codemirror/codemirror.js",
+            "__docgen/editor.js",
+        ] {
+            assert!(out.find(marker).unwrap() < body, "{marker} not before </body>");
+        }
+        // CodeMirror loads in dependency order: core -> xml -> overlay -> markdown.
+        let core = out.find("__codemirror/codemirror.js").unwrap();
+        let xml = out.find("__codemirror/xml.js").unwrap();
+        let overlay = out.find("__codemirror/overlay.js").unwrap();
+        let markdown = out.find("__codemirror/markdown.js").unwrap();
+        assert!(core < xml && xml < overlay && overlay < markdown);
     }
 
     #[test]
     fn inject_dev_html_no_body_appends() {
         let out = inject_dev_html("<p>no body tag here</p>");
         assert!(out.contains("__docgen/livereload.js"));
+        assert!(out.contains("docgenEditor"));
     }
 
     #[test]
