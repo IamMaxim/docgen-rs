@@ -22,6 +22,8 @@ pub struct Doc {
     pub body_html: String,
     /// Whether this doc contains math (drives the conditional KaTeX `<head>` link).
     pub has_math: bool,
+    /// Whether this doc contains a mermaid diagram (drives the lazy island load).
+    pub has_mermaid: bool,
 }
 
 /// A node in the sidebar tree.

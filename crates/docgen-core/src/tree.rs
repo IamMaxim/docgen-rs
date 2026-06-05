@@ -54,6 +54,7 @@ mod tests {
             title: title.into(),
             body_html: String::new(),
             has_math: false,
+            has_mermaid: false,
         }
     }
 
