@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }} — preview</title>
+  <script>(function(){try{
+  var s=localStorage.getItem('doc-theme');
+  var t=s||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');
+  document.documentElement.setAttribute('data-theme',t);
+}catch(e){}})();</script>
+  <link rel="stylesheet" href="{{ base | safe }}/docgen.css" />
+  <link rel="stylesheet" href="{{ base | safe }}/code.css" />
+  {% if has_components_css %}<link rel="stylesheet" href="{{ base | safe }}/components.css" />{% endif %}
+  {% if has_math %}<link rel="stylesheet" href="{{ base | safe }}/vendor/katex/katex.min.css" />{% endif %}
+  <style>
+    /* The preview is the published article content with no app chrome:
+       `.docgen-doc-content` already supplies the reading column + prose styles
+       from docgen.css; here we only add the outer padding the `.docgen-content`
+       main would normally provide. */
+    html, body { margin: 0; background: var(--bg); }
+    body.docgen-preview-body { padding: 32px 40px 80px; }
+  </style>
+</head>
+<body class="docgen-app docgen-preview-body">
+  <article class="docgen-doc-content">
+    {{ body | safe }}
+  </article>
+  <!-- island infra: same stack a published page runs, so mermaid diagrams,
+       custom components, and wikilink tooltips hydrate identically here. -->
+  <script>window.DOCGEN_BASE = {{ base | tojson | safe }};</script>
+  <script src="{{ base | safe }}/bootstrap.js"></script>
+  <script src="{{ base | safe }}/islands/wikilink.js"></script>
+  {% if has_mermaid %}<script src="{{ base | safe }}/islands/mermaid.js"></script>{% endif %}
+  {% if has_component_island %}<script src="{{ base | safe }}/components.js"></script>{% endif %}
+  <script src="{{ base | safe }}/vendor/alpine/alpine.min.js" defer></script>
+</body>
+</html>

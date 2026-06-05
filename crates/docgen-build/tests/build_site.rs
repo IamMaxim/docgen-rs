@@ -154,7 +154,8 @@ fn failed_build_preserves_last_good_out_dir() {
 }
 
 #[test]
-fn dev_and_production_modes_emit_identical_files() {
+fn dev_emits_no_dev_only_surface_only_the_mermaid_superset() {
+    // The fixture has NO mermaid diagram, so production omits the mermaid runtime.
     let root = tempfile::tempdir().unwrap();
     setup_fixture(root.path());
 
@@ -174,10 +175,28 @@ fn dev_and_production_modes_emit_identical_files() {
     })
     .unwrap();
 
-    // build_site itself is dev-asset-free: the emitted file SET is identical in
-    // both modes (gate 0.3 at the build level). The dev server adds dev assets
-    // AFTER build_site returns, never inside it.
-    assert_eq!(emitted_paths(prod_out.path()), emitted_paths(dev_out.path()));
+    let prod = emitted_paths(prod_out.path());
+    let dev = emitted_paths(dev_out.path());
+
+    // build_site emits NO dev-only surface (editor/livereload) in either mode —
+    // the dev server layers that on AFTER build_site returns. The ONLY difference
+    // is the mermaid runtime, which dev ships unconditionally so the editor
+    // preview can render a just-typed diagram (production gates it on usage).
+    let only_in_dev: std::collections::BTreeSet<_> = dev.difference(&prod).cloned().collect();
+    let only_in_prod: std::collections::BTreeSet<_> = prod.difference(&dev).cloned().collect();
+    assert!(only_in_prod.is_empty(), "production emitted files dev lacks: {only_in_prod:?}");
+    assert_eq!(
+        only_in_dev,
+        ["islands/mermaid.js", "vendor/mermaid/mermaid.min.js"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<std::collections::BTreeSet<_>>(),
+        "dev's only extra over production must be the mermaid runtime"
+    );
+    // No dev-only editor/livereload surface leaked into either on-disk build.
+    for p in dev.iter().chain(prod.iter()) {
+        assert!(!p.contains("__docgen") && !p.contains("editor") && !p.contains("livereload"));
+    }
 }
 
 #[test]

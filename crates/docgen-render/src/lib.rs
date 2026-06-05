@@ -31,6 +31,12 @@ pub const DEFAULT_GRAPH_TEMPLATE: &str = include_str!("../templates/graph.html")
 /// from the build-time `timeline.json` + `revisions/<id>.json` payloads.
 pub const DEFAULT_DIFF_TEMPLATE: &str = include_str!("../templates/diff.html");
 
+/// The dev editor's live-preview document template, embedded at compile time.
+/// Content-only (no app chrome): the rendered article wrapped in the SAME asset
+/// and island stack a published page uses, so a doc previewed in the editor
+/// renders identically to its built page (mermaid, components, tooltips, math).
+pub const DEFAULT_PREVIEW_TEMPLATE: &str = include_str!("../templates/preview.html");
+
 /// One diff line, render-friendly. `kind`/line numbers are pre-stringified by
 /// the caller so `docgen-render` stays free of the `docgen-diff` domain types.
 #[derive(Serialize)]
@@ -121,6 +127,25 @@ pub struct DiffContext<'a> {
     pub search_enabled: bool,
 }
 
+/// Everything the editor's live-preview document render needs. The body is the
+/// already-rendered inner HTML (run through the same per-doc pipeline as a build);
+/// the flags gate the same conditional asset links a published page uses.
+#[derive(Serialize)]
+pub struct PreviewContext<'a> {
+    pub title: &'a str,
+    pub body_html: &'a str,
+    /// Deployed base path (e.g. `/docs`); `""` for the dev server root (default).
+    pub base: &'a str,
+    /// Whether this doc contains a mermaid diagram (gates the mermaid island).
+    pub has_mermaid: bool,
+    /// Whether this doc contains math (gates the KaTeX stylesheet link).
+    pub has_math: bool,
+    /// Whether any component shipped a `style.css` (links `/components.css`).
+    pub has_components_css: bool,
+    /// Whether this doc used a component with an `island.js` (links `/components.js`).
+    pub has_component_island: bool,
+}
+
 /// Everything a single page render needs.
 #[derive(Serialize)]
 pub struct PageContext<'a> {
@@ -187,6 +212,7 @@ impl Renderer {
         env.add_template_owned("history.html", DEFAULT_HISTORY_TEMPLATE.to_string())?;
         env.add_template_owned("graph.html", DEFAULT_GRAPH_TEMPLATE.to_string())?;
         env.add_template_owned("diff.html", DEFAULT_DIFF_TEMPLATE.to_string())?;
+        env.add_template_owned("preview.html", DEFAULT_PREVIEW_TEMPLATE.to_string())?;
         Ok(Self { env })
     }
 
@@ -255,6 +281,20 @@ impl Renderer {
             base => ctx.base,
             site_title => ctx.site_title,
             search_enabled => ctx.search_enabled,
+        })
+    }
+
+    /// Render the editor's live-preview document (content-only, real asset stack).
+    pub fn render_preview(&self, ctx: &PreviewContext) -> Result<String, minijinja::Error> {
+        let tmpl = self.env.get_template("preview.html")?;
+        tmpl.render(context! {
+            title => ctx.title,
+            body => ctx.body_html,
+            base => ctx.base,
+            has_mermaid => ctx.has_mermaid,
+            has_math => ctx.has_math,
+            has_components_css => ctx.has_components_css,
+            has_component_island => ctx.has_component_island,
         })
     }
 
@@ -905,6 +945,81 @@ mod tests {
         assert!(SEARCH_JS.contains("search-index.json"));
         assert!(SEARCH_JS.contains("metaKey"));
         assert!(!SEARCH_JS.contains("import ")); // no module imports / npm
+    }
+
+    // ---- editor live-preview document ----
+
+    #[test]
+    fn preview_is_content_only_with_real_asset_stack() {
+        let r = renderer();
+        let html = r
+            .render_preview(&PreviewContext {
+                title: "Intro",
+                body_html: r#"<h1>Intro</h1><p>See <a class="docgen-wikilink" href="/guide">g</a></p>"#,
+                base: "",
+                has_mermaid: false,
+                has_math: false,
+                has_components_css: false,
+                has_component_island: false,
+            })
+            .unwrap();
+        // The article content is emitted raw inside the published prose wrapper.
+        assert!(html.contains(r#"<article class="docgen-doc-content">"#));
+        assert!(html.contains(r#"href="/guide""#));
+        // Same content + island stack a built page uses — so islands hydrate.
+        assert!(html.contains(r#"href="/docgen.css""#));
+        assert!(html.contains(r#"href="/code.css""#));
+        assert!(html.contains(r#"src="/bootstrap.js""#));
+        assert!(html.contains(r#"src="/islands/wikilink.js""#));
+        assert!(html.contains(r#"src="/vendor/alpine/alpine.min.js""#));
+        // No app chrome: this is a preview pane, not a full page.
+        assert!(!html.contains("docgen-topbar"));
+        assert!(!html.contains("docgen-sidebar"));
+        assert!(!html.contains("docgen-rail"));
+        // Conditional assets gated off.
+        assert!(!html.contains("islands/mermaid.js"));
+        assert!(!html.contains("components.css"));
+        assert!(!html.contains("katex.min.css"));
+    }
+
+    #[test]
+    fn preview_gates_mermaid_math_and_component_assets() {
+        let r = renderer();
+        let html = r
+            .render_preview(&PreviewContext {
+                title: "D",
+                body_html: r#"<div class="docgen-mermaid"></div>"#,
+                base: "",
+                has_mermaid: true,
+                has_math: true,
+                has_components_css: true,
+                has_component_island: true,
+            })
+            .unwrap();
+        assert!(html.contains(r#"src="/islands/mermaid.js""#));
+        assert!(html.contains(r#"href="/vendor/katex/katex.min.css""#));
+        assert!(html.contains(r#"href="/components.css""#));
+        assert!(html.contains(r#"src="/components.js""#));
+    }
+
+    #[test]
+    fn preview_prefixes_base() {
+        let r = renderer();
+        let html = r
+            .render_preview(&PreviewContext {
+                title: "X",
+                body_html: "<p>x</p>",
+                base: "/docs",
+                has_mermaid: true,
+                has_math: false,
+                has_components_css: false,
+                has_component_island: false,
+            })
+            .unwrap();
+        assert!(html.contains(r#"href="/docs/docgen.css""#));
+        assert!(html.contains(r#"src="/docs/bootstrap.js""#));
+        assert!(html.contains(r#"src="/docs/islands/mermaid.js""#));
+        assert!(!html.contains(r#"href="/docgen.css""#));
     }
 
     fn sample_buckets() -> Vec<TimelineBucketView> {

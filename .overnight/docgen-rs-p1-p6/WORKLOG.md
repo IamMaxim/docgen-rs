@@ -267,3 +267,66 @@ full-page split editor at `/edit/<slug>`:
 
 ALL THREE user-flagged regressions resolved: popups (47b4815), diff (741f2b7),
 editor (f93eff7). Branch HEAD = f93eff7. Local-only, not pushed.
+
+## 2026-06-05 23:09 MSK — Editor preview unification ("same roof") — STARTED
+User: implement the two flagged deviations AND fix preview regressions —
+mermaid/components/wikilinks unrendered, frontmatter rendered wrong, "View"
+button broken style. GOAL (verbatim): "bring preview and usual page rendering
+under the same roof."
+
+Root cause (mapped via Explore + reading pipeline.rs/handlers.rs): post_preview
+called bare `docgen_core::markdown::render_markdown` (comrak only) — NO
+frontmatter strip, NO wikilink resolve, NO directive/component substitution, NO
+math, NO mermaid. The build runs a rich per-doc pipeline (pipeline.rs:137-194).
+
+Decision — reuse the EXACT build pipeline + the EXACT published asset stack:
+  M1 docgen-core: factor pipeline.rs loop body -> pub render_doc(); render_docs
+     calls it (the literal shared roof for transforms).
+  M2 docgen-render: content-only preview.html + render_preview() emitting the
+     same docgen.css/code.css/components.css/katex + bootstrap/wikilink/mermaid/
+     components/alpine island stack a built page uses, wrapping
+     <article class="docgen-doc-content">{body}</article> (no topbar/sidebar/rail).
+  M3 docgen-server: post_preview reconstructs slug set (discover_docs), config +
+     registry (mirror docgen-build), prepare(live source) -> render_doc ->
+     render_preview -> full content-only document.
+  M4 docgen-build: include_mermaid in Dev so a newly-added diagram renders in
+     preview before first save (production gating unchanged).
+  M5 editor JS: render preview into an <iframe srcdoc> (perfect island/asset
+     hydration, real published rendering) preserving scroll across swaps; fix the
+     class-less "View" <a> (gets .btn-strip height but no flex centering). Re-bundle.
+Rationale for iframe over innerHTML+manual-hydrate: islands self-init via Alpine's
+in-document observer + per-island bootstrap; an iframe runs the real stack so
+mermaid/components/wikilink-tooltips hydrate identically with zero re-init plumbing.
+Known narrow edge (documented): a brand-new island-only component on a site that
+used none won't have its island.js until first save+rebuild (component CSS always
+ships, so styling is always correct; mermaid forced in dev covers the diagram case).
+
+## 2026-06-05 23:40 MSK — Preview unification GREEN + Chrome-verified
+M1 docgen-core: `render_doc()` + `RenderedDoc` factored out; `render_docs` now
+   calls it (single source of truth). Test: render_doc == render_docs per doc.
+M2 docgen-render: `preview.html` (content-only) + `PreviewContext`/`render_preview`
+   emitting the real docgen.css/code.css/components.css/katex + bootstrap/wikilink/
+   mermaid/components/alpine stack. 3 tests.
+M3 docgen-server: post_preview → `render_preview_document()` (spawn_blocking):
+   discover_docs→slug set, docgen_config::load, build_registry (mirrors build),
+   prepare(live source)→render_doc→render_preview. Added config/components/render deps.
+M4 docgen-build: include_mermaid |= mode==Dev (newly-typed diagram renders pre-save).
+   Updated the dev/prod parity test to assert dev = prod + mermaid runtime only.
+M5 editor entry JS: preview now an <iframe srcdoc> (scroll-preserving onload),
+   error path renders a styled mini-doc; re-bundled via esbuild (625KB). editor.css:
+   .btn-strip a/button now inline-flex centered (fixes the "View" broken style) +
+   .doc-preview-frame fills the pane.
+
+GATE: cargo test --workspace → all green; clippy --all-targets → clean.
+CHROME (localhost:4399 /edit/guide/intro, rich demo w/ frontmatter+wikilink+
+callout+mermaid+math): iframe renders — wikilink href=/index, callout bold inner
+md, MERMAID flowchart-v2 SVG hydrated, KaTeX rendered, docgen-code highlight,
+NO topbar (content-only), frontmatter NOT leaked, Alpine running in-iframe. Live
+edit: typed marker appears in preview, mermaid RE-hydrates after 2nd srcdoc swap.
+View button: inline-flex, 32px, bordered, no underline — fixed.
+
+RESOLVED this session: mermaid+components+wikilinks unrendered, frontmatter wrong,
+View button broken — all fixed by routing preview through the build pipeline +
+real asset stack. Deviation "wikilinks unresolved in preview" → CLOSED.
+STILL OPEN (separate, larger): editor multi-theme switcher / settings menu
+(original's 8 CM themes) — editor chrome only, independent of preview; not started.

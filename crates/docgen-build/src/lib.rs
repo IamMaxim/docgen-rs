@@ -109,14 +109,13 @@ pub fn build(project_root: &Path) -> Result<BuildOutcome> {
 /// (a sibling temp dir) and only swapped into `out_dir` on full success. A
 /// failure anywhere in the pipeline therefore leaves any pre-existing `out_dir`
 /// untouched — so the dev server genuinely keeps serving the last good build
-/// (the swap is the only step that mutates `out_dir`). Emits ONLY production
-/// assets regardless of `opts.mode`.
+/// (the swap is the only step that mutates `out_dir`). Emits NO dev-only surface
+/// (editor/livereload) in either mode — the dev server layers that on afterward.
+/// The one mode-dependent emission is the mermaid runtime: Dev ships it
+/// unconditionally so the editor preview can render a just-typed diagram.
 pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
     let docs_dir = opts.project_root.join("docs");
     let final_dir = opts.out_dir;
-
-    // The mode is recorded for logging/parity; the pipeline is mode-independent.
-    let _ = opts.mode;
 
     let raws = discover_docs(&docs_dir)
         .with_context(|| format!("reading docs from {}", docs_dir.display()))?;
@@ -351,7 +350,13 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
     // only when the /graph/ page is emitted.
     let emit_opts = docgen_assets::EmitOptions {
         include_katex_runtime: false,
-        include_mermaid: site.any_mermaid,
+        // Production gates the mermaid lib + island on actual usage. In Dev we
+        // ship them unconditionally so the editor's live preview can render a
+        // diagram the moment it's typed — before the first save+rebuild that would
+        // flip `any_mermaid`. These are production assets (no dev-only surface), so
+        // shipping a superset in dev keeps the build's "no dev assets on disk in a
+        // static build" invariant (editor/livereload) untouched.
+        include_mermaid: site.any_mermaid || opts.mode == BuildMode::Dev,
         include_graph: config.features.graph,
         include_diff: has_diff,
         // Component bundles are written separately (B-8) via emit_component_bundle;

@@ -116,6 +116,94 @@ pub fn render_block_markdown(
     out
 }
 
+/// A single rendered doc plus the by-products the site assembly needs: its
+/// search plaintext and the slugs it links out to (for the link graph). Returned
+/// by [`render_doc`] so both the whole-site build and the editor live-preview run
+/// the *same* per-doc pipeline rather than two drifting copies.
+pub struct RenderedDoc {
+    pub doc: Doc,
+    /// Plaintext extracted from the pristine AST (no markup), for the search index.
+    pub search_text: String,
+    /// Resolved outbound wikilink target slugs, in document order (for the graph).
+    pub resolved_links: Vec<String>,
+}
+
+/// Render ONE prepared doc to its final inner HTML, running the full per-doc
+/// pipeline: directive pre-pass → parse → search plaintext → headings → wikilink
+/// resolve → math → mermaid → format → heading-id stamp → directive substitute.
+///
+/// `slugs` is the *whole site's* slug set so `[[wikilinks]]` resolve against every
+/// doc, not just this one — the caller must build it from all docs. This is the
+/// single source of truth the static build ([`render_docs`]) and the dev server's
+/// editor preview both call, so a doc previewed in the editor renders byte-for-byte
+/// like its published page.
+pub fn render_doc(
+    p: &PreparedDoc,
+    config: &docgen_config::SiteConfig,
+    registry: &docgen_components::Registry,
+    slugs: &SlugSet,
+) -> RenderedDoc {
+    let options = comrak_options();
+
+    // Directive pre-pass: rewrite the raw body, replacing each `:::`/`:leaf`
+    // directive with an HTML-comment sentinel that survives comrak verbatim.
+    let (rewritten, instances) = crate::directivepass::extract(&p.body_md);
+
+    // Parse the (directive-free) body once. Extract search plaintext from the
+    // pristine AST *before* the wikilink pass rewrites `[[...]]` Text nodes.
+    let arena = Arena::new();
+    let root = parse_document(&arena, &rewritten, &options);
+
+    let search_text = plaintext(root);
+
+    // Heading outline for the right-rail TOC. Collected from the pristine
+    // AST (after parse, before formatting) so the anchorized ids match what
+    // `stamp_heading_ids` writes onto the rendered tags below.
+    let headings = crate::headings::collect_headings(root);
+
+    // Wikilink AST pass (mutates `root`) + highlighted HTML.
+    let pass = transform_wikilinks(root, &arena, slugs, &config.base);
+    let resolved_links = pass.resolved;
+    // Build-time math: replace math nodes with KaTeX HTML before formatting.
+    let math_count = if config.features.math {
+        crate::mathpass::transform_math(root)
+    } else {
+        0
+    };
+    // Mermaid: replace ```mermaid fences with island containers before formatting.
+    let mermaid_count = if config.features.mermaid {
+        crate::mermaidpass::transform_mermaid(root)
+    } else {
+        0
+    };
+    let formatted = format_ast(root, &options);
+    // Stamp the anchorized ids onto the `<h2>`/`<h3>` tags so the rail TOC +
+    // scroll-spy can target them via `h2[id]` / `h3[id]`.
+    let formatted = crate::headings::stamp_heading_ids(&formatted, &headings);
+
+    // Directive post-pass: substitute each sentinel with the component's
+    // rendered HTML; block inner content is rendered by the full recursive
+    // pipeline. `used` drives per-page island/style gating.
+    let render_inner = |m: &str| render_block_markdown(m, config, registry, slugs);
+    let (body_html, used) =
+        crate::directivepass::substitute(&formatted, &instances, registry, &render_inner);
+
+    RenderedDoc {
+        doc: Doc {
+            rel_path: p.rel_path.clone(),
+            slug: p.slug.clone(),
+            title: p.title.clone(),
+            body_html,
+            has_math: math_count > 0,
+            has_mermaid: mermaid_count > 0,
+            components_used: used,
+            headings,
+        },
+        search_text,
+        resolved_links,
+    }
+}
+
 /// Pass 2: build the slug set, run the wikilink pass + syntect highlight per doc,
 /// assemble the link graph + search index. Input order preserved.
 pub fn render_docs(
@@ -128,70 +216,21 @@ pub fn render_docs(
         .iter()
         .map(|p| (p.slug.clone(), p.title.clone(), p.description.clone()))
         .collect();
-    let options = comrak_options();
 
     let mut docs = Vec::with_capacity(prepared.len());
     let mut outbound: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut search = Vec::with_capacity(prepared.len());
 
     for p in &prepared {
-        // Directive pre-pass: rewrite the raw body, replacing each `:::`/`:leaf`
-        // directive with an HTML-comment sentinel that survives comrak verbatim.
-        let (rewritten, instances) = crate::directivepass::extract(&p.body_md);
-
-        // Parse the (directive-free) body once. Extract search plaintext from the
-        // pristine AST *before* the wikilink pass rewrites `[[...]]` Text nodes.
-        let arena = Arena::new();
-        let root = parse_document(&arena, &rewritten, &options);
-
+        // Same per-doc pipeline the editor preview runs (single source of truth).
+        let rendered = render_doc(p, config, registry, &slugs);
         search.push(SearchEntry {
             slug: p.slug.clone(),
             title: p.title.clone(),
-            text: plaintext(root),
+            text: rendered.search_text,
         });
-
-        // Heading outline for the right-rail TOC. Collected from the pristine
-        // AST (after parse, before formatting) so the anchorized ids match what
-        // `stamp_heading_ids` writes onto the rendered tags below.
-        let headings = crate::headings::collect_headings(root);
-
-        // Wikilink AST pass (mutates `root`) + highlighted HTML.
-        let pass = transform_wikilinks(root, &arena, &slugs, &config.base);
-        outbound.insert(p.slug.clone(), pass.resolved);
-        // Build-time math: replace math nodes with KaTeX HTML before formatting.
-        let math_count = if config.features.math {
-            crate::mathpass::transform_math(root)
-        } else {
-            0
-        };
-        // Mermaid: replace ```mermaid fences with island containers before formatting.
-        let mermaid_count = if config.features.mermaid {
-            crate::mermaidpass::transform_mermaid(root)
-        } else {
-            0
-        };
-        let formatted = format_ast(root, &options);
-        // Stamp the anchorized ids onto the `<h2>`/`<h3>` tags so the rail TOC +
-        // scroll-spy can target them via `h2[id]` / `h3[id]`.
-        let formatted = crate::headings::stamp_heading_ids(&formatted, &headings);
-
-        // Directive post-pass: substitute each sentinel with the component's
-        // rendered HTML; block inner content is rendered by the full recursive
-        // pipeline. `used` drives per-page island/style gating.
-        let render_inner = |m: &str| render_block_markdown(m, config, registry, &slugs);
-        let (body_html, used) =
-            crate::directivepass::substitute(&formatted, &instances, registry, &render_inner);
-
-        docs.push(Doc {
-            rel_path: p.rel_path.clone(),
-            slug: p.slug.clone(),
-            title: p.title.clone(),
-            body_html,
-            has_math: math_count > 0,
-            has_mermaid: mermaid_count > 0,
-            components_used: used,
-            headings,
-        });
+        outbound.insert(p.slug.clone(), rendered.resolved_links);
+        docs.push(rendered.doc);
     }
 
     let graph = build_link_graph(&doc_meta, &outbound);
@@ -216,6 +255,31 @@ mod tests {
         assert_eq!(p.title, "Intro");
         assert!(p.body_md.contains("[[index]]"));
         assert!(!p.body_md.contains("title:")); // frontmatter stripped
+    }
+
+    #[test]
+    fn render_doc_matches_render_docs_for_one_doc() {
+        // The preview path (render_doc) and the build path (render_docs) must run
+        // the identical per-doc pipeline: same body_html, search text, and links.
+        let prepared = vec![
+            prepare(raw("index.md", "# Home\nGo to [[guide/intro]].\n")),
+            prepare(raw("guide/intro.md", "# Intro\n```rust\nfn x(){}\n```\nBack to [[index]] and [[ghost]].\n")),
+        ];
+        let slugs: SlugSet = prepared.iter().map(|p| p.slug.clone()).collect();
+        let cfg = docgen_config::SiteConfig::default();
+        let reg = docgen_components::Registry::empty();
+
+        let site = render_docs(prepared.clone(), &cfg, &reg);
+        let single = render_doc(&prepared[1], &cfg, &reg, &slugs);
+
+        assert_eq!(single.doc.body_html, site.docs[1].body_html);
+        assert_eq!(single.doc.has_mermaid, site.docs[1].has_mermaid);
+        assert_eq!(single.doc.has_math, site.docs[1].has_math);
+        assert_eq!(single.doc.headings, site.docs[1].headings);
+        assert_eq!(single.search_text, site.search[1].text);
+        // Resolved outbound links match what the graph was built from (ghost dropped).
+        assert!(single.resolved_links.contains(&"index".to_string()));
+        assert!(!single.resolved_links.contains(&"ghost".to_string()));
     }
 
     #[test]

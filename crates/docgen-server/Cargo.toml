@@ -24,6 +24,9 @@ docgen-assets = { path = "../docgen-assets" }
 docgen-build = { path = "../docgen-build" }
 docgen-core = { path = "../docgen-core" }
 docgen-diff = { path = "../docgen-diff" }
+docgen-config = { path = "../docgen-config" }
+docgen-components = { path = "../docgen-components" }
+docgen-render = { path = "../docgen-render" }
 
 [dev-dependencies]
 http-body-util = "0.1"

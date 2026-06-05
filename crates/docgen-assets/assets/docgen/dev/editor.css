@@ -81,13 +81,27 @@
 .primary,
 .btn-strip a,
 .btn-strip button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
 	height: 32px;
 	padding: 0 12px;
 	border: 1px solid var(--border);
 	border-radius: var(--r-md);
 	background: var(--surface);
 	color: var(--text);
+	font: inherit;
+	font-size: 13px;
+	line-height: 1;
+	white-space: nowrap;
+	cursor: pointer;
 	text-decoration: none;
+}
+
+.btn-strip a:hover,
+.btn-strip button:not(:disabled):hover {
+	border-color: var(--border-strong, var(--accent));
 }
 
 .icon-action {
@@ -176,7 +190,17 @@
 }
 
 .preview-pane {
-	overflow: auto;
+	/* Hosts the live-preview <iframe>, which renders the article through the real
+	   published pipeline (same CSS + island stack) and scrolls internally. */
+	overflow: hidden;
+	background: var(--bg);
+}
+
+.doc-preview-frame {
+	display: block;
+	width: 100%;
+	height: 100%;
+	border: 0;
 	background: var(--bg);
 }
 

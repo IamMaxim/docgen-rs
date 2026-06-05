@@ -224,16 +224,115 @@ async fn get_source(
     }))
 }
 
-/// Render markdown to HTML for the editor's live preview pane. No disk write —
-/// the body's `source` is rendered as-is through the same core pipeline the
-/// build uses. (The path is validated so only editable docs can be previewed.)
+/// Render the editor's live preview through the EXACT pipeline `docgen build`
+/// runs for a published page — not a bare markdown render. The live `source` is
+/// prepared (frontmatter stripped, title derived), rendered against the whole
+/// site's slug set (so `[[wikilinks]]` resolve), with directives/components,
+/// math, and mermaid all expanded, then wrapped in a content-only document that
+/// loads the same CSS + island stack a built page uses. The result is fed into an
+/// `<iframe srcdoc>` in the editor, so the preview hydrates identically to the
+/// real page. No disk write. (Path validated so only editable docs preview.)
 async fn post_preview(
     State(state): State<AppState>,
     Json(req): Json<PreviewRequest>,
 ) -> Result<Json<PreviewResponse>, (StatusCode, Json<ApiError>)> {
     resolve_doc_path(&state.docs_dir, &req.path).map_err(guard_response)?;
-    let html = docgen_core::markdown::render_markdown(&req.source);
-    Ok(Json(PreviewResponse { html }))
+
+    // The render is CPU/disk-bound (reads every doc for the slug set, runs comrak +
+    // syntect): run it off the async worker, mirroring the save-rebuild handler.
+    let result = tokio::task::spawn_blocking(move || {
+        render_preview_document(&state.project_root, &state.docs_dir, &req.path, &req.source)
+    })
+    .await;
+
+    match result {
+        Ok(Ok(html)) => Ok(Json(PreviewResponse { html })),
+        Ok(Err(e)) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiError {
+                error: format!("preview render failed: {e:#}"),
+            }),
+        )),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiError {
+                error: format!("preview task panicked: {e}"),
+            }),
+        )),
+    }
+}
+
+/// Synchronously render one doc's live `source` to the content-only preview
+/// document, reconstructing the build-time inputs at serve time: the whole-site
+/// slug set (from `docs/`), the loaded `docgen.toml`, and the component registry.
+/// `doc_rel_path` is the docs-relative path of the doc being edited (e.g.
+/// `guide/intro.md`); it drives the previewed doc's slug + title.
+fn render_preview_document(
+    project_root: &Path,
+    docs_dir: &Path,
+    doc_rel_path: &str,
+    source: &str,
+) -> anyhow::Result<String> {
+    use docgen_core::discover::discover_docs;
+    use docgen_core::model::RawDoc;
+    use docgen_core::pipeline::{prepare, render_doc};
+    use docgen_core::wikilink::SlugSet;
+
+    // Whole-site slug set so `[[wikilinks]]` in the edited doc resolve against
+    // every other doc, exactly as the build does. Built from the on-disk docs;
+    // the edited doc's own slug is already among them (same file path).
+    let raws = discover_docs(docs_dir)?;
+    let slugs: SlugSet = raws.iter().map(|r| prepare(r.clone()).slug).collect();
+
+    // Same config + component registry the build assembles (built-ins overridden
+    // by the project `components/` dir). Mirrors `docgen-build::build_site`.
+    let config = docgen_config::load(project_root)?;
+    let builtins: Vec<docgen_components::Component> = docgen_assets::builtin_components()
+        .into_iter()
+        .map(|b| {
+            docgen_components::Component::from_parts(
+                b.name,
+                b.template,
+                b.island_js.map(str::to_string),
+                b.style_css.map(str::to_string),
+            )
+        })
+        .collect();
+    let components_dir = project_root.join(&config.components.dir);
+    let registry = docgen_components::build_registry(builtins, &components_dir)?;
+
+    // Render the LIVE buffer (not the on-disk file) through the shared per-doc
+    // pipeline — this is the "same roof" as the build.
+    let prepared = prepare(RawDoc {
+        rel_path: doc_rel_path.to_string(),
+        raw: source.to_string(),
+    });
+    let rendered = render_doc(&prepared, &config, &registry, &slugs);
+
+    // Per-page asset gating, mirroring the build's page render.
+    let has_components_css = !registry.styles().is_empty();
+    let island_components: std::collections::BTreeSet<String> = registry
+        .islands()
+        .iter()
+        .filter_map(|c| c.island_js.as_ref().map(|_| c.name.clone()))
+        .collect();
+    let has_component_island = rendered
+        .doc
+        .components_used
+        .iter()
+        .any(|c| island_components.contains(c));
+
+    let renderer = docgen_render::Renderer::new(docgen_render::DEFAULT_PAGE_TEMPLATE)?;
+    let html = renderer.render_preview(&docgen_render::PreviewContext {
+        title: &prepared.title,
+        body_html: &rendered.doc.body_html,
+        base: &config.base,
+        has_mermaid: rendered.doc.has_mermaid,
+        has_math: rendered.doc.has_math,
+        has_components_css,
+        has_component_island,
+    })?;
+    Ok(html)
 }
 
 /// Serve the dev-only full-page split editor at `/edit/<slug>`. The page is a

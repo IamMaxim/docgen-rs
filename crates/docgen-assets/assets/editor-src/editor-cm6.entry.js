@@ -678,19 +678,14 @@ function mountEditor(root) {
   const sourceHost = el("div", { class: "source-editor" });
   const sourcePane = el("div", { class: "pane source-pane" }, [sourceHost]);
 
-  const previewContent = el("section", { class: "doc-content" }, [
-    el("p", { class: "preview-muted", text: "Preparing preview..." }),
-  ]);
-  const previewArticle = el("article", { class: "doc-editor-preview" }, [
-    el("header", { class: "doc-header" }, [
-      el("p", { class: "eyebrow", text: "Preview" }),
-      el("h1", { text: title }),
-    ]),
-    previewContent,
-  ]);
-  const previewPane = el("div", { class: "pane preview-pane" }, [
-    previewArticle,
-  ]);
+  // The preview is rendered server-side through the SAME pipeline as a published
+  // page and shown in an <iframe>, so mermaid diagrams, custom components, and
+  // wikilink tooltips hydrate with the real island stack — identical to the
+  // built site. (innerHTML injection can't re-run the per-island bootstrap.)
+  const previewFrame = el("iframe", { class: "doc-preview-frame", title: "Preview" });
+  previewFrame.srcdoc =
+    '<!DOCTYPE html><html><body style="margin:0;padding:28px;font:13px system-ui;color:#888;background:#111">Preparing preview…</body></html>';
+  const previewPane = el("div", { class: "pane preview-pane" }, [previewFrame]);
 
   const workspace = el("section", { class: "editor-workspace" }, [
     sourcePane,
@@ -724,19 +719,33 @@ function mountEditor(root) {
   }
 
   function setPreviewHtml(html) {
-    previewContent.innerHTML = html; // trusted server output
+    // Preserve the reader's scroll position across the srcdoc swap (the iframe is
+    // same-origin, so we can read/restore its scroll) — otherwise every debounced
+    // re-render would jump a long doc back to the top.
+    let prevScroll = 0;
+    try {
+      prevScroll = previewFrame.contentWindow ? previewFrame.contentWindow.scrollY : 0;
+    } catch {
+      /* cross-origin guard; ignore */
+    }
+    previewFrame.onload = () => {
+      try {
+        previewFrame.contentWindow.scrollTo(0, prevScroll);
+      } catch {
+        /* ignore */
+      }
+    };
+    previewFrame.srcdoc = html; // trusted server output (full content-only document)
   }
 
   function setPreviewError(message) {
-    previewContent.textContent = "";
-    const errSection = el("section", {
-      class: "preview-error",
-      "aria-live": "polite",
-    }, [
-      el("strong", { text: "Preview failed" }),
-      el("pre", { text: message }),
-    ]);
-    previewContent.appendChild(errSection);
+    previewFrame.onload = null;
+    const esc = (s) =>
+      String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    previewFrame.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="${base}/docgen.css"></head><body class="docgen-app" style="margin:0;padding:24px"><section class="preview-error" aria-live="polite"><strong>Preview failed</strong><pre>${esc(message)}</pre></section></body></html>`;
   }
 
   // --- Editor construction ----------------------------------------------
