@@ -24,7 +24,7 @@ no push/PR/remote; quarantine irreversible decisions behind a seam and flag them
 
 | # | Milestone | Depends on | Status | Commit |
 |---|-----------|-----------|--------|--------|
-| P1 | Search (JSON index + client search island) + `syntect` highlight + wikilinks→links + backlinks | P0 | TODO | — |
+| P1 | Search (JSON index + client search island) + `syntect` highlight + wikilinks→links + backlinks | P0 | GREEN | 9b02dd5 |
 | P2 | Git diff timeline (`git2` + port of diff algorithms) | P0 | TODO | — |
 | P3 | Build-time KaTeX + Mermaid + **`docgen-assets`** crate (Alpine + island embedding infra) | P1 | TODO | — |
 | P4 | Graph view (Rust precomputes nodes/edges; JS renders SVG/canvas island) | P1, P3 | TODO | — |
@@ -42,4 +42,11 @@ Status legend: TODO / IN-PROGRESS / GREEN / BLOCKED.
 - Interactive phases to validate live in Chrome: P3 (mermaid/katex render), P4 (graph), P5 (editor + live reload).
 
 ## Current position
-Phase 0 complete (branch + state). Next: launch P1 workflow.
+P1 GREEN (9b02dd5), validated live in Chrome (search modal, wikilinks, backlinks, highlighting). Next: launch P2 (git diff timeline).
+
+**P1 API surface now in place** (later phases depend on these):
+- `docgen-core`: `pipeline::{prepare, render_docs, PreparedDoc, SiteBuild{docs,graph,search}}` (two-pass render), `graph::{LinkGraph{edges,backlinks}, build_link_graph}`, `model::{LinkEdge, Backlink, SearchEntry}`, `wikilink::{parse_wikilink, resolve_target, transform_wikilinks}`, `markdown::{comrak_options, format_ast, syntect_adapter (OnceLock), SYNTECT_THEME}`, `search::{plaintext(&AstNode), index_json}`.
+- `docgen-render`: `PageContext{..., backlinks: &[Backlink]}`; template refs `/docgen.css`, `/search.js`, `.docgen-search-trigger`; consts `SEARCH_JS`, `DOCGEN_CSS`.
+- `docgen` build.rs emits `dist/{search-index.json, search.js, docgen.css}` + clean-URL pages.
+- **The link graph (`graph::LinkGraph.edges`) is already built — P4 graph view consumes it directly.**
+- **Asset-emission pattern** (include_str! const in a crate, written to dist by build.rs) is the seed P3 generalizes into `docgen-assets`.

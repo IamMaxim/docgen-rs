@@ -12,3 +12,11 @@
   infrastructure (`docgen-assets` + Alpine) is deferred to P3 where it's the headline. Accept minor P1→P3
   rework risk to avoid building island infra before it's needed.
 - Next: launch P1 workflow.
+
+## 2026-06-05 15:03 MSK — P1 GREEN
+- Workflow wpv8ecm1s: plan → 3 TDD build clusters (highlight / wikilinks+backlinks / search) → gate → 4 reviews → fix → verify. 11 agents.
+- Result: 59 tests green (my re-run; verify agent counted 60), clippy clean, fixture builds 3 pages + search-index.json + search.js + docgen.css.
+- Adversarial review: 16 findings, 11 applied (4 major: per-doc syntect adapter→OnceLock; double comrak parse→single; empty wikilink label fallback; search.js innerHTML slug-injection→createElement/setAttribute), 6 rejected with sound rationale (intentional behaviors/micro-churn).
+- ARCHITECT VERIFICATION (not just trusting subagents): ran cargo test (59 pass / 7 binaries), clippy (clean), built fixture, and validated LIVE in Chrome: highlighted `fn main()`, resolved [[index]] link + broken [[missing-page]] marked span, Backlinks section, and the Cmd/Ctrl-K search modal returning live full-text results. All confirmed working.
+- Decision (reversible, FYI): comrak 0.52 needed render.unsafe=true so injected wikilink anchor HTML survives; acceptable since our input is trusted local docs, and titles/sidebar are still auto-escaped by minijinja. Noted as a seam to revisit if docgen ever renders untrusted markdown.
+- Two-pass render pipeline landed cleanly; link graph already built (P4 will consume it). Next: P2 git diff timeline.
