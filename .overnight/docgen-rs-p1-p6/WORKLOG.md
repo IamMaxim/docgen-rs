@@ -245,3 +245,25 @@ original diff + editor subsystems (two Explore agents → exhaustive specs).
    full-page split route (CM6 source | live preview), merge-vs-HEAD, wikilink
    autocomplete from search index, table-format, theme system. Large rebuild;
    scoping with user next (CM6 vendoring + dedicated route is the faithful path).
+
+## 2026-06-06 ~00:10 MSK — Editor rebuilt (full CM6, `f93eff7`)
+User chose the full faithful path. Replaced the CM5 overlay with the original's
+full-page split editor at `/edit/<slug>`:
+- Vendored a CM6 bundle: editor-src/editor-cm6.entry.js (ported DocEditorView +
+  DocSourceEditor + themes + wikilinks + complete + table-format by an agent) →
+  esbuild IIFE → docgen/dev/editor-cm6.js (624KB, committed; README documents
+  regeneration). No bundler at load time.
+- docgen-diff::head_source (HEAD blob for the merge view). docgen-server: source
+  endpoint returns head_source; new POST /__docgen/preview (markdown→html); new
+  GET /edit/<slug> shell; dev pencil now links to /edit/<slug>; dropped the dead
+  CM5 vendor + __codemirror route.
+- Chrome-verified: split source|preview, live debounced preview, dirty state,
+  [[wikilink]] highlight + fuzzy autocomplete from search index, merge-vs-HEAD
+  gutter, Cmd-S save ('Saved <time>') + rebuild. Reverted the test edit to the
+  fixture. Workspace green, clippy clean.
+- Deviations (noted in REPORT): server-side preview injects HTML (no Vite
+  virtual module); wikilinks unresolved in the preview pane; single var-driven
+  theme for v1 (no theme switcher / settings menu).
+
+ALL THREE user-flagged regressions resolved: popups (47b4815), diff (741f2b7),
+editor (f93eff7). Branch HEAD = f93eff7. Local-only, not pushed.
