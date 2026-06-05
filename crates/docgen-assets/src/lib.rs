@@ -4,9 +4,118 @@
 //! emission via [`assets_for`] + [`emit`].
 
 use include_dir::{include_dir, Dir};
+use std::path::Path;
 
 /// Every vendored + authored frontend file, embedded at compile time.
 static ASSETS: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/assets");
+
+/// Coarse classification of an emitted asset.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AssetKind {
+    Css,
+    Js,
+    Font,
+    Json,
+    Other,
+}
+
+/// One embedded frontend file, ready to write into `dist/`.
+#[derive(Debug, Clone, Copy)]
+pub struct Asset {
+    /// dist-relative path, e.g. `"docgen.css"`, `"vendor/katex/katex.min.css"`.
+    pub path: &'static str,
+    /// Embedded file contents.
+    pub bytes: &'static [u8],
+    pub kind: AssetKind,
+}
+
+/// Read an embedded file (`src_path`) into an [`Asset`] written at `dist_path`.
+fn embed(src_path: &'static str, dist_path: &'static str, kind: AssetKind) -> Asset {
+    let bytes = ASSETS
+        .get_file(src_path)
+        .unwrap_or_else(|| panic!("embedded asset missing: {src_path}"))
+        .contents();
+    Asset {
+        path: dist_path,
+        bytes,
+        kind,
+    }
+}
+
+/// Assets emitted on every build: Alpine, bootstrap, shared css, search client.
+pub fn core_assets() -> Vec<Asset> {
+    vec![
+        embed(
+            "vendor/alpine/alpine.min.js",
+            "vendor/alpine/alpine.min.js",
+            AssetKind::Js,
+        ),
+        embed("docgen/bootstrap.js", "bootstrap.js", AssetKind::Js),
+        embed("docgen/docgen.css", "docgen.css", AssetKind::Css),
+        embed("docgen/search.js", "search.js", AssetKind::Js),
+    ]
+}
+
+/// KaTeX stylesheet + fonts, always emitted (build-time-rendered HTML needs them).
+///
+/// Stub for Cluster A; filled in Cluster B (B-5).
+pub fn katex_css_assets() -> Vec<Asset> {
+    vec![]
+}
+
+/// Runtime KaTeX (`katex.min.js` + `auto-render.min.js`). Fallback path only,
+/// gated by [`EmitOptions::include_katex_runtime`].
+///
+/// Stub for Cluster A; filled in Cluster B (B-8).
+pub fn katex_runtime_assets() -> Vec<Asset> {
+    vec![]
+}
+
+/// Mermaid library + island glue. Emitted only when a page used a diagram.
+///
+/// Stub for Cluster A; filled in Cluster C (C-4).
+pub fn mermaid_assets() -> Vec<Asset> {
+    vec![]
+}
+
+/// Flags driving which conditional asset slices a build emits.
+///
+/// Both fields default to `false`: the default build takes the build-time KaTeX
+/// path (no runtime JS) and emits mermaid only when a page used a diagram.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct EmitOptions {
+    /// Ship runtime `katex.min.js` + `auto-render.min.js` (fallback path). Default false.
+    pub include_katex_runtime: bool,
+    /// Ship `mermaid.min.js` + the mermaid island (only when a page used a diagram).
+    pub include_mermaid: bool,
+}
+
+/// The full asset set to emit for this build: core + katex css (always, for math
+/// output) + conditional runtime/mermaid. Stable ordering for deterministic tests.
+pub fn assets_for(opts: &EmitOptions) -> Vec<Asset> {
+    let mut out = core_assets();
+    out.extend(katex_css_assets());
+    if opts.include_katex_runtime {
+        out.extend(katex_runtime_assets());
+    }
+    if opts.include_mermaid {
+        out.extend(mermaid_assets());
+    }
+    out
+}
+
+/// Write every asset under `dist`, creating parent dirs. `dist` is wiped per
+/// build, so there is no staleness concern; this always overwrites.
+pub fn emit(assets: &[Asset], dist: &Path) -> std::io::Result<()> {
+    for a in assets {
+        let out = dist.join(a.path);
+        if let Some(parent) = out.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(out, a.bytes)?;
+    }
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {
@@ -25,5 +134,90 @@ mod tests {
         for p in ["docgen/docgen.css", "docgen/search.js", "docgen/bootstrap.js"] {
             assert!(ASSETS.get_file(p).is_some(), "missing embedded {p}");
         }
+    }
+
+    // ---- A-4: typed API + core_assets() ----
+
+    #[test]
+    fn core_assets_cover_alpine_bootstrap_css_search() {
+        let paths: Vec<_> = core_assets().iter().map(|a| a.path).collect();
+        assert!(paths.contains(&"vendor/alpine/alpine.min.js"));
+        assert!(paths.contains(&"bootstrap.js"));
+        assert!(paths.contains(&"docgen.css"));
+        assert!(paths.contains(&"search.js"));
+    }
+
+    #[test]
+    fn core_assets_are_nonempty_and_kinded() {
+        for a in core_assets() {
+            assert!(!a.bytes.is_empty(), "{} empty", a.path);
+        }
+        assert_eq!(
+            core_assets()
+                .iter()
+                .find(|a| a.path == "docgen.css")
+                .unwrap()
+                .kind,
+            AssetKind::Css
+        );
+    }
+
+    #[test]
+    fn shared_css_retains_p1_classes() {
+        let css = core_assets()
+            .iter()
+            .find(|a| a.path == "docgen.css")
+            .unwrap()
+            .bytes;
+        let s = std::str::from_utf8(css).unwrap();
+        assert!(s.contains("docgen-search-modal"));
+        assert!(s.contains("docgen-diff-line--added"));
+        assert!(s.contains("docgen-diff-line--removed"));
+    }
+
+    // ---- A-5: bootstrap registry contract ----
+
+    #[test]
+    fn bootstrap_defines_registry_and_lazy_loader_without_esm() {
+        let js = std::str::from_utf8(
+            core_assets()
+                .iter()
+                .find(|a| a.path == "bootstrap.js")
+                .unwrap()
+                .bytes,
+        )
+        .unwrap();
+        assert!(js.contains("docgen.island"));
+        assert!(js.contains("docgen.loadScript"));
+        assert!(js.contains("alpine:init"));
+        assert!(!js.contains("import ")); // no ESM / npm
+    }
+
+    // ---- A-6: emit() + assets_for() planner ----
+
+    #[test]
+    fn emit_writes_core_assets_to_disk() {
+        let tmp =
+            std::env::temp_dir().join(format!("docgen_assets_emit_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        emit(&assets_for(&EmitOptions::default()), &tmp).unwrap();
+        assert!(tmp.join("vendor/alpine/alpine.min.js").is_file());
+        assert!(tmp.join("bootstrap.js").is_file());
+        assert!(tmp.join("docgen.css").is_file());
+        assert!(tmp.join("search.js").is_file());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn planner_gates_mermaid_and_katex_runtime() {
+        let base = assets_for(&EmitOptions::default());
+        assert!(!base.iter().any(|a| a.path.contains("mermaid")));
+        assert!(!base.iter().any(|a| a.path.ends_with("katex.min.js")));
+        // With both flags on, the planner still must not include the stubbed
+        // slices' files until B/C fill them — but it must not panic either.
+        let _full = assets_for(&EmitOptions {
+            include_katex_runtime: true,
+            include_mermaid: true,
+        });
     }
 }
