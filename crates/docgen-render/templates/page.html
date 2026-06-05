@@ -49,6 +49,11 @@
       {% endif %}
       <div class="docgen-topbar__actions">
         <div class="docgen-btn-strip" role="group" aria-label="Layout">
+          {% if has_history %}
+          <a class="icon-only" href="{{ base | safe }}/{{ slug | safe }}/history" aria-label="Show documentation diff" title="Show documentation diff">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4v16M18 4v16"/><path d="M9 8h6M9 16h6M12 5v6M12 13v6"/></svg>
+          </a>
+          {% endif %}
           <button type="button" class="docgen-ctl--fullwidth icon-only" aria-pressed="false" aria-label="Toggle full page width" title="Toggle full page width">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"/></svg>
           </button>
@@ -78,9 +83,6 @@
     </nav>
     <main class="docgen-content" id="docgen-main" tabindex="-1">
       <article class="docgen-doc-content">
-        {% if has_history %}
-        <p class="docgen-history-link"><a href="{{ base | safe }}/{{ slug | safe }}/history">History</a></p>
-        {% endif %}
         {{ body | safe }}
       </article>
     </main>
