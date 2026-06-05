@@ -131,6 +131,21 @@ pub fn graph_assets() -> Vec<Asset> {
     )]
 }
 
+/// DEV-ONLY assets, served by `docgen dev` ONLY. NEVER returned by [`assets_for`]
+/// and NEVER emitted by `docgen build`. Dist paths are namespaced under
+/// `__docgen/` (and, once CodeMirror is vendored in Cluster B, `__codemirror/`)
+/// so they cannot collide with doc slugs.
+///
+/// Cluster A ships the live-reload client; Cluster B extends this slice with the
+/// vendored CodeMirror UMD + the editor island + editor css.
+pub fn dev_assets() -> Vec<Asset> {
+    vec![embed(
+        "docgen/dev/livereload.js",
+        "__docgen/livereload.js",
+        AssetKind::Js,
+    )]
+}
+
 /// Flags driving which conditional asset slices a build emits.
 ///
 /// Both fields default to `false`: the default build takes the build-time KaTeX
@@ -364,6 +379,58 @@ mod tests {
         assert!(s.contains(".docgen-graph"));
         assert!(s.contains(".docgen-graph__nodes circle"));
         assert!(s.contains(".docgen-graph__links line"));
+    }
+
+    // ---- P5 A-6/B-1: dev_assets() slice, gated out of static emit ----
+
+    #[test]
+    fn dev_livereload_connects_to_sse_endpoint() {
+        let reload = dev_assets()
+            .into_iter()
+            .find(|a| a.path == "__docgen/livereload.js")
+            .expect("livereload client present");
+        let js = std::str::from_utf8(reload.bytes).unwrap();
+        assert!(js.contains("EventSource('/__docgen/livereload')"));
+        assert!(js.contains("location.reload"));
+    }
+
+    #[test]
+    fn dev_assets_are_nonempty() {
+        let d = dev_assets();
+        assert!(!d.is_empty());
+        for a in &d {
+            assert!(!a.bytes.is_empty(), "{} empty", a.path);
+        }
+    }
+
+    #[test]
+    fn assets_for_never_includes_dev_assets() {
+        let dev_paths: Vec<&str> = dev_assets().iter().map(|a| a.path).collect();
+        // Every combination of the three EmitOptions flags.
+        for k in [false, true] {
+            for m in [false, true] {
+                for g in [false, true] {
+                    let opts = EmitOptions {
+                        include_katex_runtime: k,
+                        include_mermaid: m,
+                        include_graph: g,
+                    };
+                    for a in assets_for(&opts) {
+                        assert!(
+                            !dev_paths.contains(&a.path),
+                            "dev asset {} leaked into assets_for({opts:?})",
+                            a.path
+                        );
+                        assert!(
+                            !a.path.starts_with("__docgen/")
+                                && !a.path.starts_with("__codemirror/"),
+                            "dev-namespaced path {} leaked into assets_for",
+                            a.path
+                        );
+                    }
+                }
+            }
+        }
     }
 
     // ---- A-6: emit() + assets_for() planner ----
