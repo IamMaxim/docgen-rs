@@ -17,6 +17,9 @@ use docgen_core::pipeline::{prepare, render_docs};
 use docgen_core::tree::build_tree;
 use docgen_render::{GraphContext, HistoryContext, PageContext, Renderer, DEFAULT_PAGE_TEMPLATE};
 
+/// The slug docgen treats as the site home (served at `/`).
+const HOME_SLUG: &str = "index";
+
 /// Default per-doc commit-history depth (parity with the original `diffLimit`).
 const DEFAULT_DIFF_LIMIT: usize = 50;
 /// Hard cap so a pathological `DOC_DIFF_LIMIT` can't blow up build time.
@@ -163,6 +166,7 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
 
     // Phase 2: render the doc pages, linking to history where one was emitted.
     let empty: Vec<docgen_core::model::Backlink> = Vec::new();
+    let mut home_html: Option<String> = None;
     for doc in &site.docs {
         let backlinks = site.graph.backlinks.get(&doc.slug).unwrap_or(&empty);
         let html = renderer.render_page(&PageContext {
@@ -179,7 +183,17 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
         // `guide/intro` -> `dist/guide/intro/index.html` (clean URLs).
         let out_dir = dist_dir.join(&doc.slug);
         fs::create_dir_all(&out_dir)?;
-        fs::write(out_dir.join("index.html"), html)?;
+        fs::write(out_dir.join("index.html"), &html)?;
+        if doc.slug == HOME_SLUG {
+            home_html = Some(html);
+        }
+    }
+
+    // Root page: serve the home doc at `/` too, so the site has a real index.
+    // The nested `dist/index/index.html` is still emitted above, so existing
+    // `/index` links keep working — this is purely additive.
+    if let Some(html) = home_html {
+        fs::write(dist_dir.join("index.html"), html)?;
     }
 
     // Phase 3: the /graph/ page (default-on in P4). Deterministic force layout

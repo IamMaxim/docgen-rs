@@ -138,3 +138,47 @@ fn dev_and_production_modes_emit_identical_files() {
     // AFTER build_site returns, never inside it.
     assert_eq!(emitted_paths(prod_out.path()), emitted_paths(dev_out.path()));
 }
+
+#[test]
+fn build_site_emits_a_real_root_index_page() {
+    let root = tempfile::tempdir().unwrap();
+    setup_fixture(root.path());
+    let out = tempfile::tempdir().unwrap();
+    build_site(&BuildOptions {
+        project_root: root.path(),
+        out_dir: out.path(),
+        mode: BuildMode::Production,
+    })
+    .unwrap();
+
+    let root_html = std::fs::read_to_string(out.path().join("index.html")).unwrap();
+    assert!(root_html.contains("<title>Home</title>"));
+    // The nested copy still exists (no link breakage).
+    assert!(out.path().join("index/index.html").is_file());
+    // Both are byte-identical (same rendered home doc).
+    let nested = std::fs::read_to_string(out.path().join("index/index.html")).unwrap();
+    assert_eq!(root_html, nested);
+}
+
+#[test]
+fn no_home_doc_means_no_root_index_page() {
+    // A site lacking `docs/index.md` writes no `dist/index.html` (no regression:
+    // same as pre-P6), while its other pages still build.
+    let root = tempfile::tempdir().unwrap();
+    fs::create_dir_all(root.path().join("docs/guide")).unwrap();
+    fs::write(
+        root.path().join("docs/guide/intro.md"),
+        "# Introduction\nbody\n",
+    )
+    .unwrap();
+    let out = tempfile::tempdir().unwrap();
+    build_site(&BuildOptions {
+        project_root: root.path(),
+        out_dir: out.path(),
+        mode: BuildMode::Production,
+    })
+    .unwrap();
+
+    assert!(!out.path().join("index.html").exists());
+    assert!(out.path().join("guide/intro/index.html").is_file());
+}
