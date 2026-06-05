@@ -177,6 +177,7 @@ impl Renderer {
         let safe_json = ctx.graph_json.replace("</", "<\\/");
         tmpl.render(context! {
             tree => ctx.tree,
+            slug => "",
             graph_json => safe_json,
             node_count => ctx.node_count,
             edge_count => ctx.edge_count,
@@ -863,5 +864,130 @@ mod tests {
             .unwrap();
         assert!(html.contains("&lt;script&gt;alert(1)&lt;&#x2f;script&gt;"));
         assert!(!html.contains("<script>alert(1)</script>"));
+    }
+
+    // ---- P7 Cluster A: app shell, themes, theme-toggle, sidebar tree ----
+
+    fn page(slug: &str, tree: &[TreeNode]) -> String {
+        renderer()
+            .render_page(&PageContext {
+                title: "X",
+                slug,
+                body_html: "<p>hi</p>",
+                tree,
+                backlinks: &[],
+                has_history: false,
+                has_mermaid: false,
+                has_math: false,
+                base: "",
+                site_title: "Docs",
+                search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn page_has_app_shell() {
+        let html = page("x", &[]);
+        for cls in [
+            "docgen-app",
+            "docgen-topbar",
+            "docgen-layout",
+            "docgen-sidebar",
+            "docgen-content",
+            "docgen-doc-content",
+        ] {
+            assert!(html.contains(cls), "app shell missing {cls}");
+        }
+    }
+
+    #[test]
+    fn page_has_no_flash_script_in_head() {
+        let html = page("x", &[]);
+        let script_at = html
+            .find("localStorage.getItem('docgen-theme')")
+            .expect("no-flash script present");
+        let css_at = html
+            .find("/docgen.css")
+            .expect("docgen.css link present");
+        assert!(
+            script_at < css_at,
+            "no-flash script must precede docgen.css link"
+        );
+        assert!(html.contains("prefers-color-scheme"));
+    }
+
+    #[test]
+    fn page_has_theme_toggle_island() {
+        let html = page("x", &[]);
+        assert!(html.contains(r#"x-data="docgenThemeToggle""#));
+        assert!(html.contains("/islands/theme-toggle.js"));
+        assert!(html.contains(r#"data-theme="light""#)); // default attr on <html>
+    }
+
+    #[test]
+    fn sidebar_marks_active_doc() {
+        let tree = vec![TreeNode::Doc {
+            name: "a".into(),
+            slug: "a".into(),
+            title: "A".into(),
+        }];
+        let active = page("a", &tree);
+        assert!(active.contains(r#"docgen-tree__item is-active"#));
+        assert!(active.contains(r#"aria-current="page""#));
+
+        let inactive = page("b", &tree);
+        assert!(!inactive.contains(r#"docgen-tree__item is-active"#));
+        assert!(!inactive.contains(r#"aria-current="page""#));
+    }
+
+    #[test]
+    fn sidebar_renders_nested_dir_as_details() {
+        let tree = vec![TreeNode::Dir {
+            name: "guide".into(),
+            children: vec![TreeNode::Doc {
+                name: "intro".into(),
+                slug: "guide/intro".into(),
+                title: "Intro".into(),
+            }],
+        }];
+        let html = page("x", &tree);
+        assert!(html.contains("<details"));
+        assert!(html.contains("<summary"));
+        assert!(html.contains("docgen-tree"));
+    }
+
+    #[test]
+    fn graph_and_history_share_shell() {
+        let r = Renderer::new(DEFAULT_PAGE_TEMPLATE).unwrap();
+        let graph = r
+            .render_graph(&GraphContext {
+                tree: &[],
+                graph_json: r#"{"nodes":[],"edges":[]}"#,
+                node_count: 0,
+                edge_count: 0,
+                base: "",
+                site_title: "",
+                search_enabled: true,
+            })
+            .unwrap();
+        let hist = r
+            .render_history(&HistoryContext {
+                title: "A",
+                slug: "a",
+                tree: &[],
+                buckets: &[],
+                base: "",
+                site_title: "",
+            })
+            .unwrap();
+        for html in [&graph, &hist] {
+            assert!(html.contains("docgen-topbar"));
+            assert!(html.contains("data-theme"));
+            assert!(html.contains("/islands/theme-toggle.js"));
+            assert!(html.contains("localStorage.getItem('docgen-theme')"));
+        }
     }
 }

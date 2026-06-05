@@ -98,6 +98,11 @@ pub fn core_assets() -> Vec<Asset> {
         embed("docgen/bootstrap.js", "bootstrap.js", AssetKind::Js),
         embed("docgen/docgen.css", "docgen.css", AssetKind::Css),
         embed("docgen/search.js", "search.js", AssetKind::Js),
+        embed(
+            "docgen/islands/theme-toggle.js",
+            "islands/theme-toggle.js",
+            AssetKind::Js,
+        ),
     ]
 }
 
@@ -354,6 +359,7 @@ mod tests {
         assert!(paths.contains(&"bootstrap.js"));
         assert!(paths.contains(&"docgen.css"));
         assert!(paths.contains(&"search.js"));
+        assert!(paths.contains(&"islands/theme-toggle.js"));
     }
 
     #[test]
@@ -382,6 +388,93 @@ mod tests {
         assert!(s.contains("docgen-search-modal"));
         assert!(s.contains("docgen-diff-line--added"));
         assert!(s.contains("docgen-diff-line--removed"));
+    }
+
+    // ---- P7 Cluster A: theme-toggle island + design tokens + app shell css ----
+
+    fn shared_css() -> &'static str {
+        std::str::from_utf8(
+            core_assets()
+                .iter()
+                .find(|a| a.path == "docgen.css")
+                .unwrap()
+                .bytes,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn core_assets_include_theme_toggle_island() {
+        let a = core_assets()
+            .into_iter()
+            .find(|a| a.path == "islands/theme-toggle.js")
+            .expect("theme-toggle island in core_assets");
+        assert_eq!(a.kind, AssetKind::Js);
+        assert!(!a.bytes.is_empty());
+    }
+
+    #[test]
+    fn theme_toggle_island_registers_without_esm() {
+        let js = std::str::from_utf8(
+            ASSETS
+                .get_file("docgen/islands/theme-toggle.js")
+                .unwrap()
+                .contents(),
+        )
+        .unwrap();
+        assert!(js.contains("docgen.island"));
+        assert!(js.contains("docgenThemeToggle"));
+        assert!(js.contains("localStorage"));
+        assert!(js.contains("setAttribute('data-theme'"));
+        assert!(!js.contains("import ")); // no ESM / npm
+    }
+
+    #[test]
+    fn shared_css_defines_theme_tokens() {
+        let s = shared_css();
+        assert!(s.contains(r#":root[data-theme="dark"]"#));
+        for tok in ["--accent", "--bg", "--text", "--surface"] {
+            assert!(s.contains(tok), "missing token {tok}");
+        }
+    }
+
+    #[test]
+    fn shared_css_has_layout_and_topbar() {
+        let s = shared_css();
+        for cls in [
+            ".docgen-topbar",
+            ".docgen-layout",
+            ".docgen-sidebar",
+            ".docgen-tree",
+            ".docgen-content",
+        ] {
+            assert!(s.contains(cls), "css missing {cls}");
+        }
+    }
+
+    #[test]
+    fn shared_css_code_block_surface_is_theme_stable() {
+        let s = shared_css();
+        assert!(s.contains("--code-surface"));
+        assert!(s.contains(".docgen-doc-content pre"));
+    }
+
+    #[test]
+    fn shared_css_retains_legacy_selectors() {
+        let s = shared_css();
+        for sel in [
+            ".docgen-search-modal",
+            ".docgen-diff-line--added",
+            ".docgen-diff-line--removed",
+            ".katex-display",
+            ".docgen-mermaid",
+            ".docgen-graph",
+            ".docgen-graph__nodes circle",
+            ".docgen-graph__links line",
+            ".docgen-wikilink--broken",
+        ] {
+            assert!(s.contains(sel), "css dropped legacy selector {sel}");
+        }
     }
 
     #[test]
