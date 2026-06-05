@@ -1,0 +1,15 @@
+/* docgen P1 styles: wikilinks, backlinks, search modal. */
+.docgen-wikilink--broken { color: #b00020; text-decoration: underline dotted; cursor: help; }
+.docgen-backlinks { margin-top: 2rem; border-top: 1px solid #ddd; padding-top: 1rem; }
+.docgen-backlinks h2 { font-size: 1rem; }
+
+.docgen-search-trigger { position: fixed; top: 1rem; right: 1rem; }
+.docgen-search-modal[hidden] { display: none; }
+.docgen-search-modal { position: fixed; inset: 0; z-index: 1000; }
+.docgen-search-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.4); }
+.docgen-search-box { position: relative; max-width: 36rem; margin: 10vh auto 0;
+  background: #fff; border-radius: 8px; padding: .75rem; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
+.docgen-search-input { width: 100%; font-size: 1.1rem; padding: .6rem; box-sizing: border-box; }
+.docgen-search-results { list-style: none; margin: .5rem 0 0; padding: 0; max-height: 50vh; overflow: auto; }
+.docgen-search-result a { display: block; padding: .4rem .5rem; text-decoration: none; color: inherit; }
+.docgen-search-result.is-selected { background: #eef; }
