@@ -206,3 +206,46 @@ fn builds_math_page_with_build_time_katex() {
 
     let _ = fs::remove_dir_all(&tmp);
 }
+
+/// End-to-end graceful degradation: a doc carrying a malformed math expression
+/// must NOT fail the build. It flows the full comrak `$...$` -> NodeValue::Math
+/// -> transform_math -> render_math path (not the hand-passed unit-test string),
+/// and the failed expression must land as `docgen-math-error` markup with HTML
+/// metacharacters escaped, while the rest of the page still renders.
+#[test]
+fn broken_math_degrades_without_failing_build() {
+    let tmp = std::env::temp_dir()
+        .join(format!("docgen_build_cli_badmath_test_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&tmp);
+    fs::create_dir_all(tmp.join("docs")).unwrap();
+    // A genuinely-broken inline expression carrying HTML metacharacters, plus
+    // surrounding prose that must survive intact.
+    fs::write(
+        tmp.join("docs/bad.md"),
+        "# Bad\n\nProse before. Broken inline math: $<script>\\frac{$ and prose after.\n",
+    )
+    .unwrap();
+
+    let status = Command::new(env!("CARGO_BIN_EXE_docgen"))
+        .arg("build")
+        .arg(&tmp)
+        .status()
+        .unwrap();
+    // The central safety claim: a malformed expression does not abort the build.
+    assert!(status.success(), "build must not fail on broken math");
+
+    let page = fs::read_to_string(tmp.join("dist/bad/index.html")).unwrap();
+    // Failed expression degraded to the escaped error markup, not a crash.
+    assert!(
+        page.contains("docgen-math-error"),
+        "no math-error fallback: {page}"
+    );
+    // HTML metacharacters in the failed expression are escaped (render.unsafe=true downstream).
+    assert!(page.contains("&lt;script&gt;"), "metachars not escaped: {page}");
+    assert!(!page.contains("<script>\\frac"), "raw script tag leaked: {page}");
+    // The rest of the page still rendered.
+    assert!(page.contains("Prose before."));
+    assert!(page.contains("and prose after."));
+
+    let _ = fs::remove_dir_all(&tmp);
+}

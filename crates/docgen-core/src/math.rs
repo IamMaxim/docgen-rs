@@ -14,6 +14,12 @@ use crate::util::escape_html;
 /// input and emits its own red error markup (returning `Ok`), which would never
 /// reach our graceful fallback. Letting KaTeX return `Err` on a genuine parse
 /// failure lets us emit a clean escaped `<code class="docgen-math-error">`.
+///
+/// The error fallback honors `display`: a failed display (`$$`) equation is
+/// wrapped in a block `<div class="katex-display docgen-math-error">` so it
+/// still renders as a centered block (matching `.katex-display` spacing),
+/// while inline math degrades to inline `<code>`. The KaTeX error message is
+/// logged to stderr so a malformed expression leaves a build-time diagnostic.
 pub fn render_math(src: &str, display: bool) -> String {
     let opts = katex::Opts::builder()
         .display_mode(display)
@@ -22,10 +28,15 @@ pub fn render_math(src: &str, display: bool) -> String {
         .expect("katex opts build");
     match katex::render_with_opts(src, &opts) {
         Ok(html) => html,
-        Err(_) => format!(
-            "<code class=\"docgen-math-error\">{}</code>",
-            escape_html(src)
-        ),
+        Err(e) => {
+            eprintln!("docgen: KaTeX failed to render math `{src}`: {e}");
+            let escaped = escape_html(src);
+            if display {
+                format!("<div class=\"katex-display docgen-math-error\">{escaped}</div>")
+            } else {
+                format!("<code class=\"docgen-math-error\">{escaped}</code>")
+            }
+        }
     }
 }
 
@@ -50,6 +61,27 @@ mod tests {
     fn bad_expression_degrades_to_escaped_code() {
         let html = render_math("\\frac{", false);
         assert!(html.contains("docgen-math-error"));
+        assert!(html.contains("<code")); // inline → inline code
         assert!(!html.contains("<script"));
+    }
+
+    #[test]
+    fn bad_display_expression_degrades_to_block() {
+        // A failed *display* equation must stay a centered block, not collapse
+        // to an inline <code> fragment.
+        let html = render_math("\\frac{", true);
+        assert!(html.contains("docgen-math-error"));
+        assert!(html.contains("katex-display")); // block wrapper retained
+        assert!(html.contains("<div")); // block element, not inline <code>
+        assert!(!html.contains("<code"));
+    }
+
+    #[test]
+    fn bad_expression_escapes_html_metacharacters() {
+        // A malformed expression carrying HTML metacharacters must be escaped
+        // before landing in raw HTML (render.unsafe = true downstream).
+        let html = render_math("<script>\\frac{", false);
+        assert!(html.contains("&lt;script&gt;"));
+        assert!(!html.contains("<script>"));
     }
 }

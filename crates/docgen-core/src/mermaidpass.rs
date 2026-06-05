@@ -102,6 +102,16 @@ mod tests {
     }
 
     #[test]
+    fn info_string_with_trailing_metadata_is_recognized() {
+        // `cb.info.split_whitespace().next()` must still match a fence whose
+        // info string carries trailing metadata after `mermaid`.
+        let (html, n) = render("```mermaid title=\"x\"\ngraph TD;A-->B;\n```\n");
+        assert_eq!(n, 1);
+        assert!(html.contains("docgen-mermaid"));
+        assert!(html.contains("graph TD"));
+    }
+
+    #[test]
     fn multiple_diagrams_get_distinct_ids() {
         let (html, n) = render(
             "```mermaid\ngraph TD;A-->B;\n```\n\n```mermaid\ngraph TD;C-->D;\n```\n",

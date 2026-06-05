@@ -42,14 +42,16 @@ fn embed(src_path: &'static str, dist_path: &'static str, kind: AssetKind) -> As
     }
 }
 
+/// Embed a file whose dist path equals its source path (the common case). Use
+/// [`embed`] directly only for the few `docgen/...` -> root rewrites.
+fn same(path: &'static str, kind: AssetKind) -> Asset {
+    embed(path, path, kind)
+}
+
 /// Assets emitted on every build: Alpine, bootstrap, shared css, search client.
 pub fn core_assets() -> Vec<Asset> {
     vec![
-        embed(
-            "vendor/alpine/alpine.min.js",
-            "vendor/alpine/alpine.min.js",
-            AssetKind::Js,
-        ),
+        same("vendor/alpine/alpine.min.js", AssetKind::Js),
         embed("docgen/bootstrap.js", "bootstrap.js", AssetKind::Js),
         embed("docgen/docgen.css", "docgen.css", AssetKind::Css),
         embed("docgen/search.js", "search.js", AssetKind::Js),
@@ -65,19 +67,14 @@ pub fn core_assets() -> Vec<Asset> {
 pub fn katex_css_assets() -> Vec<Asset> {
     macro_rules! font {
         ($name:literal) => {
-            embed(
-                concat!("vendor/katex/fonts/KaTeX_", $name, ".woff2"),
+            same(
                 concat!("vendor/katex/fonts/KaTeX_", $name, ".woff2"),
                 AssetKind::Font,
             )
         };
     }
     vec![
-        embed(
-            "vendor/katex/katex.min.css",
-            "vendor/katex/katex.min.css",
-            AssetKind::Css,
-        ),
+        same("vendor/katex/katex.min.css", AssetKind::Css),
         font!("AMS-Regular"),
         font!("Caligraphic-Bold"),
         font!("Caligraphic-Regular"),
@@ -103,16 +100,8 @@ pub fn katex_css_assets() -> Vec<Asset> {
 /// build renders math at build time and ships **zero** runtime JS for math.
 pub fn katex_runtime_assets() -> Vec<Asset> {
     vec![
-        embed(
-            "vendor/katex/katex.min.js",
-            "vendor/katex/katex.min.js",
-            AssetKind::Js,
-        ),
-        embed(
-            "vendor/katex/auto-render.min.js",
-            "vendor/katex/auto-render.min.js",
-            AssetKind::Js,
-        ),
+        same("vendor/katex/katex.min.js", AssetKind::Js),
+        same("vendor/katex/auto-render.min.js", AssetKind::Js),
     ]
 }
 
@@ -121,11 +110,7 @@ pub fn katex_runtime_assets() -> Vec<Asset> {
 /// `mermaid.min.js` at runtime, so it ships only on pages with a diagram.
 pub fn mermaid_assets() -> Vec<Asset> {
     vec![
-        embed(
-            "vendor/mermaid/mermaid.min.js",
-            "vendor/mermaid/mermaid.min.js",
-            AssetKind::Js,
-        ),
+        same("vendor/mermaid/mermaid.min.js", AssetKind::Js),
         embed(
             "docgen/islands/mermaid.js",
             "islands/mermaid.js",
