@@ -556,6 +556,7 @@ dependencies = [
  "docgen-build",
  "docgen-core",
  "docgen-diff",
+ "docgen-init",
  "docgen-render",
  "docgen-server",
  "git2",

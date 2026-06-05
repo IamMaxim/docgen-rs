@@ -13,6 +13,7 @@ docgen-assets = { path = "../docgen-assets" }
 docgen-render = { path = "../docgen-render" }
 docgen-build = { path = "../docgen-build" }
 docgen-server = { path = "../docgen-server" }
+docgen-init = { path = "../docgen-init" }
 chrono = { version = "0.4.41", default-features = false, features = ["clock"] }
 
 [dev-dependencies]
