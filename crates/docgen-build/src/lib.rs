@@ -113,7 +113,9 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
 
     // Two-pass: prepare all docs, then render with full slug knowledge.
     let prepared: Vec<_> = raws.into_iter().map(prepare).collect();
-    let site = render_docs(prepared);
+    // Config wiring lands in A-5; A-2 threads a default to keep behaviour identical.
+    let config = docgen_config::SiteConfig::default();
+    let site = render_docs(prepared, &config);
     let tree = build_tree(&site.docs);
 
     let renderer = Renderer::new(DEFAULT_PAGE_TEMPLATE)?;

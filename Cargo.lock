@@ -576,6 +576,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "docgen-assets",
+ "docgen-config",
  "docgen-core",
  "docgen-diff",
  "docgen-render",
@@ -597,6 +598,7 @@ name = "docgen-core"
 version = "0.0.0"
 dependencies = [
  "comrak",
+ "docgen-config",
  "katex",
  "serde",
  "serde_json",

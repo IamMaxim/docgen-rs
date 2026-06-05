@@ -70,7 +70,10 @@ pub fn prepare(raw: RawDoc) -> PreparedDoc {
 
 /// Pass 2: build the slug set, run the wikilink pass + syntect highlight per doc,
 /// assemble the link graph + search index. Input order preserved.
-pub fn render_docs(prepared: Vec<PreparedDoc>) -> SiteBuild {
+pub fn render_docs(
+    prepared: Vec<PreparedDoc>,
+    config: &docgen_config::SiteConfig,
+) -> SiteBuild {
     let slugs: SlugSet = prepared.iter().map(|p| p.slug.clone()).collect();
     let doc_meta: Vec<(String, String)> =
         prepared.iter().map(|p| (p.slug.clone(), p.title.clone())).collect();
@@ -96,9 +99,17 @@ pub fn render_docs(prepared: Vec<PreparedDoc>) -> SiteBuild {
         let pass = transform_wikilinks(root, &arena, &slugs);
         outbound.insert(p.slug.clone(), pass.resolved);
         // Build-time math: replace math nodes with KaTeX HTML before formatting.
-        let math_count = crate::mathpass::transform_math(root);
+        let math_count = if config.features.math {
+            crate::mathpass::transform_math(root)
+        } else {
+            0
+        };
         // Mermaid: replace ```mermaid fences with island containers before formatting.
-        let mermaid_count = crate::mermaidpass::transform_mermaid(root);
+        let mermaid_count = if config.features.mermaid {
+            crate::mermaidpass::transform_mermaid(root)
+        } else {
+            0
+        };
         let body_html = format_ast(root, &options);
 
         docs.push(Doc {
@@ -140,7 +151,7 @@ mod tests {
             prepare(raw("index.md", "# Home\nGo to [[guide/intro]].\n")),
             prepare(raw("guide/intro.md", "# Intro\n```rust\nfn x(){}\n```\nBack to [[index]] and [[ghost]].\n")),
         ];
-        let site = render_docs(prepared);
+        let site = render_docs(prepared, &docgen_config::SiteConfig::default());
 
         // Doc order preserved.
         assert_eq!(site.docs[0].slug, "index");
@@ -172,10 +183,30 @@ mod tests {
     #[test]
     fn render_docs_renders_math_at_build_time() {
         let prepared = vec![prepare(raw("m.md", "# M\nmass: $E=mc^2$\n"))];
-        let site = render_docs(prepared);
+        let site = render_docs(prepared, &docgen_config::SiteConfig::default());
         assert!(site.docs[0].body_html.contains("katex"));
         assert!(site.docs[0].has_math);
         assert!(!site.docs[0].body_html.contains("$E=mc^2$"));
+    }
+
+    #[test]
+    fn math_feature_off_skips_build_time_katex() {
+        let prepared = vec![prepare(raw("m.md", "# M\n$E=mc^2$\n"))];
+        let mut cfg = docgen_config::SiteConfig::default();
+        cfg.features.math = false;
+        let site = render_docs(prepared, &cfg);
+        assert!(!site.docs[0].has_math);
+        assert!(!site.docs[0].body_html.contains("katex"));
+    }
+
+    #[test]
+    fn mermaid_feature_off_leaves_code_block() {
+        let prepared = vec![prepare(raw("d.md", "# D\n```mermaid\ngraph TD;A-->B;\n```\n"))];
+        let mut cfg = docgen_config::SiteConfig::default();
+        cfg.features.mermaid = false;
+        let site = render_docs(prepared, &cfg);
+        assert!(!site.docs[0].has_mermaid);
+        assert!(!site.any_mermaid);
     }
 
     #[test]
@@ -184,7 +215,7 @@ mod tests {
             prepare(raw("d.md", "# D\n```mermaid\ngraph TD;A-->B;\n```\n")),
             prepare(raw("p.md", "# P\nplain\n")),
         ];
-        let site = render_docs(prepared);
+        let site = render_docs(prepared, &docgen_config::SiteConfig::default());
         assert!(site.docs[0].has_mermaid && site.docs[0].body_html.contains("docgen-mermaid"));
         assert!(!site.docs[1].has_mermaid);
         assert!(site.any_mermaid);
@@ -196,7 +227,7 @@ mod tests {
             prepare(raw("index.md", "# Home\nGo to [[guide/intro]].\n")),
             prepare(raw("guide/intro.md", "# Intro\nBack to [[index]].\n")),
         ];
-        let site = render_docs(prepared);
+        let site = render_docs(prepared, &docgen_config::SiteConfig::default());
         let gd = site.graph_data(crate::graphlayout::LayoutParams::default());
         assert_eq!(gd.nodes.len(), 2);
         assert!(gd.nodes.iter().any(|n| n.slug == "index" && n.title == "Home"));
@@ -213,7 +244,7 @@ mod tests {
     #[test]
     fn render_docs_without_mermaid_clears_site_flag() {
         let prepared = vec![prepare(raw("p.md", "# P\nplain\n"))];
-        let site = render_docs(prepared);
+        let site = render_docs(prepared, &docgen_config::SiteConfig::default());
         assert!(!site.any_mermaid);
     }
 
@@ -222,7 +253,7 @@ mod tests {
         // A doc that links to its own slug renders a resolved anchor, but the
         // self-edge is dropped from the graph (no self-backlink).
         let prepared = vec![prepare(raw("index.md", "# Home\nBack to [[index]].\n"))];
-        let site = render_docs(prepared);
+        let site = render_docs(prepared, &docgen_config::SiteConfig::default());
 
         assert!(site.docs[0].body_html.contains(r#"href="/index""#));
         assert!(!site.graph.edges.iter().any(|e| e.from == "index" && e.to == "index"));
