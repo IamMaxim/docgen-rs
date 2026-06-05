@@ -251,6 +251,24 @@ mod tests {
         assert!(!js.contains("import ")); // no ESM / npm
     }
 
+    // ---- C-3: mermaid island contract ----
+
+    #[test]
+    fn mermaid_island_registers_and_lazy_loads_without_esm() {
+        let js = std::str::from_utf8(
+            ASSETS
+                .get_file("docgen/islands/mermaid.js")
+                .unwrap()
+                .contents(),
+        )
+        .unwrap();
+        assert!(js.contains("docgen.island"));
+        assert!(js.contains("docgenMermaid"));
+        assert!(js.contains("loadScript"));
+        assert!(js.contains("/vendor/mermaid/mermaid.min.js"));
+        assert!(!js.contains("import ")); // no ESM / npm
+    }
+
     // ---- A-6: emit() + assets_for() planner ----
 
     #[test]
