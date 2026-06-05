@@ -151,10 +151,14 @@ fn builds_graph_page_with_island_and_nav_link() {
     assert_eq!(nodes.len(), 2);
     assert!(nodes.iter().any(|n| n["slug"] == "index"));
     assert!(nodes.iter().any(|n| n["slug"] == "guide/intro"));
+    // index<->guide/intro is a reciprocal wikilink pair; the layout collapses
+    // it to a SINGLE undirected edge (either direction is valid).
     let edges = data["edges"].as_array().unwrap();
-    assert!(edges
-        .iter()
-        .any(|e| e["from"] == "index" && e["to"] == "guide/intro"));
+    let links_index_intro = |e: &serde_json::Value| {
+        (e["from"] == "index" && e["to"] == "guide/intro")
+            || (e["from"] == "guide/intro" && e["to"] == "index")
+    };
+    assert_eq!(edges.iter().filter(|e| links_index_intro(e)).count(), 1);
 
     // Positions are finite + in-bounds (integration-level determinism check).
     for n in nodes {

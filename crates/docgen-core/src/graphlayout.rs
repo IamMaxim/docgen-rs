@@ -4,8 +4,20 @@
 //! per-doc `(slug, title)` metadata and runs a fixed-iteration spring layout in
 //! pure Rust to produce stable 2D node positions. No RNG, no clock, no
 //! `HashMap` iteration in the hot loop: index-ordered `Vec`s + a `BTreeMap` for
-//! slug lookups built once. Given the same inputs, [`layout_graph`] produces
-//! byte-identical output across runs and machines.
+//! slug lookups built once.
+//!
+//! ## Cross-platform determinism
+//! The only transcendental operations in the whole pipeline are the `sin`/`cos`
+//! in [`seed_point`]; everything after seeding is `+ - * / sqrt`, all of which
+//! are IEEE-754 correctly-rounded and therefore identical on every platform.
+//! `sin`/`cos`, however, are NOT guaranteed correctly-rounded across libm
+//! implementations (glibc/musl/macOS/Windows can differ by ~1 ULP). To keep the
+//! whole layout byte-identical across machines, [`seed_point`] quantizes its
+//! output to a fixed 2-decimal grid: a sub-ULP libm difference cannot survive
+//! that rounding, so the seeds — and hence the entire deterministic force loop
+//! fed only by correctly-rounded ops — are platform-independent. Given the same
+//! inputs, [`layout_graph`] produces byte-identical output across runs and
+//! machines (locked by the `golden_*` snapshot tests below).
 
 use std::collections::BTreeMap;
 
@@ -56,19 +68,19 @@ impl Default for LayoutParams {
     }
 }
 
-/// Clamp `v` into `[min, max]`. Port of the original `clamp` helper.
-fn clamp(v: f64, min: f64, max: f64) -> f64 {
-    if v < min {
-        min
-    } else if v > max {
-        max
-    } else {
-        v
-    }
+/// Round to 2 decimals. Used both to quantize the libm-derived seed (for
+/// cross-platform determinism) and the final coordinates (for stable JSON).
+fn round2(v: f64) -> f64 {
+    (v * 100.0).round() / 100.0
 }
 
 /// Deterministic golden-angle spiral seed for node `i` of `total`, spread within
 /// the padded layout box. Purely a function of `(i, total, params)`.
+///
+/// The output is quantized to a 2-decimal grid so that the only non-correctly-
+/// rounded ops in the pipeline (`sin`/`cos`) cannot introduce cross-platform
+/// drift: a sub-ULP libm difference rounds away here, and every later op is
+/// IEEE-754 correctly-rounded. See the module-level determinism note.
 fn seed_point(i: usize, total: usize, params: &LayoutParams) -> (f64, f64) {
     // Golden angle ~= 2.39996 rad.
     let ga = std::f64::consts::PI * (3.0 - 5.0_f64.sqrt());
@@ -77,11 +89,13 @@ fn seed_point(i: usize, total: usize, params: &LayoutParams) -> (f64, f64) {
     let cx = params.width / 2.0;
     let cy = params.height / 2.0;
     let rmax = params.width.min(params.height) / 2.0 - params.padding;
-    let x = cx + radius_frac * rmax * angle.cos();
-    let y = cy + radius_frac * rmax * angle.sin();
+    // Quantize the libm-derived raw position before clamping so the seed is
+    // platform-independent (sin/cos are not guaranteed correctly-rounded).
+    let x = round2(cx + radius_frac * rmax * angle.cos());
+    let y = round2(cy + radius_frac * rmax * angle.sin());
     (
-        clamp(x, params.padding, params.width - params.padding),
-        clamp(y, params.padding, params.height - params.padding),
+        x.clamp(params.padding, params.width - params.padding),
+        y.clamp(params.padding, params.height - params.padding),
     )
 }
 
@@ -104,11 +118,14 @@ pub fn layout_graph(
         nodes_meta.iter().enumerate().map(|(i, (s, _))| (s.as_str(), i)).collect();
 
     // Filtered edge list as index pairs: drop self-loops and edges touching a
-    // slug not in `nodes_meta` (ghosts can't be drawn). Index order preserved
-    // (the LinkGraph edges are already sorted by `build_link_graph`).
+    // slug not in `nodes_meta` (ghosts can't be drawn). Edges are undirected for
+    // display, so collapse reciprocal pairs (a->b and b->a) into a single edge —
+    // otherwise degree and the drawn line would be double-counted. Index order
+    // preserved (the LinkGraph edges are already sorted by `build_link_graph`).
     let mut edges_idx: Vec<(usize, usize)> = Vec::with_capacity(graph.edges.len());
     let mut graph_edges: Vec<GraphDataEdge> = Vec::with_capacity(graph.edges.len());
     let mut degree: Vec<u32> = vec![0; n];
+    let mut seen: std::collections::BTreeSet<(usize, usize)> = std::collections::BTreeSet::new();
     for e in &graph.edges {
         if e.from == e.to {
             continue;
@@ -118,6 +135,11 @@ pub fn layout_graph(
         else {
             continue;
         };
+        // Canonical undirected key: insert returns false if already emitted.
+        let key = if s <= t { (s, t) } else { (t, s) };
+        if !seen.insert(key) {
+            continue;
+        }
         edges_idx.push((s, t));
         graph_edges.push(GraphDataEdge { from: e.from.clone(), to: e.to.clone() });
         degree[s] += 1;
@@ -126,17 +148,24 @@ pub fn layout_graph(
 
     // Seed positions (deterministic spiral); keep seeds for the anchor pull.
     let seeds: Vec<(f64, f64)> = (0..n).map(|i| seed_point(i, n, &params)).collect();
-    let mut xs: Vec<f64> = seeds.iter().map(|s| s.0).collect();
-    let mut ys: Vec<f64> = seeds.iter().map(|s| s.1).collect();
+    let (mut xs, mut ys): (Vec<f64>, Vec<f64>) = seeds.iter().copied().unzip();
 
     // Fixed-iteration spring relaxation (faithful port of the original graph.ts
     // constants), index-ordered throughout for determinism.
     for _ in 0..params.iterations {
         // 1) repulsion across every unordered pair.
         for a in 0..n {
-            for b in (a + 1)..n {
-                let mut dx = xs[b] - xs[a];
-                let mut dy = ys[b] - ys[a];
+            // `xs[a]`/`ys[a]` are mutated as `b` advances, so read them fresh
+            // each pair (split_at_mut gives disjoint, bounds-check-free halves).
+            let (left, right) = xs.split_at_mut(a + 1);
+            let (lefty, righty) = ys.split_at_mut(a + 1);
+            let xa = &mut left[a];
+            let ya = &mut lefty[a];
+            for k in 0..right.len() {
+                let xb = &mut right[k];
+                let yb = &mut righty[k];
+                let mut dx = *xb - *xa;
+                let mut dy = *yb - *ya;
                 if dx == 0.0 {
                     dx = 0.01;
                 }
@@ -148,10 +177,10 @@ pub fn layout_graph(
                 let strength = (2800.0 / dist_sq).min(3.8);
                 let px = dx / dist * strength;
                 let py = dy / dist * strength;
-                xs[a] -= px;
-                ys[a] -= py;
-                xs[b] += px;
-                ys[b] += py;
+                *xa -= px;
+                *ya -= py;
+                *xb += px;
+                *yb += py;
             }
         }
         // 2) attraction along edges (target length 132, factor 0.018).
@@ -171,13 +200,12 @@ pub fn layout_graph(
         for i in 0..n {
             xs[i] += (seeds[i].0 - xs[i]) * 0.012;
             ys[i] += (seeds[i].1 - ys[i]) * 0.006;
-            xs[i] = clamp(xs[i], params.padding, params.width - params.padding);
-            ys[i] = clamp(ys[i], params.padding, params.height - params.padding);
+            xs[i] = xs[i].clamp(params.padding, params.width - params.padding);
+            ys[i] = ys[i].clamp(params.padding, params.height - params.padding);
         }
     }
 
     // Round to 2dp for byte-stable JSON across platforms + smaller files.
-    let round2 = |v: f64| (v * 100.0).round() / 100.0;
     let nodes: Vec<GraphNode> = (0..n)
         .map(|i| GraphNode {
             slug: nodes_meta[i].0.clone(),
@@ -244,12 +272,25 @@ mod tests {
             ("b".into(), "B".into()),
             ("c".into(), "C".into()),
         ];
+        // a<->b reciprocal collapses to ONE undirected edge; a-c is a second.
         let g = lg(&[("a", "b"), ("a", "c"), ("b", "a")]);
         let d = layout_graph(&meta, &g, LayoutParams::default());
         let deg = |s: &str| d.nodes.iter().find(|n| n.slug == s).unwrap().degree;
-        assert_eq!(deg("a"), 3);
-        assert_eq!(deg("b"), 2);
+        assert_eq!(deg("a"), 2);
+        assert_eq!(deg("b"), 1);
         assert_eq!(deg("c"), 1);
+        // Exactly two undirected edges drawn (no duplicated reciprocal line).
+        assert_eq!(d.edges.len(), 2);
+    }
+
+    #[test]
+    fn reciprocal_links_collapse_to_single_undirected_edge() {
+        let meta = vec![("a".into(), "A".into()), ("b".into(), "B".into())];
+        let g = lg(&[("a", "b"), ("b", "a")]);
+        let d = layout_graph(&meta, &g, LayoutParams::default());
+        assert_eq!(d.edges.len(), 1);
+        assert_eq!(d.nodes.iter().find(|n| n.slug == "a").unwrap().degree, 1);
+        assert_eq!(d.nodes.iter().find(|n| n.slug == "b").unwrap().degree, 1);
     }
 
     #[test]
@@ -377,6 +418,24 @@ mod tests {
         }
         false
     }
+
+    // --- Golden snapshot: pins the seed formula, every force constant, the
+    // iteration count, and the 2dp rounding. A drift in any of those (or a
+    // cross-platform f64 regression) flips this exact-bytes assertion. ---
+
+    #[test]
+    fn golden_three_node_layout_is_pinned_exactly() {
+        let meta = vec![
+            ("a".into(), "A".into()),
+            ("b".into(), "B".into()),
+            ("c".into(), "C".into()),
+        ];
+        let g = lg(&[("a", "b"), ("a", "c"), ("b", "a")]);
+        let j = graph_data_json(&layout_graph(&meta, &g, LayoutParams::default()));
+        assert_eq!(j, GOLDEN_THREE_NODE);
+    }
+
+    const GOLDEN_THREE_NODE: &str = "{\"nodes\":[{\"slug\":\"a\",\"title\":\"A\",\"x\":766.17,\"y\":358.41,\"degree\":2},{\"slug\":\"b\",\"title\":\"B\",\"x\":610.91,\"y\":459.58,\"degree\":1},{\"slug\":\"c\",\"title\":\"C\",\"x\":742.71,\"y\":189.89,\"degree\":1}],\"edges\":[{\"from\":\"a\",\"to\":\"b\"},{\"from\":\"a\",\"to\":\"c\"}]}";
 
     #[test]
     fn coordinates_are_rounded_for_stable_json() {

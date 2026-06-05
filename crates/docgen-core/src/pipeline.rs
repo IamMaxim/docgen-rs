@@ -201,8 +201,13 @@ mod tests {
         assert_eq!(gd.nodes.len(), 2);
         assert!(gd.nodes.iter().any(|n| n.slug == "index" && n.title == "Home"));
         assert!(gd.nodes.iter().any(|n| n.slug == "guide/intro" && n.title == "Intro"));
-        assert!(gd.edges.iter().any(|e| e.from == "index" && e.to == "guide/intro"));
-        assert!(gd.edges.iter().any(|e| e.from == "guide/intro" && e.to == "index"));
+        // Reciprocal [[..]] pair collapses to a single undirected edge.
+        let is_pair = |e: &crate::graphlayout::GraphDataEdge| {
+            (e.from == "index" && e.to == "guide/intro")
+                || (e.from == "guide/intro" && e.to == "index")
+        };
+        assert_eq!(gd.edges.iter().filter(|e| is_pair(e)).count(), 1);
+        assert_eq!(gd.edges.len(), 1);
     }
 
     #[test]

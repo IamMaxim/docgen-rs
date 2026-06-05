@@ -82,10 +82,13 @@ window.docgen.island('docgenGraph', function (Alpine) {
         for (var n = 0; n < nodes.length; n++) {
           var node = nodes[n];
           var r = clamp(4.5 + Math.sqrt(node.degree || 0) * 1.2, 5, 12);
-          // anchor so a plain click navigates to /{slug}.
+          // anchor so a plain click navigates to /{slug}. Encode per path
+          // segment so slugs with spaces/#/?/% produce a well-formed URL that
+          // matches the build's directory-emit path.
           var link = document.createElementNS(SVGNS, 'a');
-          link.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '/' + node.slug);
-          link.setAttribute('href', '/' + node.slug);
+          var href = '/' + node.slug.split('/').map(encodeURIComponent).join('/');
+          link.setAttributeNS('http://www.w3.org/1999/xlink', 'href', href);
+          link.setAttribute('href', href);
           var circle = document.createElementNS(SVGNS, 'circle');
           circle.setAttribute('cx', node.x);
           circle.setAttribute('cy', node.y);
