@@ -6,9 +6,19 @@ use serde::Serialize;
 pub const DEFAULT_PAGE_TEMPLATE: &str = include_str!("../templates/page.html");
 
 /// The vendored search client script, emitted to `dist/search.js`.
+///
+/// Deprecated: assets now flow through the `docgen-assets` crate. Kept for one
+/// phase so dependents migrate without breakage. The bytes are byte-identical to
+/// `docgen-assets`' embedded copy.
+#[deprecated(note = "use docgen-assets::core_assets() / emit()")]
 pub const SEARCH_JS: &str = include_str!("../assets/search.js");
 
 /// Minimal stylesheet for wikilinks/backlinks/search, emitted to `dist/docgen.css`.
+///
+/// Deprecated: assets now flow through the `docgen-assets` crate. Kept for one
+/// phase so dependents migrate without breakage. The bytes are byte-identical to
+/// `docgen-assets`' embedded copy.
+#[deprecated(note = "use docgen-assets::core_assets() / emit()")]
 pub const DOCGEN_CSS: &str = include_str!("../assets/docgen.css");
 
 /// The built-in per-doc history-timeline template, embedded at compile time.
@@ -299,6 +309,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)] // consts kept one phase as byte-identical re-exports
     fn ships_self_contained_search_assets() {
         assert!(SEARCH_JS.contains("search-index.json"));
         assert!(SEARCH_JS.contains("metaKey"));
@@ -307,6 +318,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)] // consts kept one phase as byte-identical re-exports
     fn ships_diff_timeline_styles() {
         assert!(DOCGEN_CSS.contains("docgen-diff-line--added"));
         assert!(DOCGEN_CSS.contains("docgen-diff-line--removed"));

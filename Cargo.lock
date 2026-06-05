@@ -340,6 +340,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "docgen-assets",
  "docgen-core",
  "docgen-diff",
  "docgen-render",

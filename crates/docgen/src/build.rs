@@ -118,13 +118,21 @@ pub fn build(project_root: &Path) -> Result<()> {
         fs::write(out_dir.join("index.html"), html)?;
     }
 
-    // Static search index + vendored client assets.
+    // Static search index.
     fs::write(
         dist_dir.join("search-index.json"),
         docgen_core::search::index_json(&site.search),
     )?;
-    fs::write(dist_dir.join("search.js"), docgen_render::SEARCH_JS)?;
-    fs::write(dist_dir.join("docgen.css"), docgen_render::DOCGEN_CSS)?;
+
+    // All vendored + authored client assets flow through docgen-assets. The
+    // mermaid signal is wired in Cluster C (C-6); for now the build-time KaTeX
+    // path and no-mermaid defaults apply.
+    let include_mermaid = false;
+    let emit_opts = docgen_assets::EmitOptions {
+        include_katex_runtime: false,
+        include_mermaid,
+    };
+    docgen_assets::emit(&docgen_assets::assets_for(&emit_opts), &dist_dir)?;
 
     println!(
         "Built {} page(s) -> {}",

@@ -81,9 +81,17 @@ fn builds_fixture_site() {
     assert!(js.contains("search-index.json"));
     assert!(tmp.join("dist/docgen.css").exists());
 
+    // docgen-assets emitted the island infra alongside search + css.
+    assert!(tmp.join("dist/bootstrap.js").is_file());
+    assert!(tmp.join("dist/vendor/alpine/alpine.min.js").is_file());
+
     // Template wires the search trigger + script.
     assert!(home.contains("data-docgen-search"));
     assert!(home.contains(r#"src="/search.js""#));
+
+    // Template wires the island bootstrap + Alpine on every page.
+    assert!(home.contains(r#"src="/bootstrap.js""#));
+    assert!(home.contains(r#"src="/vendor/alpine/alpine.min.js""#));
 
     let _ = fs::remove_dir_all(&tmp);
 }
