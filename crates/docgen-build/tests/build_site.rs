@@ -182,3 +182,52 @@ fn no_home_doc_means_no_root_index_page() {
     assert!(!out.path().join("index.html").exists());
     assert!(out.path().join("guide/intro/index.html").is_file());
 }
+
+#[test]
+fn graph_feature_off_skips_graph_page_and_island() {
+    let root = tempfile::tempdir().unwrap();
+    setup_fixture(root.path());
+    std::fs::write(root.path().join("docgen.toml"), "[features]\ngraph = false\n").unwrap();
+    let out = tempfile::tempdir().unwrap();
+    build_site(&BuildOptions {
+        project_root: root.path(),
+        out_dir: out.path(),
+        mode: BuildMode::Production,
+    })
+    .unwrap();
+    assert!(!out.path().join("graph/index.html").exists());
+    assert!(!out.path().join("islands/graph.js").exists());
+}
+
+#[test]
+fn search_feature_off_skips_index_and_client() {
+    let root = tempfile::tempdir().unwrap();
+    setup_fixture(root.path());
+    std::fs::write(root.path().join("docgen.toml"), "[features]\nsearch = false\n").unwrap();
+    let out = tempfile::tempdir().unwrap();
+    build_site(&BuildOptions {
+        project_root: root.path(),
+        out_dir: out.path(),
+        mode: BuildMode::Production,
+    })
+    .unwrap();
+    assert!(!out.path().join("search-index.json").exists());
+    let home = std::fs::read_to_string(out.path().join("index.html")).unwrap();
+    assert!(!home.contains("data-docgen-search"));
+}
+
+#[test]
+fn title_from_config_suffixes_page_titles() {
+    let root = tempfile::tempdir().unwrap();
+    setup_fixture(root.path());
+    std::fs::write(root.path().join("docgen.toml"), "title = \"Acme Docs\"\n").unwrap();
+    let out = tempfile::tempdir().unwrap();
+    build_site(&BuildOptions {
+        project_root: root.path(),
+        out_dir: out.path(),
+        mode: BuildMode::Production,
+    })
+    .unwrap();
+    let intro = std::fs::read_to_string(out.path().join("guide/intro/index.html")).unwrap();
+    assert!(intro.contains("— Acme Docs</title>"));
+}

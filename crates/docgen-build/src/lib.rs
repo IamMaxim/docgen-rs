@@ -116,8 +116,9 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
 
     // Two-pass: prepare all docs, then render with full slug knowledge.
     let prepared: Vec<_> = raws.into_iter().map(prepare).collect();
-    // Config wiring lands in A-5; A-2 threads a default to keep behaviour identical.
-    let config = docgen_config::SiteConfig::default();
+    // Load `docgen.toml` (absent → defaults reproduce pre-P6 behaviour).
+    let config = docgen_config::load(opts.project_root)
+        .with_context(|| format!("loading docgen.toml from {}", opts.project_root.display()))?;
     let site = render_docs(prepared, &config);
     let tree = build_tree(&site.docs);
 
@@ -182,6 +183,7 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
             has_math: doc.has_math,
             base: &config.base,
             site_title: config.title.as_deref().unwrap_or(""),
+            search_enabled: config.features.search,
         })?;
 
         // `guide/intro` -> `dist/guide/intro/index.html` (clean URLs).
@@ -200,36 +202,42 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
         fs::write(dist_dir.join("index.html"), html)?;
     }
 
-    // Phase 3: the /graph/ page (default-on in P4). Deterministic force layout
-    // from the already-built link graph — never recomputes links.
-    let graph_data = site.graph_data(docgen_core::graphlayout::LayoutParams::default());
-    let graph_json = docgen_core::graphlayout::graph_data_json(&graph_data);
-    let graph_html = renderer.render_graph(&GraphContext {
-        tree: &tree,
-        graph_json: &graph_json,
-        node_count: graph_data.nodes.len(),
-        edge_count: graph_data.edges.len(),
-        base: &config.base,
-        site_title: config.title.as_deref().unwrap_or(""),
-    })?;
-    let graph_dir = dist_dir.join("graph");
-    fs::create_dir_all(&graph_dir)?;
-    fs::write(graph_dir.join("index.html"), graph_html)?;
+    // Phase 3: the /graph/ page (default-on, gated off by `[features] graph =
+    // false`). Deterministic force layout from the already-built link graph —
+    // never recomputes links.
+    if config.features.graph {
+        let graph_data = site.graph_data(docgen_core::graphlayout::LayoutParams::default());
+        let graph_json = docgen_core::graphlayout::graph_data_json(&graph_data);
+        let graph_html = renderer.render_graph(&GraphContext {
+            tree: &tree,
+            graph_json: &graph_json,
+            node_count: graph_data.nodes.len(),
+            edge_count: graph_data.edges.len(),
+            base: &config.base,
+            site_title: config.title.as_deref().unwrap_or(""),
+            search_enabled: config.features.search,
+        })?;
+        let graph_dir = dist_dir.join("graph");
+        fs::create_dir_all(&graph_dir)?;
+        fs::write(graph_dir.join("index.html"), graph_html)?;
+    }
 
-    // Static search index.
-    fs::write(
-        dist_dir.join("search-index.json"),
-        docgen_core::search::index_json(&site.search),
-    )?;
+    // Static search index (gated off by `[features] search = false`).
+    if config.features.search {
+        fs::write(
+            dist_dir.join("search-index.json"),
+            docgen_core::search::index_json(&site.search),
+        )?;
+    }
 
     // All vendored + authored client assets flow through docgen-assets. Mermaid
     // (lib + island) ships only when a page used a diagram; math renders at build
-    // time (the default), so no runtime KaTeX JS ships.
+    // time (the default), so no runtime KaTeX JS ships. The graph island ships
+    // only when the /graph/ page is emitted.
     let emit_opts = docgen_assets::EmitOptions {
         include_katex_runtime: false,
         include_mermaid: site.any_mermaid,
-        // The /graph/ page is always emitted in P4, so its island always ships.
-        include_graph: true,
+        include_graph: config.features.graph,
     };
     docgen_assets::emit(&docgen_assets::assets_for(&emit_opts), dist_dir)?;
 
