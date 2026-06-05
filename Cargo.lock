@@ -298,6 +298,7 @@ version = "0.0.0"
 dependencies = [
  "comrak",
  "serde",
+ "serde_json",
  "serde_yml",
  "thiserror",
  "walkdir",

@@ -2,6 +2,12 @@ use comrak::nodes::NodeValue;
 use comrak::{parse_document, Arena};
 
 use crate::markdown::comrak_options;
+use crate::model::SearchEntry;
+
+/// Serialize the search index to a compact JSON array for `dist/search-index.json`.
+pub fn index_json(entries: &[SearchEntry]) -> String {
+    serde_json::to_string(entries).expect("SearchEntry serializes")
+}
 
 /// Extract searchable plaintext from a markdown body (frontmatter already stripped).
 /// Walks the AST collecting text + inline-code, and unwraps `[[wikilinks]]` to their
@@ -82,5 +88,19 @@ mod tests {
     fn collapses_whitespace() {
         let text = plaintext("a\n\n\nb    c\n");
         assert_eq!(text, "a b c");
+    }
+
+    #[test]
+    fn serializes_index_to_json_array() {
+        use crate::model::SearchEntry;
+        let entries = vec![
+            SearchEntry { slug: "a".into(), title: "A".into(), text: "alpha".into() },
+            SearchEntry { slug: "b".into(), title: "B".into(), text: "beta".into() },
+        ];
+        let json = index_json(&entries);
+        assert!(json.starts_with('['));
+        assert!(json.contains(r#""slug":"a""#));
+        assert!(json.contains(r#""title":"A""#));
+        assert!(json.contains(r#""text":"alpha""#));
     }
 }
