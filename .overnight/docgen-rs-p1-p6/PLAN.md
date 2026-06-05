@@ -25,7 +25,7 @@ no push/PR/remote; quarantine irreversible decisions behind a seam and flag them
 | # | Milestone | Depends on | Status | Commit |
 |---|-----------|-----------|--------|--------|
 | P1 | Search (JSON index + client search island) + `syntect` highlight + wikilinks→links + backlinks | P0 | GREEN | 9b02dd5 |
-| P2 | Git diff timeline (`git2` + port of diff algorithms) | P0 | TODO | — |
+| P2 | Git diff timeline (`git2` + port of diff algorithms) | P0 | GREEN | f779ec8 |
 | P3 | Build-time KaTeX + Mermaid + **`docgen-assets`** crate (Alpine + island embedding infra) | P1 | TODO | — |
 | P4 | Graph view (Rust precomputes nodes/edges; JS renders SVG/canvas island) | P1, P3 | TODO | — |
 | P5 | Dev server (`axum` + `notify` + live reload) + CodeMirror editor island | P3 | TODO | — |
@@ -42,7 +42,7 @@ Status legend: TODO / IN-PROGRESS / GREEN / BLOCKED.
 - Interactive phases to validate live in Chrome: P3 (mermaid/katex render), P4 (graph), P5 (editor + live reload).
 
 ## Current position
-P1 GREEN (9b02dd5), validated live in Chrome (search modal, wikilinks, backlinks, highlighting). Next: launch P2 (git diff timeline).
+P2 GREEN (f779ec8), validated live (History page: timeline buckets, commit metadata, colored diff lines). New crate `docgen-diff`. Next: launch P3 (KaTeX + Mermaid + docgen-assets/Alpine island infra).
 
 **P1 API surface now in place** (later phases depend on these):
 - `docgen-core`: `pipeline::{prepare, render_docs, PreparedDoc, SiteBuild{docs,graph,search}}` (two-pass render), `graph::{LinkGraph{edges,backlinks}, build_link_graph}`, `model::{LinkEdge, Backlink, SearchEntry}`, `wikilink::{parse_wikilink, resolve_target, transform_wikilinks}`, `markdown::{comrak_options, format_ast, syntect_adapter (OnceLock), SYNTECT_THEME}`, `search::{plaintext(&AstNode), index_json}`.
