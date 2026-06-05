@@ -6,6 +6,7 @@
 //! dependency-light) and mirrors the original's split between *pure diff
 //! algorithms* (no git) and the *git-driven orchestrator*.
 
+pub mod block_diff;
 pub mod error;
 pub mod git_parsing;
 pub mod git_refs;
@@ -16,6 +17,7 @@ pub mod types;
 #[cfg(test)]
 mod testutil;
 
+pub use block_diff::{build_block_diff, split_markdown_blocks, strip_invisible_document_parts};
 pub use error::DiffError;
 pub use git_parsing::{parse_name_status, parse_untracked_docs, NameStatusEntry};
 pub use git_refs::{base_ref_for_commit_parents, EMPTY_TREE_REF};
