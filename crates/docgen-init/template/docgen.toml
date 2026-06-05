@@ -1,0 +1,11 @@
+title = "My Docs"
+base = ""
+
+[features]
+graph = true
+math = true
+mermaid = true
+search = true
+
+[components]
+dir = "components"

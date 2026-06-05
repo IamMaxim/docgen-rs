@@ -636,6 +636,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "docgen-init"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "docgen-config",
+ "include_dir",
+ "tempfile",
+]
+
+[[package]]
 name = "docgen-render"
 version = "0.0.0"
 dependencies = [
