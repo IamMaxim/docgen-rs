@@ -43,12 +43,13 @@ fn state_with_built_site() -> (tempfile::TempDir, tempfile::TempDir, AppState) {
 
     let docs_dir = root.path().join("docs").canonicalize().unwrap();
     let (reload_tx, _rx) = broadcast::channel(16);
-    let state = AppState {
-        project_root: root.path().to_path_buf(),
-        out_dir: out.path().to_path_buf(),
+    let state = AppState::new(
+        root.path().to_path_buf(),
+        out.path().to_path_buf(),
         docs_dir,
+        4321,
         reload_tx,
-    };
+    );
     (root, out, state)
 }
 
@@ -67,6 +68,7 @@ async fn get_source_returns_markdown_and_hash() {
         .oneshot(
             Request::builder()
                 .uri("/__docgen/source?path=index.md")
+                .header("host", "127.0.0.1:4321")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -90,6 +92,7 @@ async fn put_source_persists_in_bounds_write_and_rebuilds() {
             Request::builder()
                 .method("PUT")
                 .uri("/__docgen/source")
+                .header("host", "127.0.0.1:4321")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({ "path": "index.md", "source": "---\ntitle: Edited Title\n---\n\nhi\n" })
@@ -127,6 +130,7 @@ async fn put_source_rejects_traversal() {
             Request::builder()
                 .method("PUT")
                 .uri("/__docgen/source")
+                .header("host", "127.0.0.1:4321")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({ "path": "../secret.md", "source": "HACKED" }).to_string(),
@@ -146,6 +150,7 @@ async fn put_source_rejects_traversal() {
             Request::builder()
                 .method("PUT")
                 .uri("/__docgen/source")
+                .header("host", "127.0.0.1:4321")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({ "path": "/etc/passwd", "source": "x" }).to_string(),
@@ -162,6 +167,7 @@ async fn put_source_rejects_traversal() {
             Request::builder()
                 .method("PUT")
                 .uri("/__docgen/source")
+                .header("host", "127.0.0.1:4321")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({ "path": "index.txt", "source": "x" }).to_string(),
@@ -183,6 +189,7 @@ async fn put_source_conflict_on_stale_hash() {
             Request::builder()
                 .method("PUT")
                 .uri("/__docgen/source")
+                .header("host", "127.0.0.1:4321")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({

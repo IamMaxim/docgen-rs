@@ -106,15 +106,22 @@ async fn dev_serve_injects_editor_and_reload() {
 
     let docs_dir = root.path().join("docs").canonicalize().unwrap();
     let (reload_tx, _rx) = broadcast::channel(16);
-    let state = AppState {
-        project_root: root.path().to_path_buf(),
-        out_dir: out.path().to_path_buf(),
+    let state = AppState::new(
+        root.path().to_path_buf(),
+        out.path().to_path_buf(),
         docs_dir,
+        4321,
         reload_tx,
-    };
+    );
 
     let resp = router(state)
-        .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .header("host", "127.0.0.1:4321")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);

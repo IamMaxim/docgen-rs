@@ -12,9 +12,17 @@ mod handlers;
 mod watch;
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use axum::Router;
 use tokio::sync::broadcast;
+
+/// Window after an editor-initiated write during which a watcher event for the
+/// same on-disk change is treated as a duplicate and skipped. Must comfortably
+/// cover the 200ms watcher debounce.
+const SELF_WRITE_SUPPRESS: Duration = Duration::from_millis(750);
 
 /// Dev-server configuration.
 pub struct DevOptions {
@@ -39,7 +47,56 @@ pub struct AppState {
     pub out_dir: PathBuf,
     /// Canonicalized `docs/` dir — the write-guard root.
     pub docs_dir: PathBuf,
+    /// The loopback port the server is bound to. Used by the Host-header
+    /// allowlist to defeat DNS-rebinding (see `handlers::loopback_guard`).
+    pub port: u16,
     pub reload_tx: broadcast::Sender<ReloadEvent>,
+    /// Shared "last editor write" clock (millis since `epoch`) used to suppress
+    /// the duplicate watcher rebuild after an in-browser save. `0` = never.
+    self_write_at_ms: Arc<AtomicU64>,
+    /// Monotonic reference instant for `self_write_at_ms`.
+    epoch: Instant,
+}
+
+impl AppState {
+    /// Construct an `AppState`. Initializes the self-write suppression clock.
+    pub fn new(
+        project_root: PathBuf,
+        out_dir: PathBuf,
+        docs_dir: PathBuf,
+        port: u16,
+        reload_tx: broadcast::Sender<ReloadEvent>,
+    ) -> Self {
+        Self {
+            project_root,
+            out_dir,
+            docs_dir,
+            port,
+            reload_tx,
+            self_write_at_ms: Arc::new(AtomicU64::new(0)),
+            epoch: Instant::now(),
+        }
+    }
+
+    /// Record that the editor just wrote a doc on disk. The watcher will skip
+    /// the next change it sees within [`SELF_WRITE_SUPPRESS`] as a duplicate.
+    pub fn note_self_write(&self) {
+        // Store elapsed + 1 so the "never written" sentinel (0) is unambiguous
+        // even when the write happens at elapsed == 0.
+        let ms = self.epoch.elapsed().as_millis() as u64 + 1;
+        self.self_write_at_ms.store(ms, Ordering::SeqCst);
+    }
+
+    /// Whether a watcher event right now should be suppressed as the echo of a
+    /// recent editor write. Consumes the marker so only one rebuild is skipped.
+    pub fn take_self_write_suppression(&self) -> bool {
+        let marked = self.self_write_at_ms.swap(0, Ordering::SeqCst);
+        if marked == 0 {
+            return false;
+        }
+        let now = self.epoch.elapsed().as_millis() as u64 + 1;
+        now.saturating_sub(marked) <= SELF_WRITE_SUPPRESS.as_millis() as u64
+    }
 }
 
 /// Errors from [`resolve_doc_path`]; each maps to an HTTP status (see `handlers`).
@@ -109,11 +166,10 @@ pub fn resolve_doc_path(docs_dir: &Path, rel: &str) -> Result<PathBuf, PathGuard
     }
 
     // (5) realpath check (catches symlink escapes).
+    // Any canonicalize failure (missing path, permission, etc.) is reported as
+    // NotFound for a dev write endpoint — the client cannot act on finer detail.
     let canonical = match candidate.canonicalize() {
         Ok(p) => p,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Err(PathGuardError::NotFound)
-        }
         Err(_) => return Err(PathGuardError::NotFound),
     };
     if !canonical.starts_with(docs_dir) {
@@ -186,7 +242,10 @@ pub fn router(state: AppState) -> Router {
 /// Rebuild the site into `state.out_dir` (Dev mode + dev-asset emission), then
 /// broadcast a reload. Called on every debounced fs change AND after a successful
 /// editor write. Returns `Err` only on a hard build failure; the caller logs and
-/// keeps serving the last good build.
+/// keeps serving the last good build. This guarantee holds because
+/// [`docgen_build::build_site`] is atomic — it stages into a temp dir and only
+/// swaps `out_dir` on full success, so a failed rebuild leaves the served dir
+/// (the previous good build) untouched rather than torn down.
 pub fn rebuild_and_reload(state: &AppState) -> anyhow::Result<()> {
     let start = std::time::Instant::now();
     let outcome = docgen_build::build_site(&docgen_build::BuildOptions {
@@ -239,12 +298,13 @@ async fn serve_async(opts: DevOptions) -> anyhow::Result<()> {
     let out_dir = out_tmp.path().to_path_buf();
 
     let (reload_tx, _rx) = broadcast::channel(16);
-    let state = AppState {
+    let state = AppState::new(
         project_root,
         out_dir,
-        docs_dir: docs_canon.clone(),
+        docs_canon.clone(),
+        opts.port,
         reload_tx,
-    };
+    );
 
     // Initial build (Dev mode + dev assets).
     rebuild_and_reload(&state)?;
@@ -318,6 +378,24 @@ mod tests {
         let out = inject_dev_html("<p>no body tag here</p>");
         assert!(out.contains("__docgen/livereload.js"));
         assert!(out.contains("docgenEditor"));
+    }
+
+    #[test]
+    fn self_write_suppression_is_one_shot() {
+        let (tx, _rx) = broadcast::channel(4);
+        let state = AppState::new(
+            PathBuf::from("/x"),
+            PathBuf::from("/x/out"),
+            PathBuf::from("/x/docs"),
+            4321,
+            tx,
+        );
+        // No write yet -> nothing to suppress.
+        assert!(!state.take_self_write_suppression());
+        // After a self-write, exactly one watcher event is suppressed.
+        state.note_self_write();
+        assert!(state.take_self_write_suppression());
+        assert!(!state.take_self_write_suppression());
     }
 
     #[test]

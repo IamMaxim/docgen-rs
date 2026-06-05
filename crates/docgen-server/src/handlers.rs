@@ -3,13 +3,14 @@
 //! and are trivially greppable as "dev-only surface".
 
 use std::convert::Infallible;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use axum::{
-    body::Body,
-    extract::{Query, State},
-    http::{header, HeaderValue, StatusCode},
+    extract::{DefaultBodyLimit, Query, Request, State},
+    http::{header, Method, StatusCode},
+    middleware::{self, Next},
     response::{
         sse::{Event, KeepAlive, Sse},
         IntoResponse, Response,
@@ -24,6 +25,11 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{rebuild_and_reload, resolve_doc_path, AppState, PathGuardError, ReloadEvent};
 
+/// Max accepted body for `PUT /__docgen/source`. Generous for a markdown source
+/// file, but bounded + explicit so the limit survives extractor refactors
+/// instead of silently relying on axum's implicit 2 MiB default.
+const MAX_SOURCE_BODY: usize = 8 * 1024 * 1024;
+
 // ---- request/response payloads (mirror the original `types.ts`) ----
 
 #[derive(Deserialize)]
@@ -32,6 +38,9 @@ pub struct SaveRequest {
     pub path: String,
     pub source: String,
     /// sha256 hex of the source last loaded; optimistic-concurrency guard.
+    /// When omitted, the write is an **intentional force-write** (no stale-write
+    /// check). The bundled editor always sends it; a direct caller may omit it
+    /// to deliberately clobber concurrent on-disk changes.
     #[serde(default)]
     pub disk_hash: Option<String>,
 }
@@ -66,7 +75,7 @@ pub(crate) fn sha256_hex(s: &str) -> String {
     let out = h.finalize();
     let mut hex = String::with_capacity(out.len() * 2);
     for b in out {
-        hex.push_str(&format!("{b:02x}"));
+        let _ = write!(hex, "{b:02x}");
     }
     hex
 }
@@ -89,19 +98,68 @@ fn guard_response(e: PathGuardError) -> (StatusCode, Json<ApiError>) {
 }
 
 /// Build the dev router: dev-only routes + the static-serving fallback.
+///
+/// Every request first passes through [`loopback_guard`], which enforces a
+/// Host/Origin allowlist so a DNS-rebinding site cannot reach the mutating
+/// write endpoint even though the bind is already loopback-only.
 pub fn router(state: AppState) -> Router {
+    let port = state.port;
     Router::new()
         .route("/__docgen/livereload", get(livereload_sse))
         .route(
             "/__docgen/source",
-            get(get_source).put(put_source),
+            get(get_source)
+                .put(put_source)
+                .layer(DefaultBodyLimit::max(MAX_SOURCE_BODY)),
         )
         .route("/__codemirror/*file", get(serve_dev_asset))
         .route("/__docgen/editor.js", get(serve_dev_asset))
         .route("/__docgen/editor.css", get(serve_dev_asset))
         .route("/__docgen/livereload.js", get(serve_dev_asset))
         .fallback(serve_site)
+        .layer(middleware::from_fn(move |req, next| {
+            loopback_guard(port, req, next)
+        }))
         .with_state(state)
+}
+
+/// Host/Origin allowlist enforced on every request. The loopback bind already
+/// blocks off-host TCP, but it does NOT stop a browser-mediated DNS-rebinding
+/// attack: a remote page whose hostname is rebound to `127.0.0.1` would
+/// otherwise reach this dev server (and its markdown write endpoint) as
+/// "same-origin". The rebound request still carries the attacker's hostname in
+/// `Host`, so allowlisting `Host` to the loopback authorities closes it.
+///
+///  * `Host` must be exactly `127.0.0.1:<port>` or `localhost:<port>` -> else 403.
+///  * On mutating verbs (anything but GET/HEAD), if an `Origin` header is
+///    present it must be a loopback origin -> else 403. (Same-origin/no-CORS
+///    requests omit `Origin`; a cross-site request that sets it is rejected.)
+async fn loopback_guard(port: u16, req: Request, next: Next) -> Response {
+    let allowed_hosts = [format!("127.0.0.1:{port}"), format!("localhost:{port}")];
+    let host_ok = req
+        .headers()
+        .get(header::HOST)
+        .and_then(|h| h.to_str().ok())
+        .map(|h| allowed_hosts.iter().any(|a| a == h))
+        .unwrap_or(false);
+    if !host_ok {
+        return (StatusCode::FORBIDDEN, "forbidden host").into_response();
+    }
+
+    let is_mutating = !matches!(req.method(), &Method::GET | &Method::HEAD);
+    if is_mutating {
+        if let Some(origin) = req.headers().get(header::ORIGIN).and_then(|o| o.to_str().ok()) {
+            let allowed_origins = [
+                format!("http://127.0.0.1:{port}"),
+                format!("http://localhost:{port}"),
+            ];
+            if !allowed_origins.iter().any(|a| a == origin) {
+                return (StatusCode::FORBIDDEN, "forbidden origin").into_response();
+            }
+        }
+    }
+
+    next.run(req).await
 }
 
 // ---- SSE live-reload ----
@@ -128,7 +186,7 @@ async fn get_source(
     Query(q): Query<SourceQuery>,
 ) -> Result<Json<SourceResponse>, (StatusCode, Json<ApiError>)> {
     let abs = resolve_doc_path(&state.docs_dir, &q.path).map_err(guard_response)?;
-    let source = std::fs::read_to_string(&abs).map_err(|_| {
+    let source = tokio::fs::read_to_string(&abs).await.map_err(|_| {
         (
             StatusCode::NOT_FOUND,
             Json(ApiError {
@@ -151,8 +209,9 @@ async fn put_source(
     let abs = resolve_doc_path(&state.docs_dir, &req.path).map_err(guard_response)?;
 
     // Optimistic concurrency: reject if the file changed on disk since load.
+    // An absent hash is an intentional force-write (see `SaveRequest::disk_hash`).
     if let Some(ref expected) = req.disk_hash {
-        let current = std::fs::read_to_string(&abs).unwrap_or_default();
+        let current = tokio::fs::read_to_string(&abs).await.unwrap_or_default();
         if &sha256_hex(&current) != expected {
             return Err((
                 StatusCode::CONFLICT,
@@ -163,7 +222,7 @@ async fn put_source(
         }
     }
 
-    std::fs::write(&abs, &req.source).map_err(|e| {
+    tokio::fs::write(&abs, &req.source).await.map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiError {
@@ -172,9 +231,19 @@ async fn put_source(
         )
     })?;
 
+    // Mark this as an editor-initiated write so the fs watcher skips the
+    // duplicate rebuild it would otherwise fire for the same on-disk change.
+    state.note_self_write();
+
     // A successful save triggers a server rebuild + SSE reload (best-effort).
-    if let Err(e) = rebuild_and_reload(&state) {
-        tracing::error!("rebuild after save failed: {e:#}");
+    // build_site is CPU/disk/git-bound and fully synchronous, so run it off the
+    // async worker via spawn_blocking rather than stalling the runtime.
+    let st = state.clone();
+    let rebuild = tokio::task::spawn_blocking(move || rebuild_and_reload(&st)).await;
+    match rebuild {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => tracing::error!("rebuild after save failed: {e:#}"),
+        Err(e) => tracing::error!("rebuild task panicked: {e}"),
     }
 
     let disk_hash = sha256_hex(&req.source);
@@ -202,23 +271,23 @@ async fn serve_dev_asset(uri: axum::http::Uri) -> Response {
 async fn serve_site(State(state): State<AppState>, uri: axum::http::Uri) -> Response {
     let rel = uri.path().trim_start_matches('/');
     match resolve_served_file(&state.out_dir, rel) {
-        Some(Served::Html(path)) => match std::fs::read_to_string(&path) {
-            Ok(body) => Response::builder()
-                .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-                .body(Body::from(crate::inject_dev_html(&body)))
-                .unwrap(),
+        Some(Served::Html(path)) => match tokio::fs::read_to_string(&path).await {
+            Ok(body) => (
+                [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+                crate::inject_dev_html(&body),
+            )
+                .into_response(),
             Err(_) => not_found(),
         },
-        Some(Served::Raw(path)) => match std::fs::read(&path) {
-            Ok(bytes) => Response::builder()
-                .header(
+        Some(Served::Raw(path)) => match tokio::fs::read(&path).await {
+            Ok(bytes) => (
+                [(
                     header::CONTENT_TYPE,
-                    HeaderValue::from_static(content_type_for(
-                        path.to_str().unwrap_or(""),
-                    )),
-                )
-                .body(Body::from(bytes))
-                .unwrap(),
+                    content_type_for(path.to_str().unwrap_or("")),
+                )],
+                bytes,
+            )
+                .into_response(),
             Err(_) => not_found(),
         },
         None => not_found(),
