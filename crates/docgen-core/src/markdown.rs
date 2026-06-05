@@ -1,6 +1,7 @@
+use comrak::nodes::AstNode;
 use comrak::options::Plugins;
 use comrak::plugins::syntect::SyntectAdapter;
-use comrak::{markdown_to_html_with_plugins, Options};
+use comrak::{format_html_with_plugins, markdown_to_html_with_plugins, Options};
 
 /// Default syntect theme. Single source of truth.
 pub const SYNTECT_THEME: &str = "InspiredGitHub";
@@ -14,6 +15,9 @@ pub fn comrak_options() -> Options<'static> {
     options.extension.tasklist = true;
     options.extension.autolink = true;
     options.extension.footnotes = true;
+    // Allow raw inline HTML through: the wikilink AST pass injects `HtmlInline`
+    // nodes (resolved anchors / broken spans) that must render, not be omitted.
+    options.render.r#unsafe = true;
     options
 }
 
@@ -25,6 +29,16 @@ pub fn render_markdown(body: &str) -> String {
     let mut plugins = Plugins::default();
     plugins.render.codefence_syntax_highlighter = Some(&adapter);
     markdown_to_html_with_plugins(body, &options, &plugins)
+}
+
+/// Format an already-parsed (and possibly transformed) AST to HTML with syntect.
+pub fn format_ast<'a>(root: &'a AstNode<'a>, options: &Options) -> String {
+    let adapter = SyntectAdapter::new(Some(SYNTECT_THEME));
+    let mut plugins = Plugins::default();
+    plugins.render.codefence_syntax_highlighter = Some(&adapter);
+    let mut out = String::new();
+    format_html_with_plugins(root, options, &mut out, &plugins).expect("format AST to HTML");
+    out
 }
 
 #[cfg(test)]
