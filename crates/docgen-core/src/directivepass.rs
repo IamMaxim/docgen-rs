@@ -302,6 +302,133 @@ fn try_parse_leaf(chars: &[char], start: usize) -> Option<(DirectiveInstance, us
     ))
 }
 
+/// Pass 2: replace each `<!--docgen-directive:N-->` sentinel in `html` with the
+/// component's rendered HTML. `render_inner` renders a block directive's inner
+/// markdown to HTML (the full pipeline, recursively). Returns the substituted
+/// HTML and the set of component names that were actually rendered (for per-page
+/// island/style gating). An unknown directive (or a component whose template
+/// errors) becomes a clearly-marked inert error span — never a crash.
+pub fn substitute(
+    html: &str,
+    instances: &[DirectiveInstance],
+    registry: &docgen_components::Registry,
+    render_inner: &dyn Fn(&str) -> String,
+) -> (String, std::collections::BTreeSet<String>) {
+    use docgen_components::DirectiveContext;
+    let mut used = std::collections::BTreeSet::new();
+    let mut out = html.to_string();
+    for (idx, inst) in instances.iter().enumerate() {
+        let rendered = match registry.get(&inst.name) {
+            Some(component) => {
+                let content = if inst.is_block {
+                    render_inner(&inst.inner_md)
+                } else {
+                    String::new()
+                };
+                let ctx = DirectiveContext {
+                    attrs: inst.attrs.clone(),
+                    content,
+                    label: inst.label.clone(),
+                    id: format!("docgen-d-{idx}"),
+                };
+                match component.render(&ctx) {
+                    Ok(h) => {
+                        used.insert(inst.name.clone());
+                        h
+                    }
+                    Err(_) => error_span(&inst.name, "template error"),
+                }
+            }
+            None => error_span(&inst.name, "unknown directive"),
+        };
+        out = out.replace(&sentinel(idx), &rendered);
+    }
+    (out, used)
+}
+
+/// An inert, clearly-marked error span for an unresolved/failed directive. The
+/// directive name is HTML-escaped so a malformed name cannot inject markup.
+fn error_span(name: &str, reason: &str) -> String {
+    let safe = crate::util::escape_html(name);
+    format!(
+        "<span class=\"docgen-directive-error\" data-directive=\"{safe}\">[docgen: {reason} `{safe}`]</span>"
+    )
+}
+
+#[cfg(test)]
+mod substitute_tests {
+    use super::*;
+
+    fn reg_with(name: &str, tpl: &str) -> docgen_components::Registry {
+        let mut r = docgen_components::Registry::empty();
+        r.insert(docgen_components::Component::from_parts(name, tpl, None, None));
+        r
+    }
+
+    #[test]
+    fn substitutes_known_block_component_and_renders_inner() {
+        let (html, inst) = extract(":::callout{type=note}\n**hi**\n:::\n");
+        let reg = reg_with(
+            "callout",
+            "<aside class=\"c--{{ attrs.type }}\">{{ content | safe }}</aside>",
+        );
+        let render_inner = |md: &str| format!("<p>{}</p>", md.trim().replace("**", ""));
+        let (out, used) = substitute(&html, &inst, &reg, &render_inner);
+        assert!(out.contains("c--note"));
+        assert!(out.contains("<p>hi</p>"));
+        assert!(used.contains("callout"));
+        assert!(!out.contains("docgen-directive:")); // sentinel gone
+    }
+
+    #[test]
+    fn unknown_directive_becomes_marked_error_span_not_panic() {
+        let (html, inst) = extract(":bogus[x]{}\n");
+        let reg = docgen_components::Registry::empty();
+        let (out, used) = substitute(&html, &inst, &reg, &|s| s.to_string());
+        assert!(out.contains("docgen-directive-error"));
+        assert!(out.contains("unknown directive"));
+        assert!(out.contains("bogus"));
+        assert!(used.is_empty());
+    }
+
+    /// Build a doc that is just the sentinel for instance 0.
+    fn sentinel_doc() -> String {
+        format!("before {} after", sentinel(0))
+    }
+
+    #[test]
+    fn directive_name_in_error_is_escaped() {
+        // Craft an instance with a name that contains markup to exercise escaping.
+        let inst = vec![DirectiveInstance {
+            name: "<img>".into(),
+            attrs: Default::default(),
+            label: String::new(),
+            inner_md: String::new(),
+            is_block: false,
+        }];
+        let html = sentinel_doc();
+        let (out, _) = substitute(
+            &html,
+            &inst,
+            &docgen_components::Registry::empty(),
+            &|s| s.to_string(),
+        );
+        assert!(out.contains("&lt;img&gt;"));
+        assert!(!out.contains("<img>"));
+    }
+
+    #[test]
+    fn template_error_becomes_error_span_not_panic() {
+        // A template referencing an undefined filter fails to render.
+        let reg = reg_with("boom", "{{ content | nonexistent_filter }}");
+        let (html, inst) = extract(":::boom{}\nx\n:::\n");
+        let (out, used) = substitute(&html, &inst, &reg, &|s| s.to_string());
+        assert!(out.contains("docgen-directive-error"));
+        assert!(out.contains("template error"));
+        assert!(used.is_empty());
+    }
+}
+
 #[cfg(test)]
 mod extract_tests {
     use super::*;
