@@ -79,6 +79,40 @@ fn build_compat_wrapper_writes_dist() {
 }
 
 #[test]
+fn failed_build_preserves_last_good_out_dir() {
+    // A first successful build, then a build that fails (docs removed) must leave
+    // the previous good `out_dir` fully intact — the dev server keeps serving it.
+    let root = tempfile::tempdir().unwrap();
+    setup_fixture(root.path());
+    let out = tempfile::tempdir().unwrap();
+
+    build_site(&BuildOptions {
+        project_root: root.path(),
+        out_dir: out.path(),
+        mode: BuildMode::Dev,
+    })
+    .unwrap();
+    let good = emitted_paths(out.path());
+    assert!(out.path().join("index/index.html").is_file());
+
+    // Make the next build fail before/while staging (discover fails on no docs).
+    fs::remove_dir_all(root.path().join("docs")).unwrap();
+    let res = build_site(&BuildOptions {
+        project_root: root.path(),
+        out_dir: out.path(),
+        mode: BuildMode::Dev,
+    });
+    assert!(res.is_err(), "expected the second build to fail");
+
+    // The last good build is untouched: same files, index still served.
+    assert!(
+        out.path().join("index/index.html").is_file(),
+        "out_dir was torn down by a failed build"
+    );
+    assert_eq!(good, emitted_paths(out.path()));
+}
+
+#[test]
 fn dev_and_production_modes_emit_identical_files() {
     let root = tempfile::tempdir().unwrap();
     setup_fixture(root.path());

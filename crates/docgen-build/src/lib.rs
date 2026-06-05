@@ -93,11 +93,17 @@ pub fn build(project_root: &Path) -> Result<BuildOutcome> {
 }
 
 /// Discover -> render -> emit the whole site into `opts.out_dir`. This is the
-/// single pipeline both `docgen build` and `docgen dev` call. Wipes + recreates
-/// `out_dir`. Emits ONLY production assets regardless of `opts.mode`.
+/// single pipeline both `docgen build` and `docgen dev` call.
+///
+/// The build is **atomic**: the whole site is rendered into a fresh staging dir
+/// (a sibling temp dir) and only swapped into `out_dir` on full success. A
+/// failure anywhere in the pipeline therefore leaves any pre-existing `out_dir`
+/// untouched — so the dev server genuinely keeps serving the last good build
+/// (the swap is the only step that mutates `out_dir`). Emits ONLY production
+/// assets regardless of `opts.mode`.
 pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
     let docs_dir = opts.project_root.join("docs");
-    let dist_dir = opts.out_dir;
+    let final_dir = opts.out_dir;
 
     // The mode is recorded for logging/parity; the pipeline is mode-independent.
     let _ = opts.mode;
@@ -112,9 +118,13 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
 
     let renderer = Renderer::new(DEFAULT_PAGE_TEMPLATE)?;
 
-    // Clean and recreate dist.
-    let _ = fs::remove_dir_all(dist_dir);
-    fs::create_dir_all(dist_dir)?;
+    // Render the whole site into a fresh staging dir; only swap it into
+    // `final_dir` once everything below succeeds. This makes the build atomic:
+    // a failure leaves any existing `final_dir` (the last good build) intact.
+    // Staging lives alongside `final_dir` so the final move is a same-filesystem
+    // rename (atomic) rather than a cross-device copy.
+    let staging = StagingDir::new(final_dir)?;
+    let dist_dir = staging.path();
 
     // Phase 1: build the per-doc git history pages (graceful no-op outside a
     // git repo or for docs with no commit history). Collect which slugs got a
@@ -201,9 +211,79 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
     };
     docgen_assets::emit(&docgen_assets::assets_for(&emit_opts), dist_dir)?;
 
+    // Everything rendered cleanly: atomically swap staging into place. Only now
+    // is the previously-served `final_dir` replaced.
+    staging.commit(final_dir)?;
+
     Ok(BuildOutcome {
         page_count: site.docs.len(),
         any_mermaid: site.any_mermaid,
-        out_dir: dist_dir.to_path_buf(),
+        out_dir: final_dir.to_path_buf(),
     })
+}
+
+/// A staging directory for an atomic build. Renders happen here; [`commit`]
+/// swaps it into the final location only on success. If dropped without
+/// committing (i.e. the build errored), the staging dir is best-effort removed,
+/// leaving the previous `final_dir` untouched.
+///
+/// [`commit`]: StagingDir::commit
+struct StagingDir {
+    path: PathBuf,
+    committed: bool,
+}
+
+impl StagingDir {
+    /// Create a fresh, empty staging dir as a sibling of `final_dir` (same
+    /// filesystem -> the final rename is atomic).
+    fn new(final_dir: &Path) -> Result<Self> {
+        let parent = final_dir
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."));
+        fs::create_dir_all(&parent)
+            .with_context(|| format!("creating staging parent {}", parent.display()))?;
+        let file_name = final_dir
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "dist".to_string());
+        let path = parent.join(format!(".{file_name}.staging-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&path);
+        fs::create_dir_all(&path)
+            .with_context(|| format!("creating staging dir {}", path.display()))?;
+        Ok(Self {
+            path,
+            committed: false,
+        })
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Atomically replace `final_dir` with the staging dir. Removes any existing
+    /// `final_dir` first, then renames staging into place.
+    fn commit(mut self, final_dir: &Path) -> Result<()> {
+        let _ = fs::remove_dir_all(final_dir);
+        if let Some(parent) = final_dir.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::rename(&self.path, final_dir).with_context(|| {
+            format!(
+                "swapping build {} -> {}",
+                self.path.display(),
+                final_dir.display()
+            )
+        })?;
+        self.committed = true;
+        Ok(())
+    }
+}
+
+impl Drop for StagingDir {
+    fn drop(&mut self) {
+        if !self.committed {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
 }
