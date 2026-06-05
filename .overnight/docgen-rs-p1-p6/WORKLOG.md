@@ -28,3 +28,12 @@
 - ARCHITECT VERIFICATION: re-ran cargo test (104 pass/10 binaries), clippy clean, built fixture (3 pages + 3 history pages), validated LIVE in Chrome — /markup/history/ shows "Today" bucket, commit 9b02dd5 w/ author+date+(+9/−0), file path, green added-line diff. Confirmed working.
 - Decision (reversible, FYI): history pages are STATIC HTML (no Alpine) for P2; diff interactivity can be enhanced once island infra lands in P3. Per-doc history uses /<slug>/history/index.html.
 - Next: P3 (build-time KaTeX, Mermaid, docgen-assets crate + Alpine).
+
+## 2026-06-05 17:40 MSK — P3 GREEN
+- Workflow wgmzafopb (~65 min): plan → 3 TDD clusters (docgen-assets+Alpine / build-time KaTeX / Mermaid island) → gate → 4 reviews → fix → verify.
+- New crate **docgen-assets**: embeds vendored Alpine 3.14.1, KaTeX 0.16.11 (css+16 woff2 fonts), Mermaid 11.2.1 via include_dir; typed Asset API + emit(); VENDOR.md records sources/versions/licenses. Island registry: window.docgen.{island(name,fn), loadScript(src cached)} on alpine:init.
+- KaTeX = BUILD-TIME via katex crate 0.4.6 (quick-js/QuickJS backend); zero runtime JS for math; runtime fallback vendored but OFF (EmitOptions.include_katex_runtime). Mermaid = lazy Alpine island, loads mermaid.js only on pages with diagrams.
+- Result: 144 tests green, clippy clean (-D warnings), 5 fixture pages. Review 7 findings, 6 applied (display-math fallback layout, asset path same() helper wired, KaTeX error now logged, +3 tests incl. XSS-escape + broken-math E2E), 1 rejected (throw_on_error finding recommended no change).
+- ARCHITECT VERIFICATION: re-ran cargo test (144/12 binaries), clippy clean, built fixture, validated LIVE in Chrome — /math/ shows typeset E=mc^2, display sum, Euler's identity; /diagram/ shows a rendered Mermaid SVG flowchart (Start→Choice→yes/no→Do thing/Skip). Both confirmed.
+- FLAGGED DECISION (see REPORT): build-time KaTeX needs a C toolchain to COMPILE docgen from source (QuickJS). Prebuilt-binary users (P6) are unaffected (engine embedded); runtime-JS fallback exists behind a seam. Defensible + spec-sanctioned.
+- Next: P4 (graph view — consumes existing graph::LinkGraph.edges).
