@@ -14,6 +14,7 @@ pub mod git_refs;
 pub mod history;
 pub mod line_diff;
 pub mod payloads;
+pub mod timeline_groups;
 pub mod types;
 
 #[cfg(test)]
@@ -27,4 +28,5 @@ pub use git_refs::{base_ref_for_commit_parents, EMPTY_TREE_REF};
 pub use history::{discover_repo, doc_revisions, CommitMeta, RevisionContent};
 pub use line_diff::{build_line_hunks, build_line_hunks_default};
 pub use payloads::{summarize_file, summarize_report, summarize_timeline_point};
+pub use timeline_groups::{bucket_label, format_date, group_timeline, ymd, TimelineBucket};
 pub use types::*;
