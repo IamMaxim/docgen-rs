@@ -5,6 +5,7 @@
 //! component overrides a built-in of the same name.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use minijinja::{context, Environment};
 use serde::Serialize;
@@ -83,6 +84,149 @@ impl Component {
             name: self.name.clone(),
             source: e,
         })
+    }
+}
+
+/// A name → component map. Built-ins inserted first, project components last
+/// (so a project `<name>` overrides a built-in `<name>`).
+#[derive(Debug, Clone, Default)]
+pub struct Registry {
+    map: BTreeMap<String, Component>,
+}
+
+impl Registry {
+    pub fn empty() -> Self {
+        Self::default()
+    }
+
+    /// Insert (or override) a component by its `name`.
+    pub fn insert(&mut self, c: Component) {
+        self.map.insert(c.name.clone(), c);
+    }
+
+    pub fn get(&self, name: &str) -> Option<&Component> {
+        self.map.get(name)
+    }
+
+    pub fn contains(&self, name: &str) -> bool {
+        self.map.contains_key(name)
+    }
+
+    /// All components with an `island.js`, name-sorted — the concatenation order
+    /// for the emitted `components.js`.
+    pub fn islands(&self) -> Vec<&Component> {
+        self.map.values().filter(|c| c.island_js.is_some()).collect()
+    }
+
+    /// All components with a `style.css`, name-sorted.
+    pub fn styles(&self) -> Vec<&Component> {
+        self.map.values().filter(|c| c.style_css.is_some()).collect()
+    }
+}
+
+/// Read every `<name>/` subdir of `dir` into components. `template.html` is
+/// required; a subdir without it is skipped (with no error — a stray dir is not
+/// fatal). Missing `dir` → no components (empty). Deterministic (sorted names).
+pub fn discover(dir: &Path) -> std::io::Result<Vec<Component>> {
+    let mut out = Vec::new();
+    let rd = match std::fs::read_dir(dir) {
+        Ok(rd) => rd,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(out),
+        Err(e) => return Err(e),
+    };
+    let mut names: Vec<String> = Vec::new();
+    for entry in rd {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            names.push(entry.file_name().to_string_lossy().into_owned());
+        }
+    }
+    names.sort();
+    for name in names {
+        let base = dir.join(&name);
+        let template = match std::fs::read_to_string(base.join("template.html")) {
+            Ok(t) => t,
+            Err(_) => continue, // no template.html → not a component
+        };
+        let island_js = std::fs::read_to_string(base.join("island.js")).ok();
+        let style_css = std::fs::read_to_string(base.join("style.css")).ok();
+        out.push(Component::from_parts(name, template, island_js, style_css));
+    }
+    Ok(out)
+}
+
+/// Build the full registry: embedded built-ins first, then project components
+/// from `project_dir` (which override built-ins by name).
+pub fn build_registry(builtins: Vec<Component>, project_dir: &Path) -> std::io::Result<Registry> {
+    let mut reg = Registry::empty();
+    for c in builtins {
+        reg.insert(c);
+    }
+    for c in discover(project_dir)? {
+        reg.insert(c);
+    }
+    Ok(reg)
+}
+
+#[cfg(test)]
+mod registry_tests {
+    use super::*;
+
+    fn write_component(root: &Path, name: &str, tpl: &str) {
+        let d = root.join(name);
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("template.html"), tpl).unwrap();
+    }
+
+    #[test]
+    fn discovers_project_components_sorted_and_requires_template() {
+        let dir = tempfile::tempdir().unwrap();
+        write_component(dir.path(), "note", "<div>{{ content | safe }}</div>");
+        // a stray dir with no template.html is ignored
+        std::fs::create_dir_all(dir.path().join("empty")).unwrap();
+        let comps = discover(dir.path()).unwrap();
+        assert_eq!(comps.len(), 1);
+        assert_eq!(comps[0].name, "note");
+    }
+
+    #[test]
+    fn missing_components_dir_is_empty_not_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let comps = discover(&dir.path().join("nope")).unwrap();
+        assert!(comps.is_empty());
+    }
+
+    #[test]
+    fn project_component_overrides_builtin_of_same_name() {
+        let dir = tempfile::tempdir().unwrap();
+        write_component(
+            dir.path(),
+            "callout",
+            "<div class=\"project-callout\">{{ content | safe }}</div>",
+        );
+        let builtin =
+            Component::from_parts("callout", "<div class=\"builtin-callout\"></div>", None, None);
+        let reg = build_registry(vec![builtin], dir.path()).unwrap();
+        let c = reg.get("callout").unwrap();
+        assert!(c.template.contains("project-callout"));
+        assert!(!c.template.contains("builtin-callout"));
+    }
+
+    #[test]
+    fn picks_up_island_and_style_when_present() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path().join("rating");
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("template.html"), "<div></div>").unwrap();
+        std::fs::write(d.join("island.js"), "Alpine.data('r',()=>({}))").unwrap();
+        std::fs::write(d.join("style.css"), ".r{}").unwrap();
+        let comps = discover(dir.path()).unwrap();
+        assert!(comps[0].island_js.is_some());
+        assert!(comps[0].style_css.is_some());
+        let mut reg = Registry::empty();
+        reg.insert(comps.into_iter().next().unwrap());
+        assert_eq!(reg.islands().len(), 1);
+        assert_eq!(reg.styles().len(), 1);
     }
 }
 
