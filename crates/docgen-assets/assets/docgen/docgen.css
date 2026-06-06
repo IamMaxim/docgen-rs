@@ -394,9 +394,11 @@ kbd,
 .docgen-layout {
 	display: grid;
 	grid-template-columns: var(--left-rail-width) 5px minmax(0, 1fr) var(--right-rail-width);
-	max-width: 1440px;
-	margin: 0 auto;
 	align-items: start;
+	/* No max-width / auto-margins: the sidebar and right rail are nailed to the
+	   viewport edges on wide screens. The readable measure is constrained by
+	   `.docgen-doc-content` (max-width) inside the content column instead, so only
+	   the page body gets horizontal breathing room — not the whole shell. */
 }
 
 /* draggable sidebar resize handle (port of starter +layout .rail-resizer);
@@ -716,16 +718,6 @@ kbd,
 	font-size: 22px;
 	letter-spacing: -0.015em;
 }
-.docgen-doc-content h2::before {
-	content: '';
-	display: inline-block;
-	width: 4px;
-	height: 4px;
-	margin-right: 12px;
-	border-radius: 50%;
-	background: var(--accent);
-	vertical-align: 0.3em;
-}
 .docgen-doc-content h3 {
 	margin: 36px 0 12px;
 	font-size: 16px;
@@ -790,9 +782,12 @@ kbd,
 	padding: 0 0.35em;
 }
 
-/* wikilink hover-preview tooltip */
+/* wikilink hover-preview tooltip. `fixed`, not `absolute`: wikilink.js positions
+   it from getBoundingClientRect() (viewport coordinates) and clamps to
+   window.innerWidth/Height, so it must be placed in the viewport coordinate
+   system — otherwise on a scrolled page it lands `scrollY` px off from the link. */
 .docgen-wikilink-tooltip {
-	position: absolute;
+	position: fixed;
 	z-index: 60;
 	max-width: 320px;
 	padding: 10px 12px;
@@ -1277,12 +1272,20 @@ kbd,
    supplied by `.docgen-content`, so this only lays out the dashboard internals. */
 .docgen-home {
 	display: grid;
+	/* Explicit single column with a 0 minimum: without it, the implicit `auto`
+	   track sizes to the max-content of the children (a long Recent entry or
+	   wikilink title), blowing the dashboard past the content column and into the
+	   right rail. `minmax(0, 1fr)` clamps it to the available width. */
+	grid-template-columns: minmax(0, 1fr);
 	gap: 32px;
 	margin-bottom: 8px;
+	min-width: 0;
 }
 .docgen-home__head {
 	display: grid;
-	grid-template-columns: 1.4fr 1fr;
+	/* `minmax(0, …)` so a long title/subtitle can't force the track wider than
+	   the content column (see `.docgen-home`). */
+	grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
 	gap: 36px;
 	align-items: end;
 	padding-bottom: 26px;
@@ -1304,7 +1307,7 @@ kbd,
 }
 .docgen-home__stats {
 	display: grid;
-	grid-template-columns: repeat(3, 1fr);
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 20px;
 }
 .docgen-home__stat {
@@ -1365,7 +1368,7 @@ kbd,
 }
 .docgen-home__grid {
 	display: grid;
-	grid-template-columns: 1.4fr 1fr;
+	grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
 	gap: 32px;
 	align-items: start;
 }
