@@ -123,6 +123,20 @@ async fn unknown_path_404() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    // The 404 is the full styled app-shell page (so the user can navigate off via
+    // the sidebar/search), with the dev reload client injected — not bare text.
+    let ct = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    assert!(ct.contains("html"), "404 should be html, got {ct}");
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let html = String::from_utf8(body.to_vec()).unwrap();
+    assert!(html.contains("docgen-sidebar"), "404 lacks the nav shell");
+    assert!(html.contains("404"), "404 body missing the 404 marker");
+    assert!(html.contains("/__docgen/livereload.js"), "404 missing dev injection");
 }
 
 #[tokio::test]

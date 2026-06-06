@@ -353,7 +353,7 @@ async fn serve_editor_page(
     // Validate the target exists + stays under docs (same guard as the API).
     let abs = match resolve_doc_path(&state.docs_dir, &doc_path) {
         Ok(p) => p,
-        Err(_) => return not_found(),
+        Err(_) => return not_found(&state).await,
     };
     // Title = the doc's first `# ` heading, else the slug's last segment.
     let title = tokio::fs::read_to_string(&abs)
@@ -513,7 +513,7 @@ async fn serve_site(State(state): State<AppState>, uri: axum::http::Uri) -> Resp
                 crate::inject_dev_html(&body),
             )
                 .into_response(),
-            Err(_) => not_found(),
+            Err(_) => not_found(&state).await,
         },
         Some(Served::Raw(path)) => match tokio::fs::read(&path).await {
             Ok(bytes) => (
@@ -524,9 +524,9 @@ async fn serve_site(State(state): State<AppState>, uri: axum::http::Uri) -> Resp
                 bytes,
             )
                 .into_response(),
-            Err(_) => not_found(),
+            Err(_) => not_found(&state).await,
         },
-        None => not_found(),
+        None => not_found(&state).await,
     }
 }
 
@@ -582,8 +582,21 @@ fn is_html(path: &Path) -> bool {
     path.extension().map(|e| e == "html").unwrap_or(false)
 }
 
-fn not_found() -> Response {
-    (StatusCode::NOT_FOUND, "not found").into_response()
+/// 404 response. Serves the build-emitted `404.html` (full app shell + sidebar,
+/// dev HTML injected) with a 404 status so a miss lands somewhere navigable;
+/// falls back to bare text if the page isn't on disk (e.g. a build that failed
+/// before emitting it).
+async fn not_found(state: &AppState) -> Response {
+    let page = state.out_dir.join("404.html");
+    match tokio::fs::read_to_string(&page).await {
+        Ok(body) => (
+            StatusCode::NOT_FOUND,
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            crate::inject_dev_html(&body),
+        )
+            .into_response(),
+        Err(_) => (StatusCode::NOT_FOUND, "not found").into_response(),
+    }
 }
 
 fn content_type_for(path: &str) -> &'static str {

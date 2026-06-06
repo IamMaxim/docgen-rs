@@ -374,6 +374,39 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
         fs::write(dist_dir.join("index.html"), html)?;
     }
 
+    // 404 page: a full app-shell page (sidebar + search + theme) so a miss lands
+    // somewhere navigable instead of bare "not found". The dev server serves this
+    // on any unresolved path; static hosts (GitHub Pages, Netlify, …) pick up
+    // `404.html` by convention too.
+    let not_found_html = renderer.render_page(&PageContext {
+        title: "404",
+        description: "This page could not be found.",
+        slug: "404",
+        body_html: "<p>The page you’re looking for doesn’t exist or was moved. \
+            Use the navigation sidebar or search (<kbd class=\"docgen-kbd\">⌘K</kbd>) \
+            to find your way.</p>",
+        tree: &tree,
+        backlinks: &empty,
+        headings: &[],
+        commit: &commit_hash,
+        built: &built_stamp,
+        has_history: false,
+        has_mermaid: false,
+        has_math: false,
+        base: &config.base,
+        site_title: config.title.as_deref().unwrap_or(""),
+        search_enabled: config.features.search,
+        has_diff,
+        has_components_css: false,
+        has_component_island: false,
+        is_home: false,
+        graph_json: "",
+        graph_node_count: 0,
+        graph_edge_count: 0,
+        home: None,
+    })?;
+    fs::write(dist_dir.join("404.html"), not_found_html)?;
+
     // Phase 3: the standalone /graph/ page (default-on, gated off by `[features]
     // graph = false`). Reuses the force layout computed above — never recomputes.
     if let Some((graph_json, node_count, edge_count)) = &graph_payload {
