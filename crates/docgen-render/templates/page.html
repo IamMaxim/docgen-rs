@@ -22,7 +22,7 @@
     {% if node.kind == "dir" %}
       <li class="docgen-tree__group">
         <details class="docgen-tree__details" open>
-          <summary class="docgen-tree__summary"><span class="docgen-tree__chev" aria-hidden="true"></span>{{ node.name }}</summary>
+          <summary class="docgen-tree__summary{% if node.slug and node.slug == slug %} is-active{% endif %}"><span class="docgen-tree__chev" aria-hidden="true"></span>{% if node.slug %}<a class="docgen-tree__folder-link" href="{{ base | safe }}/{{ node.slug | safe }}"{% if node.slug == slug %} aria-current="page"{% endif %}>{{ node.name }}</a>{% else %}{{ node.name }}{% endif %}</summary>
           {{ render_nodes(node.children, depth + 1) }}
         </details>
       </li>
@@ -135,6 +135,12 @@
         </div>
         {% endif %}
       </section>
+      {% endif %}
+      {% if not home %}
+      <header class="docgen-doc-header">
+        <h1 class="docgen-doc-title">{{ title }}</h1>
+        {% if description %}<p class="docgen-doc-lede">{{ description }}</p>{% endif %}
+      </header>
       {% endif %}
       <article class="docgen-doc-content">
         {{ body | safe }}

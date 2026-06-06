@@ -42,8 +42,21 @@ pub struct Doc {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum TreeNode {
-    Dir { name: String, children: Vec<TreeNode> },
-    Doc { name: String, slug: String, title: String },
+    Dir {
+        name: String,
+        /// Slug of this folder's "folder note" — an `index.md` directly inside the
+        /// directory. `Some` makes the folder label a link to that page (clicking
+        /// the folder focuses its note); `None` is a plain, non-navigable group.
+        /// The note doc is NOT also emitted as a child of this dir.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        slug: Option<String>,
+        children: Vec<TreeNode>,
+    },
+    Doc {
+        name: String,
+        slug: String,
+        title: String,
+    },
 }
 
 /// One resolved wikilink edge: `from` doc links to `to` doc (both slugs).

@@ -187,6 +187,9 @@ pub struct HomeData<'a> {
 #[derive(Serialize)]
 pub struct PageContext<'a> {
     pub title: &'a str,
+    /// Optional frontmatter `description:`, rendered as the page header "lede"
+    /// under the title on doc pages. `""` → no lede paragraph.
+    pub description: &'a str,
     pub slug: &'a str,
     pub body_html: &'a str,
     pub tree: &'a [TreeNode],
@@ -265,6 +268,7 @@ impl Renderer {
         let safe_graph_json = ctx.graph_json.replace("</", "<\\/");
         tmpl.render(context! {
             title => ctx.title,
+            description => ctx.description,
             body => ctx.body_html,
             slug => ctx.slug,
             tree => ctx.tree,
@@ -386,6 +390,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
             })
             .unwrap();
@@ -418,6 +423,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
             })
             .unwrap();
@@ -458,6 +464,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
             })
             .unwrap();
@@ -487,6 +494,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
             })
             .unwrap();
@@ -508,6 +516,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
                 base: "",
                 slug: "x",
@@ -539,6 +548,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
                 base: "",
                 slug: "x",
@@ -571,6 +581,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
                 base: "",
                 slug: "x",
@@ -599,6 +610,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
                 base: "",
                 slug: "x",
@@ -635,6 +647,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
                 base: "/docs",
                 slug: "x",
@@ -695,6 +708,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
             })
             .unwrap();
@@ -732,6 +746,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
             })
             .unwrap();
@@ -775,6 +790,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
             })
             .unwrap();
@@ -812,6 +828,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
             })
             .unwrap();
@@ -845,6 +862,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
             })
             .unwrap();
@@ -873,6 +891,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
             })
             .unwrap();
@@ -904,6 +923,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
             })
             .unwrap();
@@ -934,6 +954,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
             })
             .unwrap();
@@ -965,6 +986,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
             })
             .unwrap();
@@ -993,6 +1015,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
             })
             .unwrap();
@@ -1242,6 +1265,7 @@ mod tests {
             graph_json,
             graph_node_count: 2,
             graph_edge_count: 1,
+            description: "",
             home: None,
         };
         // Home page with graph data: embeds the graph block + data + island script.
@@ -1350,6 +1374,7 @@ mod tests {
                 graph_json: "",
                 graph_node_count: 0,
                 graph_edge_count: 0,
+                description: "",
                 home: None,
             })
             .unwrap()
@@ -1418,6 +1443,7 @@ mod tests {
     fn sidebar_renders_nested_dir_as_details() {
         let tree = vec![TreeNode::Dir {
             name: "guide".into(),
+            slug: None,
             children: vec![TreeNode::Doc {
                 name: "intro".into(),
                 slug: "guide/intro".into(),

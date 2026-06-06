@@ -319,6 +319,9 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
         };
         let html = renderer.render_page(&PageContext {
             title: &doc.title,
+            // Frontmatter description → page header lede (non-home pages). The home
+            // dashboard consumes it via `HomeData.description` instead.
+            description: if is_home { "" } else { doc.description.as_deref().unwrap_or("") },
             slug: &doc.slug,
             body_html: &doc.body_html,
             tree: &tree,
