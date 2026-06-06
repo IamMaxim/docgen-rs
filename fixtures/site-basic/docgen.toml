@@ -1,0 +1,17 @@
+# docgen site config. All keys are optional; an absent file builds with these
+# same defaults. See `crates/docgen-config` for the full surface.
+
+# Site title: sets the topbar brand and the `<title>` suffix ("Page — Acme Docs").
+title = "Acme Docs"
+# Base path for a sub-path deployment (e.g. "/docs"); "" serves at the root.
+base = ""
+
+[features]
+graph = true
+math = true
+mermaid = true
+search = true
+
+[components]
+# Project-relative directory of `<name>/template.html` custom components.
+dir = "components"
