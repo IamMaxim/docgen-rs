@@ -16,14 +16,14 @@
   {% if has_components_css %}<link rel="stylesheet" href="{{ base | safe }}/components.css" />{% endif %}
   {% if has_math %}<link rel="stylesheet" href="{{ base | safe }}/vendor/katex/katex.min.css" />{% endif %}
 </head>
-{% macro render_nodes(nodes, depth) %}
+{% macro render_nodes(nodes, depth, path) %}
 <ul class="docgen-tree" data-depth="{{ depth }}">
   {% for node in nodes %}
     {% if node.kind == "dir" %}
       <li class="docgen-tree__group">
-        <details class="docgen-tree__details" open>
+        <details class="docgen-tree__details" data-tree-path="{{ path }}/{{ node.name }}" open>
           <summary class="docgen-tree__summary{% if node.slug and node.slug == slug %} is-active{% endif %}"><span class="docgen-tree__chev" aria-hidden="true"></span>{% if node.slug %}<a class="docgen-tree__folder-link" href="{{ base | safe }}/{{ node.slug | safe }}"{% if node.slug == slug %} aria-current="page"{% endif %}>{{ node.name }}</a>{% else %}{{ node.name }}{% endif %}</summary>
-          {{ render_nodes(node.children, depth + 1) }}
+          {{ render_nodes(node.children, depth + 1, path ~ "/" ~ node.name) }}
         </details>
       </li>
     {% else %}
@@ -80,7 +80,7 @@
   <div class="docgen-sidebar-backdrop" x-show="navOpen" @click="navOpen=false" x-cloak></div>
   <div class="docgen-layout">
     <nav class="docgen-sidebar" id="docgen-sidebar" :class="{ 'is-open': navOpen }">
-      {{ render_nodes(tree, 0) }}
+      {{ render_nodes(tree, 0, "") }}
     </nav>
     <div class="docgen-rail-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="-1"></div>
     <main class="docgen-content" id="docgen-main" tabindex="-1">

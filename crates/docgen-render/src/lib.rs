@@ -1454,6 +1454,8 @@ mod tests {
         assert!(html.contains("<details"));
         assert!(html.contains("<summary"));
         assert!(html.contains("docgen-tree"));
+        // Each folder carries a stable path key so its collapse state persists.
+        assert!(html.contains(r#"data-tree-path="/guide""#));
     }
 
     #[test]

@@ -15,10 +15,15 @@
 // sidebar width survives reloads. The pre-paint head script applies the stored
 // width before first paint to avoid a layout jump.
 //
+// It also persists the sidebar folder tree's collapse state: each folder
+// `<details data-tree-path>` open/closed state is stored so the tree looks the
+// same after a reload or navigation (folders default open server-side).
+//
 // localStorage keys (match ui-prefs.ts):
 //   doc-full-width            "true"/"false"  default false
 //   doc-right-rail-collapsed  "true"/"false"  default false (rail VISIBLE)
 //   doc-left-rail-width       int px, 180..560, default 264
+//   doc-sidebar-collapsed     JSON array of collapsed folder paths, default []
 // State classes on `.docgen-app`:
 //   .is-full-width        content drops its max-width
 //   .is-rail-collapsed    right rail hidden + layout track collapsed
@@ -26,6 +31,7 @@
   var FULL_KEY = 'doc-full-width';
   var RAIL_KEY = 'doc-right-rail-collapsed';
   var WIDTH_KEY = 'doc-left-rail-width';
+  var TREE_KEY = 'doc-sidebar-collapsed';
   var WIDTH_MIN = 180;
   var WIDTH_MAX = 560;
   var WIDTH_DEFAULT = 264;
@@ -88,6 +94,48 @@
     }
 
     wireResizer();
+    wireTreeCollapse();
+  }
+
+  // Persist the sidebar folder tree's open/closed state. Folders render `open`
+  // server-side; here we collapse any folder whose `data-tree-path` is stored,
+  // and keep the stored set in sync as the user toggles `<details>` elements.
+  function wireTreeCollapse() {
+    var folders = document.querySelectorAll('.docgen-tree__details[data-tree-path]');
+    if (!folders.length) return;
+
+    var collapsed = readSet(TREE_KEY);
+
+    folders.forEach(function (d) {
+      var path = d.getAttribute('data-tree-path');
+      if (collapsed[path]) d.open = false;
+      d.addEventListener('toggle', function () {
+        // Re-read so concurrent toggles in other tabs/handlers don't clobber.
+        var set = readSet(TREE_KEY);
+        if (d.open) delete set[path];
+        else set[path] = 1;
+        writeSet(TREE_KEY, set);
+      });
+    });
+  }
+
+  // Collapsed paths are stored as a JSON array; loaded as a {path: 1} map for
+  // O(1) lookup. Malformed/absent storage yields an empty map.
+  function readSet(key) {
+    try {
+      var arr = JSON.parse(localStorage.getItem(key) || '[]');
+      var map = {};
+      if (Array.isArray(arr)) arr.forEach(function (p) { map[p] = 1; });
+      return map;
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function writeSet(key, map) {
+    try {
+      localStorage.setItem(key, JSON.stringify(Object.keys(map)));
+    } catch (e) {}
   }
 
   function clampWidth(n) {
