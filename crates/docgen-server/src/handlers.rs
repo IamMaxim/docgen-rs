@@ -288,6 +288,8 @@ fn render_preview_document(
     // the edited doc's own slug is already among them (same file path).
     let raws = discover_docs(docs_dir)?;
     let slugs: SlugSet = raws.iter().map(|r| prepare(r.clone()).slug).collect();
+    // Include-only partials (`_*.md`), so `:include` resolves in live preview too.
+    let (_pages, partials) = docgen_core::pipeline::partition_partials(raws.clone());
 
     // Same config + component registry the build assembles (built-ins overridden
     // by the project `components/` dir). Mirrors `docgen-build::build_site`.
@@ -312,7 +314,7 @@ fn render_preview_document(
         rel_path: doc_rel_path.to_string(),
         raw: source.to_string(),
     });
-    let rendered = render_doc(&prepared, &config, &registry, &slugs);
+    let rendered = render_doc(&prepared, &config, &registry, &slugs, &partials);
 
     // Per-page asset gating, mirroring the build's page render.
     let has_components_css = !registry.styles().is_empty();

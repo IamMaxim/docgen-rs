@@ -168,3 +168,44 @@ fn island_component_emits_components_js_only_on_pages_that_use_it() {
     assert!(home.contains(r#"src="/components.js""#));
     assert!(!plain.contains(r#"src="/components.js""#)); // gated per-page
 }
+
+/// Build a throwaway project from in-memory files; returns the kept-alive
+/// output tempdir.
+fn build_files(files: &[(&str, &str)]) -> tempfile::TempDir {
+    let root = tempfile::tempdir().unwrap();
+    for (rel, content) in files {
+        let p = root.path().join(rel);
+        fs::create_dir_all(p.parent().unwrap()).unwrap();
+        fs::write(p, content).unwrap();
+    }
+    let out = tempfile::tempdir().unwrap();
+    build_site(&BuildOptions {
+        project_root: root.path(),
+        out_dir: out.path(),
+        mode: BuildMode::Production,
+    })
+    .unwrap();
+    out
+}
+
+#[test]
+fn include_directive_transcludes_partial_and_excludes_it_as_page() {
+    let out = build_files(&[
+        ("docs/guide/index.md", "# Guide\n\n:include{src=\"./_facts.gen.md\"}\n"),
+        ("docs/guide/_facts.gen.md", "## Facts\n\n- alpha\n- beta\n"),
+    ]);
+    // The partial's content is spliced into the host page...
+    let host = fs::read_to_string(out.path().join("guide/index/index.html")).unwrap();
+    assert!(host.contains("Facts"), "partial heading missing: {host}");
+    assert!(host.contains("alpha"), "partial list missing");
+    // ...and the partial never becomes its own page.
+    assert!(!out.path().join("guide/_facts.gen/index.html").exists(), "partial leaked as a page");
+}
+
+#[test]
+fn include_missing_src_degrades_to_error_span() {
+    let out = build_files(&[("docs/index.md", "# Home\n\n:include{src=\"./_nope.md\"}\n")]);
+    let html = fs::read_to_string(out.path().join("index/index.html")).unwrap();
+    assert!(html.contains("docgen-directive-error"), "expected inert error span: {html}");
+    // Reaching here means the build did not panic / fail.
+}

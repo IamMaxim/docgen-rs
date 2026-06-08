@@ -352,23 +352,28 @@ fn try_parse_leaf(chars: &[char], start: usize) -> Option<(DirectiveInstance, us
     }
     let name: String = chars[name_start..i].iter().collect();
 
-    // Leaf form requires a `[label]` immediately after the name.
-    if i >= chars.len() || chars[i] != '[' {
-        return None;
+    // Leaf form: an optional `[label]` then an optional `{attrs}`. At least one
+    // must be present — a bare `:name` is not a directive (so `:include{src=...}`
+    // parses, while plain `:foo` text does not).
+    let mut label = String::new();
+    let mut had_label = false;
+    if i < chars.len() && chars[i] == '[' {
+        i += 1; // skip '['
+        let label_start = i;
+        while i < chars.len() && chars[i] != ']' {
+            i += 1;
+        }
+        if i >= chars.len() {
+            return None; // unterminated label
+        }
+        label = chars[label_start..i].iter().collect();
+        i += 1; // skip ']'
+        had_label = true;
     }
-    i += 1; // skip '['
-    let label_start = i;
-    while i < chars.len() && chars[i] != ']' {
-        i += 1;
-    }
-    if i >= chars.len() {
-        return None; // unterminated label
-    }
-    let label: String = chars[label_start..i].iter().collect();
-    i += 1; // skip ']'
 
     // Optional `{attrs}`.
     let mut attrs = BTreeMap::new();
+    let mut had_attrs = false;
     if i < chars.len() && chars[i] == '{' {
         i += 1; // skip '{'
         let a_start = i;
@@ -387,6 +392,11 @@ fn try_parse_leaf(chars: &[char], start: usize) -> Option<(DirectiveInstance, us
         let attrs_str: String = chars[a_start..i].iter().collect();
         attrs = parse_attrs(&attrs_str);
         i += 1; // skip '}'
+        had_attrs = true;
+    }
+
+    if !had_label && !had_attrs {
+        return None;
     }
 
     Some((
@@ -412,11 +422,24 @@ pub fn substitute(
     instances: &[DirectiveInstance],
     registry: &docgen_components::Registry,
     render_inner: &dyn Fn(&str) -> String,
+    resolve_include: &dyn Fn(&str) -> String,
 ) -> (String, std::collections::BTreeSet<String>) {
     use docgen_components::DirectiveContext;
     let mut used = std::collections::BTreeSet::new();
     let mut out = html.to_string();
     for (idx, inst) in instances.iter().enumerate() {
+        // `:include{src=...}` is a built-in, file-transcluding directive — not a
+        // registry component. It renders the resolved partial's markdown here.
+        if inst.name == "include" {
+            let src = inst.attrs.get("src").map(String::as_str).unwrap_or("");
+            let rendered = if src.is_empty() {
+                error_span("include", "missing `src`")
+            } else {
+                resolve_include(src)
+            };
+            out = out.replace(&sentinel(idx), &rendered);
+            continue;
+        }
         let rendered = match registry.get(&inst.name) {
             Some(component) => {
                 let content = if inst.is_block {
@@ -447,7 +470,7 @@ pub fn substitute(
 
 /// An inert, clearly-marked error span for an unresolved/failed directive. The
 /// directive name is HTML-escaped so a malformed name cannot inject markup.
-fn error_span(name: &str, reason: &str) -> String {
+pub(crate) fn error_span(name: &str, reason: &str) -> String {
     let safe = crate::util::escape_html(name);
     format!(
         "<span class=\"docgen-directive-error\" data-directive=\"{safe}\">[docgen: {reason} `{safe}`]</span>"
@@ -472,7 +495,7 @@ mod substitute_tests {
             "<aside class=\"c--{{ attrs.type }}\">{{ content | safe }}</aside>",
         );
         let render_inner = |md: &str| format!("<p>{}</p>", md.trim().replace("**", ""));
-        let (out, used) = substitute(&html, &inst, &reg, &render_inner);
+        let (out, used) = substitute(&html, &inst, &reg, &render_inner, &|_s| String::new());
         assert!(out.contains("c--note"));
         assert!(out.contains("<p>hi</p>"));
         assert!(used.contains("callout"));
@@ -483,7 +506,7 @@ mod substitute_tests {
     fn unknown_directive_becomes_marked_error_span_not_panic() {
         let (html, inst) = extract(":bogus[x]{}\n");
         let reg = docgen_components::Registry::empty();
-        let (out, used) = substitute(&html, &inst, &reg, &|s| s.to_string());
+        let (out, used) = substitute(&html, &inst, &reg, &|s| s.to_string(), &|_s| String::new());
         assert!(out.contains("docgen-directive-error"));
         assert!(out.contains("unknown directive"));
         assert!(out.contains("bogus"));
@@ -511,6 +534,7 @@ mod substitute_tests {
             &inst,
             &docgen_components::Registry::empty(),
             &|s| s.to_string(),
+            &|_s| String::new(),
         );
         assert!(out.contains("&lt;img&gt;"));
         assert!(!out.contains("<img>"));
@@ -521,7 +545,7 @@ mod substitute_tests {
         // A template referencing an undefined filter fails to render.
         let reg = reg_with("boom", "{{ content | nonexistent_filter }}");
         let (html, inst) = extract(":::boom{}\nx\n:::\n");
-        let (out, used) = substitute(&html, &inst, &reg, &|s| s.to_string());
+        let (out, used) = substitute(&html, &inst, &reg, &|s| s.to_string(), &|_s| String::new());
         assert!(out.contains("docgen-directive-error"));
         assert!(out.contains("template error"));
         assert!(used.is_empty());

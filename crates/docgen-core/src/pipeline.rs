@@ -151,6 +151,9 @@ pub fn render_block_markdown(
     config: &docgen_config::SiteConfig,
     registry: &docgen_components::Registry,
     slugs: &SlugSet,
+    partials: &Partials,
+    base_dir: &str,
+    stack: &[String],
 ) -> String {
     let (rewritten, instances) = crate::directivepass::extract(md);
     let options = comrak_options();
@@ -166,10 +169,47 @@ pub fn render_block_markdown(
         crate::mermaidpass::transform_mermaid(root);
     }
     let inner_html = format_ast(root, &options);
-    let render_inner = |m: &str| render_block_markdown(m, config, registry, slugs);
-    let (out, _used) =
-        crate::directivepass::substitute(&inner_html, &instances, registry, &render_inner);
+    let render_inner =
+        |m: &str| render_block_markdown(m, config, registry, slugs, partials, base_dir, stack);
+    let resolve_include =
+        |src: &str| resolve_include_src(src, base_dir, partials, stack, config, registry, slugs);
+    let (out, _used) = crate::directivepass::substitute(
+        &inner_html,
+        &instances,
+        registry,
+        &render_inner,
+        &resolve_include,
+    );
     out
+}
+
+/// Resolve `:include{src}` against `base_dir`, render the partial's body through
+/// the recursive pipeline. Missing target or an include cycle degrades to an
+/// inert error span (never panics). `stack` holds the include keys currently on
+/// the rendering path, for cycle detection.
+fn resolve_include_src(
+    src: &str,
+    base_dir: &str,
+    partials: &Partials,
+    stack: &[String],
+    config: &docgen_config::SiteConfig,
+    registry: &docgen_components::Registry,
+    slugs: &SlugSet,
+) -> String {
+    let key = match resolve_include_key(base_dir, src) {
+        Some(k) => k,
+        None => return crate::directivepass::error_span("include", "src escapes docs root"),
+    };
+    if stack.iter().any(|s| s == &key) {
+        return crate::directivepass::error_span("include", "include cycle");
+    }
+    let Some(body) = partials.get(&key) else {
+        return crate::directivepass::error_span("include", "missing `src`");
+    };
+    let mut next = stack.to_vec();
+    next.push(key.clone());
+    let child_dir = key.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
+    render_block_markdown(body, config, registry, slugs, partials, child_dir, &next)
 }
 
 /// A single rendered doc plus the by-products the site assembly needs: its
@@ -198,6 +238,7 @@ pub fn render_doc(
     config: &docgen_config::SiteConfig,
     registry: &docgen_components::Registry,
     slugs: &SlugSet,
+    partials: &Partials,
 ) -> RenderedDoc {
     let options = comrak_options();
 
@@ -238,11 +279,21 @@ pub fn render_doc(
     let formatted = crate::headings::stamp_heading_ids(&formatted, &headings);
 
     // Directive post-pass: substitute each sentinel with the component's
-    // rendered HTML; block inner content is rendered by the full recursive
-    // pipeline. `used` drives per-page island/style gating.
-    let render_inner = |m: &str| render_block_markdown(m, config, registry, slugs);
-    let (body_html, used) =
-        crate::directivepass::substitute(&formatted, &instances, registry, &render_inner);
+    // rendered HTML; block inner content + `:include` partials are rendered by
+    // the full recursive pipeline. `used` drives per-page island/style gating.
+    let base_dir = p.rel_path.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
+    let stack: Vec<String> = Vec::new();
+    let render_inner =
+        |m: &str| render_block_markdown(m, config, registry, slugs, partials, base_dir, &stack);
+    let resolve_include =
+        |src: &str| resolve_include_src(src, base_dir, partials, &stack, config, registry, slugs);
+    let (body_html, used) = crate::directivepass::substitute(
+        &formatted,
+        &instances,
+        registry,
+        &render_inner,
+        &resolve_include,
+    );
 
     RenderedDoc {
         doc: Doc {
@@ -265,6 +316,7 @@ pub fn render_doc(
 /// assemble the link graph + search index. Input order preserved.
 pub fn render_docs(
     prepared: Vec<PreparedDoc>,
+    partials: &Partials,
     config: &docgen_config::SiteConfig,
     registry: &docgen_components::Registry,
 ) -> SiteBuild {
@@ -280,7 +332,7 @@ pub fn render_docs(
 
     for p in &prepared {
         // Same per-doc pipeline the editor preview runs (single source of truth).
-        let rendered = render_doc(p, config, registry, &slugs);
+        let rendered = render_doc(p, config, registry, &slugs, partials);
         search.push(SearchEntry {
             slug: p.slug.clone(),
             title: p.title.clone(),
@@ -355,8 +407,8 @@ mod tests {
         let cfg = docgen_config::SiteConfig::default();
         let reg = docgen_components::Registry::empty();
 
-        let site = render_docs(prepared.clone(), &cfg, &reg);
-        let single = render_doc(&prepared[1], &cfg, &reg, &slugs);
+        let site = render_docs(prepared.clone(), &Partials::new(), &cfg, &reg);
+        let single = render_doc(&prepared[1], &cfg, &reg, &slugs, &Partials::new());
 
         assert_eq!(single.doc.body_html, site.docs[1].body_html);
         assert_eq!(single.doc.has_mermaid, site.docs[1].has_mermaid);
@@ -374,7 +426,7 @@ mod tests {
             prepare(raw("index.md", "# Home\nGo to [[guide/intro]].\n")),
             prepare(raw("guide/intro.md", "# Intro\n```rust\nfn x(){}\n```\nBack to [[index]] and [[ghost]].\n")),
         ];
-        let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &docgen_components::Registry::empty());
+        let site = render_docs(prepared, &Partials::new(), &docgen_config::SiteConfig::default(), &docgen_components::Registry::empty());
 
         // Doc order preserved.
         assert_eq!(site.docs[0].slug, "index");
@@ -406,7 +458,7 @@ mod tests {
     #[test]
     fn render_docs_renders_math_at_build_time() {
         let prepared = vec![prepare(raw("m.md", "# M\nmass: $E=mc^2$\n"))];
-        let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &docgen_components::Registry::empty());
+        let site = render_docs(prepared, &Partials::new(), &docgen_config::SiteConfig::default(), &docgen_components::Registry::empty());
         assert!(site.docs[0].body_html.contains("katex"));
         assert!(site.docs[0].has_math);
         assert!(!site.docs[0].body_html.contains("$E=mc^2$"));
@@ -417,7 +469,7 @@ mod tests {
         let prepared = vec![prepare(raw("m.md", "# M\n$E=mc^2$\n"))];
         let mut cfg = docgen_config::SiteConfig::default();
         cfg.features.math = false;
-        let site = render_docs(prepared, &cfg, &docgen_components::Registry::empty());
+        let site = render_docs(prepared, &Partials::new(), &cfg, &docgen_components::Registry::empty());
         assert!(!site.docs[0].has_math);
         assert!(!site.docs[0].body_html.contains("katex"));
     }
@@ -427,7 +479,7 @@ mod tests {
         let prepared = vec![prepare(raw("d.md", "# D\n```mermaid\ngraph TD;A-->B;\n```\n"))];
         let mut cfg = docgen_config::SiteConfig::default();
         cfg.features.mermaid = false;
-        let site = render_docs(prepared, &cfg, &docgen_components::Registry::empty());
+        let site = render_docs(prepared, &Partials::new(), &cfg, &docgen_components::Registry::empty());
         assert!(!site.docs[0].has_mermaid);
         assert!(!site.any_mermaid);
     }
@@ -438,7 +490,7 @@ mod tests {
             prepare(raw("d.md", "# D\n```mermaid\ngraph TD;A-->B;\n```\n")),
             prepare(raw("p.md", "# P\nplain\n")),
         ];
-        let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &docgen_components::Registry::empty());
+        let site = render_docs(prepared, &Partials::new(), &docgen_config::SiteConfig::default(), &docgen_components::Registry::empty());
         assert!(site.docs[0].has_mermaid && site.docs[0].body_html.contains("docgen-mermaid"));
         assert!(!site.docs[1].has_mermaid);
         assert!(site.any_mermaid);
@@ -450,7 +502,7 @@ mod tests {
             prepare(raw("index.md", "# Home\nGo to [[guide/intro]].\n")),
             prepare(raw("guide/intro.md", "# Intro\nBack to [[index]].\n")),
         ];
-        let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &docgen_components::Registry::empty());
+        let site = render_docs(prepared, &Partials::new(), &docgen_config::SiteConfig::default(), &docgen_components::Registry::empty());
         let gd = site.graph_data(crate::graphlayout::LayoutParams::default());
         assert_eq!(gd.nodes.len(), 2);
         assert!(gd.nodes.iter().any(|n| n.slug == "index" && n.title == "Home"));
@@ -467,7 +519,7 @@ mod tests {
     #[test]
     fn render_docs_without_mermaid_clears_site_flag() {
         let prepared = vec![prepare(raw("p.md", "# P\nplain\n"))];
-        let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &docgen_components::Registry::empty());
+        let site = render_docs(prepared, &Partials::new(), &docgen_config::SiteConfig::default(), &docgen_components::Registry::empty());
         assert!(!site.any_mermaid);
     }
 
@@ -484,7 +536,7 @@ mod tests {
             "d.md",
             "# D\n\n:::callout{type=warning}\nBe **careful**.\n:::\n",
         ))];
-        let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &reg);
+        let site = render_docs(prepared, &Partials::new(), &docgen_config::SiteConfig::default(), &reg);
         let h = &site.docs[0].body_html;
         assert!(h.contains("docgen-callout--warning"));
         assert!(h.contains("<strong>careful</strong>")); // inner markdown rendered
@@ -497,6 +549,7 @@ mod tests {
         let prepared = vec![prepare(raw("d.md", "# D\n\n:nope[x]{}\n"))];
         let site = render_docs(
             prepared,
+            &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
         );
@@ -517,7 +570,7 @@ mod tests {
             prepare(raw("index.md", "# Home\nSee [[guide]].\n\n:::callout{}\nx\n:::\n")),
             prepare(raw("guide.md", "# Guide\n")),
         ];
-        let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &reg);
+        let site = render_docs(prepared, &Partials::new(), &docgen_config::SiteConfig::default(), &reg);
         assert!(site.docs[0].body_html.contains(r#"href="/guide""#));
     }
 
@@ -537,7 +590,7 @@ mod tests {
             )),
             prepare(raw("guide/intro.md", "# Intro\n")),
         ];
-        let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &reg);
+        let site = render_docs(prepared, &Partials::new(), &docgen_config::SiteConfig::default(), &reg);
         let h = &site.docs[0].body_html;
         // The resolved wikilink inside the directive body is a real anchor with the
         // label text, not literal `[[...]]`.
@@ -554,7 +607,7 @@ mod tests {
         // A doc that links to its own slug renders a resolved anchor, but the
         // self-edge is dropped from the graph (no self-backlink).
         let prepared = vec![prepare(raw("index.md", "# Home\nBack to [[index]].\n"))];
-        let site = render_docs(prepared, &docgen_config::SiteConfig::default(), &docgen_components::Registry::empty());
+        let site = render_docs(prepared, &Partials::new(), &docgen_config::SiteConfig::default(), &docgen_components::Registry::empty());
 
         assert!(site.docs[0].body_html.contains(r#"href="/index""#));
         assert!(!site.graph.edges.iter().any(|e| e.from == "index" && e.to == "index"));

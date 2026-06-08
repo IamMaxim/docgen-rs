@@ -13,6 +13,7 @@ pub fn assemble(raw: RawDoc) -> Doc {
     let prepared = prepare(raw);
     render_docs(
         vec![prepared],
+        &crate::pipeline::Partials::new(),
         &docgen_config::SiteConfig::default(),
         &docgen_components::Registry::empty(),
     )

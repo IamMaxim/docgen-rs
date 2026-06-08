@@ -122,8 +122,11 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
     let raws = discover_docs(&docs_dir)
         .with_context(|| format!("reading docs from {}", docs_dir.display()))?;
 
-    // Two-pass: prepare all docs, then render with full slug knowledge.
-    let prepared: Vec<_> = raws.into_iter().map(prepare).collect();
+    // Split include-only partials (`_*.md`) out of the page set; they render
+    // only where a `:include` transcludes them, never as standalone pages.
+    let (pages, partials) = docgen_core::pipeline::partition_partials(raws);
+    // Two-pass: prepare all pages, then render with full slug knowledge.
+    let prepared: Vec<_> = pages.into_iter().map(prepare).collect();
     // Load `docgen.toml` (absent → defaults reproduce pre-P6 behaviour).
     let config = docgen_config::load(opts.project_root)
         .with_context(|| format!("loading docgen.toml from {}", opts.project_root.display()))?;
@@ -143,7 +146,7 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
     let components_dir = opts.project_root.join(&config.components.dir);
     let registry = docgen_components::build_registry(builtins, &components_dir)
         .with_context(|| format!("discovering components in {}", components_dir.display()))?;
-    let site = render_docs(prepared, &config, &registry);
+    let site = render_docs(prepared, &partials, &config, &registry);
     let tree = build_tree(&site.docs);
 
     // Concatenate the component asset bundle. `components.css` carries every
