@@ -9,6 +9,62 @@ use crate::model::{Doc, RawDoc, SearchEntry};
 use crate::search::plaintext;
 use crate::wikilink::{transform_wikilinks, SlugSet};
 
+/// Docs-relative path → frontmatter-stripped body, for `:include` targets.
+pub type Partials = std::collections::BTreeMap<String, String>;
+
+/// A doc is an include-only *partial* (never its own page) when its filename
+/// starts with `_`. Only the basename matters — a `_dir/` directory does not
+/// hide the pages inside it.
+pub fn is_partial_rel(rel_path: &str) -> bool {
+    rel_path
+        .rsplit('/')
+        .next()
+        .map(|name| name.starts_with('_'))
+        .unwrap_or(false)
+}
+
+/// Split discovered raw docs into rendered pages and the include-only partial
+/// map (keyed by docs-relative path, frontmatter stripped).
+pub fn partition_partials(raws: Vec<RawDoc>) -> (Vec<RawDoc>, Partials) {
+    let mut pages = Vec::new();
+    let mut partials = Partials::new();
+    for raw in raws {
+        if is_partial_rel(&raw.rel_path) {
+            let body = parse_frontmatter(&raw.raw).body;
+            partials.insert(raw.rel_path, body);
+        } else {
+            pages.push(raw);
+        }
+    }
+    (pages, partials)
+}
+
+/// Resolve a relative include `src` against the docs-relative directory
+/// `base_dir` into a normalized docs-relative key (no `./`, `..` collapsed). A
+/// leading `/` is treated as docs-root-absolute. Returns `None` if the path
+/// escapes above the docs root.
+pub fn resolve_include_key(base_dir: &str, src: &str) -> Option<String> {
+    let src = src.trim();
+    let combined = if let Some(rest) = src.strip_prefix('/') {
+        rest.to_string()
+    } else if base_dir.is_empty() {
+        src.to_string()
+    } else {
+        format!("{base_dir}/{src}")
+    };
+    let mut parts: Vec<&str> = Vec::new();
+    for seg in combined.split('/') {
+        match seg {
+            "" | "." => continue,
+            ".." => {
+                parts.pop()?;
+            }
+            s => parts.push(s),
+        }
+    }
+    Some(parts.join("/"))
+}
+
 /// A document after pass 1: frontmatter parsed, slug/title derived, raw body kept.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PreparedDoc {
@@ -247,6 +303,35 @@ mod tests {
 
     fn raw(path: &str, body: &str) -> RawDoc {
         RawDoc { rel_path: path.into(), raw: body.into() }
+    }
+
+    #[test]
+    fn is_partial_rel_detects_underscore_basename() {
+        assert!(is_partial_rel("dev/server/_systems.gen.md"));
+        assert!(is_partial_rel("_root.md"));
+        assert!(!is_partial_rel("dev/server/index.md"));
+        assert!(!is_partial_rel("dev/_dir/page.md")); // only the *basename* counts
+    }
+
+    #[test]
+    fn partition_partials_splits_pages_and_strips_frontmatter() {
+        let raws = vec![
+            raw("a/index.md", "# Page\n"),
+            raw("a/_inc.md", "---\ntitle: x\n---\n## Inc\n"),
+        ];
+        let (pages, partials) = partition_partials(raws);
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].rel_path, "a/index.md");
+        assert_eq!(partials.get("a/_inc.md").map(String::as_str), Some("## Inc\n"));
+    }
+
+    #[test]
+    fn resolve_include_key_normalizes_relative_and_absolute() {
+        assert_eq!(resolve_include_key("dev/server", "./_s.gen.md").as_deref(), Some("dev/server/_s.gen.md"));
+        assert_eq!(resolve_include_key("dev/server", "../_top.md").as_deref(), Some("dev/_top.md"));
+        assert_eq!(resolve_include_key("dev/server", "/root/_x.md").as_deref(), Some("root/_x.md"));
+        assert_eq!(resolve_include_key("", "_x.md").as_deref(), Some("_x.md"));
+        assert_eq!(resolve_include_key("dev", "../../escape.md"), None); // escapes docs root
     }
 
     #[test]
