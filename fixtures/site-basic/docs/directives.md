@@ -22,3 +22,11 @@ component discovered from `components/note/`).
 
 An unknown directive degrades to an inert error span rather than crashing:
 :bogus[oops]{}.
+
+## Includes
+
+The `:include` directive transcludes another file's markdown, resolved relative
+to this doc. Files whose name starts with `_` are include-only partials and are
+never rendered as their own page.
+
+:include{src="./_facts.inc.md"}

@@ -66,3 +66,12 @@ cargo run -p docgen -- build path/to/project
 
 The project must contain a `docs/` directory of `.md` files. Output is written to
 `path/to/project/dist/`.
+
+## Includes & partials
+
+`:include{src="./_part.md"}` transcludes another markdown file (resolved relative
+to the including doc) and renders it through the full pipeline. Any `.md` file
+whose basename starts with `_` is an *include-only partial*: it is excluded from
+page discovery (no standalone page, sidebar entry, or search result) but remains
+a valid `:include` target. Missing targets and include cycles degrade to an
+inert error span; the build never fails on a bad include.
