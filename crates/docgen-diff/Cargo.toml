@@ -8,7 +8,10 @@ repository.workspace = true
 
 [dependencies]
 docgen-core = { workspace = true }
-git2 = "0.20.2"
+# Local-only repo access (history/diff); no network, so drop the default
+# https/ssh features that pull in openssl-sys (breaks cross-builds and
+# `cargo install` on hosts without OpenSSL).
+git2 = { version = "0.20.2", default-features = false }
 similar = "2.7.0"
 chrono = { version = "0.4.41", default-features = false, features = ["clock"] }
 serde = { version = "1.0.228", features = ["derive"] }
