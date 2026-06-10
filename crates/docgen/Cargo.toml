@@ -1,10 +1,17 @@
 [package]
-name = "docgen"
+name = "docgen-rs"
+description = "A Cargo-only static documentation-site generator. No npm, no Node."
 edition.workspace = true
 license.workspace = true
 version.workspace = true
-description = "Cargo-only static documentation-site generator"
-repository = "https://github.com/iammaxim/docgen-rs"
+repository.workspace = true
+readme.workspace = true
+keywords = ["documentation", "static-site", "generator", "markdown", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "docgen"
+path = "src/main.rs"
 
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/docgen-{ target }{ archive-suffix }"
@@ -17,13 +24,13 @@ pkg-fmt = "zip"
 [dependencies]
 anyhow = "1.0.102"
 clap = { version = "4.6.1", features = ["derive"] }
-docgen-core = { path = "../docgen-core" }
-docgen-diff = { path = "../docgen-diff" }
-docgen-assets = { path = "../docgen-assets" }
-docgen-render = { path = "../docgen-render" }
-docgen-build = { path = "../docgen-build" }
-docgen-server = { path = "../docgen-server" }
-docgen-init = { path = "../docgen-init" }
+docgen-core = { workspace = true }
+docgen-diff = { workspace = true }
+docgen-assets = { workspace = true }
+docgen-render = { workspace = true }
+docgen-build = { workspace = true }
+docgen-server = { workspace = true }
+docgen-init = { workspace = true }
 chrono = { version = "0.4.41", default-features = false, features = ["clock"] }
 
 [dev-dependencies]

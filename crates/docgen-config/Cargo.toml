@@ -1,8 +1,10 @@
 [package]
 name = "docgen-config"
+description = "Configuration parsing for docgen, the Cargo-only static documentation-site generator"
 edition.workspace = true
 license.workspace = true
 version.workspace = true
+repository.workspace = true
 
 [dependencies]
 serde = { version = "1.0.228", features = ["derive"] }

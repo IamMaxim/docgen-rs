@@ -1,8 +1,10 @@
 [package]
 name = "docgen-components"
+description = "Reusable template components for docgen, the Cargo-only static documentation-site generator"
 edition.workspace = true
 license.workspace = true
 version.workspace = true
+repository.workspace = true
 
 [dependencies]
 minijinja = "2.20.0"

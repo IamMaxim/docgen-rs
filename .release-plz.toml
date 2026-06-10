@@ -1,0 +1,18 @@
+# release-plz configuration — https://release-plz.dev/docs/config
+#
+# This is a single-product workspace: nine library crates plus the `docgen-rs`
+# CLI. All ten are published to crates.io, but only the CLI carries the
+# user-facing `vX.Y.Z` git tag + GitHub release (which also triggers the
+# binary-build matrix in release.yml). The library crates are published
+# silently with no individual tags/releases.
+
+[workspace]
+git_release_enable = false
+git_tag_enable = false
+
+[[package]]
+name = "docgen-rs"
+git_tag_enable = true
+git_tag_name = "v{{ version }}"
+git_release_enable = true
+git_release_name = "v{{ version }}"

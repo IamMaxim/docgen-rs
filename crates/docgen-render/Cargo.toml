@@ -1,10 +1,12 @@
 [package]
 name = "docgen-render"
+description = "HTML rendering for docgen, the Cargo-only static documentation-site generator"
 edition.workspace = true
 license.workspace = true
 version.workspace = true
+repository.workspace = true
 
 [dependencies]
-docgen-core = { version = "0.0.0", path = "../docgen-core" }
+docgen-core = { workspace = true }
 minijinja = { version = "2.20.0", features = ["json"] }
 serde = { version = "1.0.228", features = ["derive"] }

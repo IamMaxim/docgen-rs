@@ -1,12 +1,14 @@
 [package]
 name = "docgen-core"
+description = "Core Markdown processing and page model for docgen, the Cargo-only static documentation-site generator"
 edition.workspace = true
 license.workspace = true
 version.workspace = true
+repository.workspace = true
 
 [dependencies]
-docgen-config = { path = "../docgen-config" }
-docgen-components = { path = "../docgen-components" }
+docgen-config = { workspace = true }
+docgen-components = { workspace = true }
 comrak = { version = "0.52.0", features = ["syntect"] }
 katex = "0.4.6"
 serde = { version = "1.0.228", features = ["derive"] }

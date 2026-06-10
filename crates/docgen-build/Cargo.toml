@@ -1,18 +1,20 @@
 [package]
 name = "docgen-build"
+description = "Site build pipeline for docgen, the Cargo-only static documentation-site generator"
 edition.workspace = true
 license.workspace = true
 version.workspace = true
+repository.workspace = true
 
 [dependencies]
 anyhow = "1.0.102"
-docgen-config = { path = "../docgen-config" }
-docgen-components = { path = "../docgen-components" }
+docgen-config = { workspace = true }
+docgen-components = { workspace = true }
 chrono = { version = "0.4.41", default-features = false, features = ["clock"] }
-docgen-core = { path = "../docgen-core" }
-docgen-diff = { path = "../docgen-diff" }
-docgen-assets = { path = "../docgen-assets" }
-docgen-render = { path = "../docgen-render" }
+docgen-core = { workspace = true }
+docgen-diff = { workspace = true }
+docgen-assets = { workspace = true }
+docgen-render = { workspace = true }
 serde_json = "1"
 
 [dev-dependencies]

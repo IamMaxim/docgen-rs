@@ -1,11 +1,13 @@
 [package]
 name = "docgen-diff"
+description = "Git-based change tracking for docgen, the Cargo-only static documentation-site generator"
 edition.workspace = true
 license.workspace = true
 version.workspace = true
+repository.workspace = true
 
 [dependencies]
-docgen-core = { path = "../docgen-core" }
+docgen-core = { workspace = true }
 git2 = "0.20.2"
 similar = "2.7.0"
 chrono = { version = "0.4.41", default-features = false, features = ["clock"] }

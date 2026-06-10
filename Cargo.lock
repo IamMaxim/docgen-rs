@@ -546,8 +546,101 @@ dependencies = [
 ]
 
 [[package]]
-name = "docgen"
-version = "0.0.0"
+name = "docgen-assets"
+version = "0.1.0"
+dependencies = [
+ "include_dir",
+ "tempfile",
+]
+
+[[package]]
+name = "docgen-build"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "docgen-assets",
+ "docgen-components",
+ "docgen-config",
+ "docgen-core",
+ "docgen-diff",
+ "docgen-render",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "docgen-components"
+version = "0.1.0"
+dependencies = [
+ "include_dir",
+ "minijinja",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "docgen-config"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tempfile",
+ "thiserror 2.0.18",
+ "toml",
+]
+
+[[package]]
+name = "docgen-core"
+version = "0.1.0"
+dependencies = [
+ "comrak",
+ "docgen-components",
+ "docgen-config",
+ "katex",
+ "serde",
+ "serde_json",
+ "serde_yml",
+ "thiserror 2.0.18",
+ "walkdir",
+]
+
+[[package]]
+name = "docgen-diff"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "docgen-core",
+ "git2",
+ "regex",
+ "serde",
+ "serde_json",
+ "similar",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "docgen-init"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "docgen-config",
+ "include_dir",
+ "tempfile",
+]
+
+[[package]]
+name = "docgen-render"
+version = "0.1.0"
+dependencies = [
+ "docgen-core",
+ "minijinja",
+ "serde",
+]
+
+[[package]]
+name = "docgen-rs"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -564,101 +657,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "docgen-assets"
-version = "0.0.0"
-dependencies = [
- "include_dir",
- "tempfile",
-]
-
-[[package]]
-name = "docgen-build"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "chrono",
- "docgen-assets",
- "docgen-components",
- "docgen-config",
- "docgen-core",
- "docgen-diff",
- "docgen-render",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "docgen-components"
-version = "0.0.0"
-dependencies = [
- "include_dir",
- "minijinja",
- "serde",
- "tempfile",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "docgen-config"
-version = "0.0.0"
-dependencies = [
- "serde",
- "tempfile",
- "thiserror 2.0.18",
- "toml",
-]
-
-[[package]]
-name = "docgen-core"
-version = "0.0.0"
-dependencies = [
- "comrak",
- "docgen-components",
- "docgen-config",
- "katex",
- "serde",
- "serde_json",
- "serde_yml",
- "thiserror 2.0.18",
- "walkdir",
-]
-
-[[package]]
-name = "docgen-diff"
-version = "0.0.0"
-dependencies = [
- "chrono",
- "docgen-core",
- "git2",
- "regex",
- "serde",
- "serde_json",
- "similar",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "docgen-init"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "docgen-config",
- "include_dir",
- "tempfile",
-]
-
-[[package]]
-name = "docgen-render"
-version = "0.0.0"
-dependencies = [
- "docgen-core",
- "minijinja",
- "serde",
-]
-
-[[package]]
 name = "docgen-server"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",

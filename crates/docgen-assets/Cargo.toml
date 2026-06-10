@@ -1,8 +1,10 @@
 [package]
 name = "docgen-assets"
+description = "Bundled static assets for docgen, the Cargo-only static documentation-site generator"
 edition.workspace = true
 license.workspace = true
 version.workspace = true
+repository.workspace = true
 
 [dependencies]
 include_dir = "0.7.4"
