@@ -151,7 +151,7 @@
           <h2>Doc graph</h2>
           <span class="docgen-graph__meta">{{ graph_node_count }} nodes &middot; {{ graph_edge_count }} links</span>
         </div>
-        <div class="docgen-graph" x-data="docgenGraph" x-init="init()">
+        <div class="docgen-graph" x-data="docgenGraph">
           <svg class="docgen-graph__svg" viewBox="0 0 1420 760" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Document link graph"></svg>
         </div>
         <script type="application/json" id="docgen-graph-data">{{ graph_json | safe }}</script>

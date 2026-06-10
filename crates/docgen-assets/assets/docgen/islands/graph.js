@@ -55,6 +55,11 @@ window.docgen.island('docgenGraph', function (Alpine) {
       draw() {
         var svg = this.$el.querySelector('svg.docgen-graph__svg');
         if (!svg) return;
+        // Idempotent: drop any previously-drawn root so a repeat draw() (e.g. a
+        // re-init) can never stack a second graph on top of the first. Each
+        // draw() owns exactly one `docgen-graph__root`.
+        var stale = svg.querySelectorAll('.docgen-graph__root');
+        for (var s = 0; s < stale.length; s++) stale[s].remove();
         // root group carries the pan/zoom transform.
         var root = document.createElementNS(SVGNS, 'g');
         root.setAttribute('class', 'docgen-graph__root');
