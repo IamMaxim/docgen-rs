@@ -547,7 +547,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-assets"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "include_dir",
  "tempfile",
@@ -555,7 +555,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-build"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -571,7 +571,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-components"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "include_dir",
  "minijinja",
@@ -582,7 +582,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-config"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "tempfile",
@@ -592,7 +592,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "comrak",
  "docgen-components",
@@ -607,7 +607,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-diff"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "docgen-core",
@@ -621,7 +621,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-init"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "docgen-config",
@@ -631,7 +631,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-render"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "docgen-core",
  "minijinja",
@@ -640,7 +640,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-rs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -658,7 +658,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "axum",
