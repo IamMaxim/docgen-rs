@@ -52,6 +52,11 @@ pub struct AppState {
     pub out_dir: PathBuf,
     /// Canonicalized `docs/` dir — the write-guard root.
     pub docs_dir: PathBuf,
+    /// Site `base` path (e.g. `/docs`), normalized to a leading-slash, no-trailing-slash
+    /// form; empty when the site is served at the root. The built HTML prefixes every
+    /// asset/nav/wikilink URL with this, so the dev server must strip it off incoming
+    /// request paths before resolving them against `out_dir`.
+    pub base: String,
     /// The loopback port the server is bound to. Used by the Host-header
     /// allowlist to defeat DNS-rebinding (see `handlers::loopback_guard`).
     pub port: u16,
@@ -76,11 +81,20 @@ impl AppState {
             project_root,
             out_dir,
             docs_dir,
+            base: String::new(),
             port,
             reload_tx,
             self_write_at_ms: Arc::new(AtomicU64::new(0)),
             epoch: Instant::now(),
         }
+    }
+
+    /// Set the site `base` path, normalized to a leading-slash, no-trailing-slash
+    /// form (`docs` / `/docs/` / `docs/` all become `/docs`; empty stays empty).
+    /// Builder-style so the existing `new()` call sites stay untouched.
+    pub fn with_base(mut self, base: &str) -> Self {
+        self.base = normalize_base(base);
+        self
     }
 
     /// Record that the editor just wrote a doc on disk. The watcher will skip
@@ -101,6 +115,35 @@ impl AppState {
         }
         let now = self.epoch.elapsed().as_millis() as u64 + 1;
         now.saturating_sub(marked) <= SELF_WRITE_SUPPRESS.as_millis() as u64
+    }
+}
+
+/// Normalize a configured `base` into a leading-slash, no-trailing-slash form
+/// for prefix matching: `""` -> `""`, `"docs"` / `"/docs/"` / `"docs/"` -> `"/docs"`.
+pub fn normalize_base(base: &str) -> String {
+    let trimmed = base.trim().trim_matches('/');
+    if trimmed.is_empty() {
+        String::new()
+    } else {
+        format!("/{trimmed}")
+    }
+}
+
+/// Strip the site `base` prefix from a (already percent-decoded) request path so
+/// it can be resolved against `out_dir`. `base` must be normalized
+/// (`normalize_base`). A request that does not fall under `base` is returned
+/// unchanged — the caller then resolves it normally (and likely 404s), matching
+/// production where the host only routes in-base requests to the site.
+///
+/// `/docs/x.css` -> `/x.css`; `/docs` and `/docs/` -> `/`; `/other` -> `/other`.
+pub fn strip_base<'a>(path: &'a str, base: &str) -> &'a str {
+    if base.is_empty() {
+        return path;
+    }
+    match path.strip_prefix(base) {
+        Some("") => "/",
+        Some(rest) if rest.starts_with('/') => rest,
+        _ => path,
     }
 }
 
@@ -309,6 +352,13 @@ async fn serve_async(opts: DevOptions) -> anyhow::Result<()> {
     let out_tmp = tempfile::tempdir()?;
     let out_dir = out_tmp.path().to_path_buf();
 
+    // The built HTML prefixes every URL with the configured `base`; the server
+    // must strip it off incoming requests. A malformed config here is non-fatal
+    // for serving (the build step reports it) — fall back to "served at root".
+    let base = docgen_config::load(&project_root)
+        .map(|c| c.base)
+        .unwrap_or_default();
+
     let (reload_tx, _rx) = broadcast::channel(16);
     let state = AppState::new(
         project_root,
@@ -316,7 +366,8 @@ async fn serve_async(opts: DevOptions) -> anyhow::Result<()> {
         docs_canon.clone(),
         opts.port,
         reload_tx,
-    );
+    )
+    .with_base(&base);
 
     // Initial build (Dev mode + dev assets).
     rebuild_and_reload(&state)?;
@@ -401,6 +452,33 @@ mod tests {
         state.note_self_write();
         assert!(state.take_self_write_suppression());
         assert!(!state.take_self_write_suppression());
+    }
+
+    #[test]
+    fn normalize_base_canonicalizes() {
+        assert_eq!(normalize_base(""), "");
+        assert_eq!(normalize_base("/"), "");
+        assert_eq!(normalize_base("docs"), "/docs");
+        assert_eq!(normalize_base("/docs"), "/docs");
+        assert_eq!(normalize_base("/docs/"), "/docs");
+        assert_eq!(normalize_base("docs/"), "/docs");
+        assert_eq!(normalize_base("/a/b"), "/a/b");
+    }
+
+    #[test]
+    fn strip_base_handles_prefix_and_misses() {
+        // Empty base: everything passes through unchanged.
+        assert_eq!(strip_base("/docgen.css", ""), "/docgen.css");
+        // In-base requests get the prefix removed.
+        assert_eq!(strip_base("/docs/docgen.css", "/docs"), "/docgen.css");
+        assert_eq!(strip_base("/docs/guide/intro", "/docs"), "/guide/intro");
+        // The base root itself maps to "/".
+        assert_eq!(strip_base("/docs", "/docs"), "/");
+        assert_eq!(strip_base("/docs/", "/docs"), "/");
+        // A path that merely shares a textual prefix is NOT in-base.
+        assert_eq!(strip_base("/docsxyz", "/docs"), "/docsxyz");
+        // Out-of-base requests are returned unchanged.
+        assert_eq!(strip_base("/other", "/docs"), "/other");
     }
 
     #[test]

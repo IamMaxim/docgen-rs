@@ -509,7 +509,13 @@ async fn serve_dev_asset(uri: axum::http::Uri) -> Response {
 // ---- static site serving with dev-html injection ----
 
 async fn serve_site(State(state): State<AppState>, uri: axum::http::Uri) -> Response {
-    let rel = uri.path().trim_start_matches('/');
+    // `uri.path()` is percent-encoded (a browser sends `/café` as `/caf%C3%A9`);
+    // decode it so non-ASCII slugs match the Unicode dirs the build wrote on disk.
+    let decoded = percent_encoding::percent_decode_str(uri.path()).decode_utf8_lossy();
+    // The built HTML prefixes URLs with `base`; strip it before resolving against
+    // `out_dir` (where assets/pages live without the base prefix).
+    let path = crate::strip_base(&decoded, &state.base);
+    let rel = path.trim_start_matches('/');
     match resolve_served_file(&state.out_dir, rel) {
         Some(Served::Html(path)) => match tokio::fs::read_to_string(&path).await {
             Ok(body) => (

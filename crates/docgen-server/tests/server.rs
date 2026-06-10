@@ -330,3 +330,90 @@ async fn failed_build_does_not_broadcast() {
     // No reload was delivered for the failed build.
     assert!(rx.try_recv().is_err());
 }
+
+/// Build a custom site (given `docs/` files + a `docgen.toml`) and an `AppState`
+/// honoring its `base`, mirroring how `serve` derives `AppState` from config.
+fn state_with_site(
+    files: &[(&str, &str)],
+    toml: &str,
+) -> (tempfile::TempDir, tempfile::TempDir, AppState) {
+    let root = tempfile::tempdir().unwrap();
+    fs::write(root.path().join("docgen.toml"), toml).unwrap();
+    for (rel, body) in files {
+        let path = root.path().join("docs").join(rel);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, body).unwrap();
+    }
+    let out = tempfile::tempdir().unwrap();
+    build_site(&BuildOptions {
+        project_root: root.path(),
+        out_dir: out.path(),
+        mode: BuildMode::Dev,
+    })
+    .unwrap();
+    docgen_assets::emit(&docgen_assets::dev_assets(), out.path()).unwrap();
+
+    let docs_dir = root.path().join("docs").canonicalize().unwrap();
+    let base = docgen_config::load(root.path()).unwrap().base;
+    let (reload_tx, _rx) = broadcast::channel(16);
+    let state = AppState::new(
+        root.path().to_path_buf(),
+        out.path().to_path_buf(),
+        docs_dir,
+        4321,
+        reload_tx,
+    )
+    .with_base(&base);
+    (root, out, state)
+}
+
+async fn get_status(app: axum::Router, uri: &str) -> StatusCode {
+    app.oneshot(
+        Request::builder()
+            .uri(uri)
+            .header("host", "127.0.0.1:4321")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap()
+    .status()
+}
+
+/// Regression: a page whose slug contains non-ASCII characters is served for the
+/// percent-encoded request a browser actually sends (the path must be decoded
+/// before it is resolved against the Unicode dir on disk).
+#[tokio::test]
+async fn serves_non_ascii_slug_via_percent_encoded_request() {
+    let (_root, _out, state) = state_with_site(
+        &[("café/résumé.md", "---\ntitle: R\n---\n\nbody\n")],
+        "base = \"\"\n",
+    );
+    let app = router(state);
+    // Browser percent-encodes "café/résumé" as below.
+    assert_eq!(
+        get_status(app, "/caf%C3%A9/r%C3%A9sum%C3%A9").await,
+        StatusCode::OK
+    );
+}
+
+/// Regression: with a non-empty `base`, the dev server strips the prefix the
+/// built HTML emits on every asset/page URL — otherwise every request 404s.
+#[tokio::test]
+async fn strips_base_prefix_from_requests() {
+    let (_root, _out, state) = state_with_site(
+        &[
+            ("index.md", "---\ntitle: H\n---\n\nhome\n"),
+            ("guide.md", "---\ntitle: G\n---\n\nbody\n"),
+        ],
+        "base = \"/docs\"\n",
+    );
+    let app = router(state.clone());
+    // Asset + page + home under the base resolve.
+    assert_eq!(
+        get_status(app.clone(), "/docs/docgen.css").await,
+        StatusCode::OK
+    );
+    assert_eq!(get_status(app.clone(), "/docs/guide").await, StatusCode::OK);
+    assert_eq!(get_status(app, "/docs/").await, StatusCode::OK);
+}

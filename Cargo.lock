@@ -673,6 +673,7 @@ dependencies = [
  "http-body-util",
  "notify",
  "notify-debouncer-mini",
+ "percent-encoding",
  "serde",
  "serde_json",
  "sha2",
