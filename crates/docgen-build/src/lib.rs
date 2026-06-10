@@ -231,7 +231,10 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
                     fs::create_dir_all(diff_dir.join("revisions"))?;
                     // timeline.json — the lightweight index (hunks/blocks stripped).
                     let summary = docgen_diff::summarize_report(&report);
-                    fs::write(diff_dir.join("timeline.json"), serde_json::to_vec(&summary)?)?;
+                    fs::write(
+                        diff_dir.join("timeline.json"),
+                        serde_json::to_vec(&summary)?,
+                    )?;
                     // revisions/<id>.json — each commit's full per-file block diff,
                     // lazily fetched by the island when a commit is selected.
                     for point in &report.timeline {
@@ -275,7 +278,8 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
     // doc's render consumes it (every other page passes `home: None`).
     let total_links = site.graph.edges.len();
     let mut section_rows: Vec<(String, String, usize)> = Vec::new();
-    let mut section_idx: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    let mut section_idx: std::collections::BTreeMap<String, usize> =
+        std::collections::BTreeMap::new();
     for doc in &site.docs {
         if doc.slug == HOME_SLUG || !doc.slug.contains('/') {
             continue;
@@ -295,17 +299,29 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
         .filter(|d| d.slug != HOME_SLUG)
         .take(6)
         .map(|d| {
-            let section = d.slug.split_once('/').map(|(s, _)| s.to_string()).unwrap_or_default();
+            let section = d
+                .slug
+                .split_once('/')
+                .map(|(s, _)| s.to_string())
+                .unwrap_or_default();
             (d.title.clone(), d.slug.clone(), section)
         })
         .collect();
     let home_sections: Vec<HomeSection> = section_rows
         .iter()
-        .map(|(label, slug, count)| HomeSection { label, slug, count: *count })
+        .map(|(label, slug, count)| HomeSection {
+            label,
+            slug,
+            count: *count,
+        })
         .collect();
     let home_recent: Vec<HomeRecent> = recent_rows
         .iter()
-        .map(|(title, slug, section)| HomeRecent { title, slug, section })
+        .map(|(title, slug, section)| HomeRecent {
+            title,
+            slug,
+            section,
+        })
         .collect();
 
     // Phase 2: render the doc pages, linking to history where one was emitted.
@@ -324,7 +340,11 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
             title: &doc.title,
             // Frontmatter description → page header lede (non-home pages). The home
             // dashboard consumes it via `HomeData.description` instead.
-            description: if is_home { "" } else { doc.description.as_deref().unwrap_or("") },
+            description: if is_home {
+                ""
+            } else {
+                doc.description.as_deref().unwrap_or("")
+            },
             slug: &doc.slug,
             body_html: &doc.body_html,
             tree: &tree,

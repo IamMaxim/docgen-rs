@@ -64,7 +64,12 @@ pub struct LayoutParams {
 
 impl Default for LayoutParams {
     fn default() -> Self {
-        LayoutParams { width: 1420.0, height: 760.0, padding: 74.0, iterations: 180 }
+        LayoutParams {
+            width: 1420.0,
+            height: 760.0,
+            padding: 74.0,
+            iterations: 180,
+        }
     }
 }
 
@@ -110,12 +115,18 @@ pub fn layout_graph(
 ) -> GraphData {
     let n = nodes_meta.len();
     if n == 0 {
-        return GraphData { nodes: Vec::new(), edges: Vec::new() };
+        return GraphData {
+            nodes: Vec::new(),
+            edges: Vec::new(),
+        };
     }
 
     // Slug -> index, built once. BTreeMap for stable, no-hash lookup.
-    let index_of: BTreeMap<&str, usize> =
-        nodes_meta.iter().enumerate().map(|(i, (s, _))| (s.as_str(), i)).collect();
+    let index_of: BTreeMap<&str, usize> = nodes_meta
+        .iter()
+        .enumerate()
+        .map(|(i, (s, _))| (s.as_str(), i))
+        .collect();
 
     // Filtered edge list as index pairs: drop self-loops and edges touching a
     // slug not in `nodes_meta` (ghosts can't be drawn). Edges are undirected for
@@ -130,8 +141,7 @@ pub fn layout_graph(
         if e.from == e.to {
             continue;
         }
-        let (Some(&s), Some(&t)) =
-            (index_of.get(e.from.as_str()), index_of.get(e.to.as_str()))
+        let (Some(&s), Some(&t)) = (index_of.get(e.from.as_str()), index_of.get(e.to.as_str()))
         else {
             continue;
         };
@@ -141,7 +151,10 @@ pub fn layout_graph(
             continue;
         }
         edges_idx.push((s, t));
-        graph_edges.push(GraphDataEdge { from: e.from.clone(), to: e.to.clone() });
+        graph_edges.push(GraphDataEdge {
+            from: e.from.clone(),
+            to: e.to.clone(),
+        });
         degree[s] += 1;
         degree[t] += 1;
     }
@@ -216,7 +229,10 @@ pub fn layout_graph(
         })
         .collect();
 
-    GraphData { nodes, edges: graph_edges }
+    GraphData {
+        nodes,
+        edges: graph_edges,
+    }
 }
 
 /// Serialize [`GraphData`] to compact JSON (stable key order via serde derive).
@@ -233,7 +249,10 @@ mod tests {
         LinkGraph {
             edges: edges
                 .iter()
-                .map(|(f, t)| LinkEdge { from: f.to_string(), to: t.to_string() })
+                .map(|(f, t)| LinkEdge {
+                    from: f.to_string(),
+                    to: t.to_string(),
+                })
                 .collect(),
             backlinks: Default::default(),
         }
@@ -251,7 +270,10 @@ mod tests {
                 y: 2.0,
                 degree: 3,
             }],
-            edges: vec![GraphDataEdge { from: "a".into(), to: "b".into() }],
+            edges: vec![GraphDataEdge {
+                from: "a".into(),
+                to: "b".into(),
+            }],
         };
         let j = graph_data_json(&d);
         assert!(j.contains(r#""slug":"a""#));
@@ -323,8 +345,16 @@ mod tests {
         let d2 = layout_graph(&meta, &g, p);
         assert_eq!(d1, d2);
         for n in &d1.nodes {
-            assert!(n.x >= p.padding && n.x <= p.width - p.padding, "x oob: {}", n.x);
-            assert!(n.y >= p.padding && n.y <= p.height - p.padding, "y oob: {}", n.y);
+            assert!(
+                n.x >= p.padding && n.x <= p.width - p.padding,
+                "x oob: {}",
+                n.x
+            );
+            assert!(
+                n.y >= p.padding && n.y <= p.height - p.padding,
+                "y oob: {}",
+                n.y
+            );
         }
     }
 
@@ -357,7 +387,10 @@ mod tests {
         let a = &d1.nodes[0];
         let b = &d1.nodes[1];
         let dist = ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt();
-        assert!(dist > 40.0 && dist < 320.0, "pair distance {dist} not in plausible band");
+        assert!(
+            dist > 40.0 && dist < 320.0,
+            "pair distance {dist} not in plausible band"
+        );
         for n in &d1.nodes {
             assert!(n.x.is_finite() && n.y.is_finite());
         }
@@ -365,7 +398,9 @@ mod tests {
 
     #[test]
     fn all_positions_stay_in_bounds_after_forces() {
-        let meta: Vec<_> = (0..20).map(|i| (format!("n{i}"), format!("N{i}"))).collect();
+        let meta: Vec<_> = (0..20)
+            .map(|i| (format!("n{i}"), format!("N{i}")))
+            .collect();
         let owned: Vec<(String, String)> =
             (1..15).map(|i| ("n0".into(), format!("n{i}"))).collect();
         let mut e: Vec<(&str, &str)> = Vec::new();

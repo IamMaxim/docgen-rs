@@ -20,10 +20,17 @@ fn insert(node: &mut Builder, parts: &[&str], slug: &str, title: &str, depth: us
             node.note = Some(slug.to_string());
         }
         [leaf] => {
-            node.docs.insert(leaf.to_string(), (slug.to_string(), title.to_string()));
+            node.docs
+                .insert(leaf.to_string(), (slug.to_string(), title.to_string()));
         }
         [head, rest @ ..] => {
-            insert(node.dirs.entry(head.to_string()).or_default(), rest, slug, title, depth + 1);
+            insert(
+                node.dirs.entry(head.to_string()).or_default(),
+                rest,
+                slug,
+                title,
+                depth + 1,
+            );
         }
         [] => {}
     }
@@ -34,7 +41,11 @@ fn to_nodes(builder: Builder) -> Vec<TreeNode> {
     // Directories first (BTreeMap keeps them name-sorted), then loose docs.
     for (name, child) in builder.dirs {
         let slug = child.note.clone();
-        out.push(TreeNode::Dir { name, slug, children: to_nodes(child) });
+        out.push(TreeNode::Dir {
+            name,
+            slug,
+            children: to_nodes(child),
+        });
     }
     for (name, (slug, title)) in builder.docs {
         out.push(TreeNode::Doc { name, slug, title });
@@ -84,7 +95,9 @@ mod tests {
             TreeNode::Dir { name, children, .. } => {
                 assert_eq!(name, "guide");
                 assert_eq!(children.len(), 1);
-                assert!(matches!(&children[0], TreeNode::Doc { slug, .. } if slug == "guide/intro"));
+                assert!(
+                    matches!(&children[0], TreeNode::Doc { slug, .. } if slug == "guide/intro")
+                );
             }
             other => panic!("expected dir, got {other:?}"),
         }
@@ -141,12 +154,18 @@ mod tests {
         let tree = build_tree(&docs);
         assert_eq!(tree.len(), 1);
         match &tree[0] {
-            TreeNode::Dir { name, slug, children } => {
+            TreeNode::Dir {
+                name,
+                slug,
+                children,
+            } => {
                 assert_eq!(name, "guide");
                 assert_eq!(slug.as_deref(), Some("guide/index"));
                 // Only `intro` is a child — no `index` entry.
                 assert_eq!(children.len(), 1);
-                assert!(matches!(&children[0], TreeNode::Doc { slug, .. } if slug == "guide/intro"));
+                assert!(
+                    matches!(&children[0], TreeNode::Doc { slug, .. } if slug == "guide/intro")
+                );
             }
             other => panic!("expected dir, got {other:?}"),
         }
@@ -158,6 +177,8 @@ mod tests {
         // remain a normal doc node (depth 0).
         let docs = vec![doc("index", "Home"), doc("guide/intro", "Intro")];
         let tree = build_tree(&docs);
-        assert!(tree.iter().any(|n| matches!(n, TreeNode::Doc { slug, .. } if slug == "index")));
+        assert!(tree
+            .iter()
+            .any(|n| matches!(n, TreeNode::Doc { slug, .. } if slug == "index")));
     }
 }

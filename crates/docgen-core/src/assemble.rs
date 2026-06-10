@@ -19,7 +19,7 @@ pub fn assemble(raw: RawDoc) -> Doc {
     )
     .docs
     .pop()
-        .expect("one doc in, one doc out")
+    .expect("one doc in, one doc out")
 }
 
 #[cfg(test)]
@@ -46,10 +46,16 @@ mod tests {
 
     #[test]
     fn title_falls_back_to_first_h1_then_slug() {
-        let with_h1 = assemble(RawDoc { rel_path: "b.md".into(), raw: "# Just Heading\n".into() });
+        let with_h1 = assemble(RawDoc {
+            rel_path: "b.md".into(),
+            raw: "# Just Heading\n".into(),
+        });
         assert_eq!(with_h1.title, "Just Heading");
 
-        let bare = assemble(RawDoc { rel_path: "c.md".into(), raw: "no heading here\n".into() });
+        let bare = assemble(RawDoc {
+            rel_path: "c.md".into(),
+            raw: "no heading here\n".into(),
+        });
         assert_eq!(bare.title, "c");
     }
 

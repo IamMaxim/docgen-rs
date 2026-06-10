@@ -113,9 +113,8 @@ mod tests {
 
     #[test]
     fn multiple_diagrams_get_distinct_ids() {
-        let (html, n) = render(
-            "```mermaid\ngraph TD;A-->B;\n```\n\n```mermaid\ngraph TD;C-->D;\n```\n",
-        );
+        let (html, n) =
+            render("```mermaid\ngraph TD;A-->B;\n```\n\n```mermaid\ngraph TD;C-->D;\n```\n");
         assert_eq!(n, 2);
         assert!(html.contains("data-mermaid-id=\"docgen-mermaid-0\""));
         assert!(html.contains("data-mermaid-id=\"docgen-mermaid-1\""));

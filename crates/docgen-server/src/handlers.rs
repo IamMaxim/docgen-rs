@@ -168,7 +168,11 @@ async fn loopback_guard(port: u16, req: Request, next: Next) -> Response {
 
     let is_mutating = !matches!(req.method(), &Method::GET | &Method::HEAD);
     if is_mutating {
-        if let Some(origin) = req.headers().get(header::ORIGIN).and_then(|o| o.to_str().ok()) {
+        if let Some(origin) = req
+            .headers()
+            .get(header::ORIGIN)
+            .and_then(|o| o.to_str().ok())
+        {
             let allowed_origins = [
                 format!("http://127.0.0.1:{port}"),
                 format!("http://localhost:{port}"),
@@ -194,9 +198,7 @@ async fn livereload_sse(
         .take_while(|ev| std::future::ready(!matches!(ev, Ok(ReloadEvent::Shutdown))))
         .filter_map(|ev| async move {
             match ev {
-                Ok(ReloadEvent::Reload) => {
-                    Some(Ok(Event::default().event("reload").data("now")))
-                }
+                Ok(ReloadEvent::Reload) => Some(Ok(Event::default().event("reload").data("now"))),
                 // Shutdown is consumed by take_while above; lagged is skipped.
                 Ok(ReloadEvent::Shutdown) | Err(_) => None,
             }

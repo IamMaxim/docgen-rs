@@ -11,7 +11,11 @@ fn discovers_and_processes_a_temp_site() {
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(dir.join("docs/guide")).unwrap();
     fs::write(dir.join("docs/index.md"), "# Home\n").unwrap();
-    fs::write(dir.join("docs/guide/intro.md"), "---\ntitle: Intro\n---\nbody\n").unwrap();
+    fs::write(
+        dir.join("docs/guide/intro.md"),
+        "---\ntitle: Intro\n---\nbody\n",
+    )
+    .unwrap();
 
     let mut raws = discover_docs(&dir.join("docs")).unwrap();
     raws.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));

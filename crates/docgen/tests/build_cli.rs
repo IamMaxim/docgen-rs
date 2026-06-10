@@ -13,7 +13,11 @@ fn builds_fixture_site() {
     let _ = fs::remove_dir_all(&tmp);
     fs::create_dir_all(tmp.join("docs/guide")).unwrap();
     fs::copy(fixture.join("docs/index.md"), tmp.join("docs/index.md")).unwrap();
-    fs::copy(fixture.join("docs/guide/intro.md"), tmp.join("docs/guide/intro.md")).unwrap();
+    fs::copy(
+        fixture.join("docs/guide/intro.md"),
+        tmp.join("docs/guide/intro.md"),
+    )
+    .unwrap();
     fs::copy(fixture.join("docs/markup.md"), tmp.join("docs/markup.md")).unwrap();
 
     let status = Command::new(env!("CARGO_BIN_EXE_docgen"))
@@ -130,8 +134,10 @@ fn builds_graph_page_with_island_and_nav_link() {
     let workspace = manifest.parent().unwrap().parent().unwrap();
     let fixture = workspace.join("fixtures/site-basic");
 
-    let tmp = std::env::temp_dir()
-        .join(format!("docgen_build_cli_graph_test_{}", std::process::id()));
+    let tmp = std::env::temp_dir().join(format!(
+        "docgen_build_cli_graph_test_{}",
+        std::process::id()
+    ));
     let _ = fs::remove_dir_all(&tmp);
     fs::create_dir_all(tmp.join("docs/guide")).unwrap();
     fs::copy(fixture.join("docs/index.md"), tmp.join("docs/index.md")).unwrap();
@@ -205,8 +211,10 @@ fn builds_mermaid_page_with_lazy_island() {
     let workspace = manifest.parent().unwrap().parent().unwrap();
     let fixture = workspace.join("fixtures/site-basic");
 
-    let tmp = std::env::temp_dir()
-        .join(format!("docgen_build_cli_mermaid_test_{}", std::process::id()));
+    let tmp = std::env::temp_dir().join(format!(
+        "docgen_build_cli_mermaid_test_{}",
+        std::process::id()
+    ));
     let _ = fs::remove_dir_all(&tmp);
     fs::create_dir_all(tmp.join("docs")).unwrap();
     fs::copy(fixture.join("docs/diagram.md"), tmp.join("docs/diagram.md")).unwrap();
@@ -225,7 +233,7 @@ fn builds_mermaid_page_with_lazy_island() {
     assert!(diag.contains("docgen-mermaid"), "no container: {diag}");
     assert!(diag.contains(r#"x-data="docgenMermaid""#));
     assert!(diag.contains("graph TD")); // source preserved
-    // The diagram page links the lazy island script.
+                                        // The diagram page links the lazy island script.
     assert!(diag.contains(r#"src="/islands/mermaid.js""#));
 
     // Lazy lib + island JS emitted (the island fetches the lib at runtime).
@@ -308,8 +316,10 @@ fn builds_math_page_with_build_time_katex() {
 /// metacharacters escaped, while the rest of the page still renders.
 #[test]
 fn broken_math_degrades_without_failing_build() {
-    let tmp = std::env::temp_dir()
-        .join(format!("docgen_build_cli_badmath_test_{}", std::process::id()));
+    let tmp = std::env::temp_dir().join(format!(
+        "docgen_build_cli_badmath_test_{}",
+        std::process::id()
+    ));
     let _ = fs::remove_dir_all(&tmp);
     fs::create_dir_all(tmp.join("docs")).unwrap();
     // A genuinely-broken inline expression carrying HTML metacharacters, plus
@@ -335,8 +345,14 @@ fn broken_math_degrades_without_failing_build() {
         "no math-error fallback: {page}"
     );
     // HTML metacharacters in the failed expression are escaped (render.unsafe=true downstream).
-    assert!(page.contains("&lt;script&gt;"), "metachars not escaped: {page}");
-    assert!(!page.contains("<script>\\frac"), "raw script tag leaked: {page}");
+    assert!(
+        page.contains("&lt;script&gt;"),
+        "metachars not escaped: {page}"
+    );
+    assert!(
+        !page.contains("<script>\\frac"),
+        "raw script tag leaked: {page}"
+    );
     // The rest of the page still rendered.
     assert!(page.contains("Prose before."));
     assert!(page.contains("and prose after."));

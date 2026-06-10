@@ -125,8 +125,16 @@ mod tests {
     fn serializes_index_to_json_array() {
         use crate::model::SearchEntry;
         let entries = vec![
-            SearchEntry { slug: "a".into(), title: "A".into(), text: "alpha".into() },
-            SearchEntry { slug: "b".into(), title: "B".into(), text: "beta".into() },
+            SearchEntry {
+                slug: "a".into(),
+                title: "A".into(),
+                text: "alpha".into(),
+            },
+            SearchEntry {
+                slug: "b".into(),
+                title: "B".into(),
+                text: "beta".into(),
+            },
         ];
         let json = index_json(&entries);
         assert!(json.starts_with('['));

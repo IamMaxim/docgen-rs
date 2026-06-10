@@ -28,7 +28,10 @@ pub fn parse_frontmatter(raw: &str) -> Parsed {
                 let yaml = &rest[..offset];
                 let after = &rest[offset + line.len()..];
                 let frontmatter = serde_yml::from_str(yaml).unwrap_or(Value::Null);
-                return Parsed { frontmatter, body: after.to_string() };
+                return Parsed {
+                    frontmatter,
+                    body: after.to_string(),
+                };
             }
             offset += line.len();
         }
@@ -37,11 +40,17 @@ pub fn parse_frontmatter(raw: &str) -> Parsed {
         if last.trim_end_matches('\r').trim_end() == "---" {
             let yaml = &rest[..offset];
             let frontmatter = serde_yml::from_str(yaml).unwrap_or(Value::Null);
-            return Parsed { frontmatter, body: String::new() };
+            return Parsed {
+                frontmatter,
+                body: String::new(),
+            };
         }
     }
 
-    Parsed { frontmatter: Value::Null, body: input.to_string() }
+    Parsed {
+        frontmatter: Value::Null,
+        body: input.to_string(),
+    }
 }
 
 #[cfg(test)]

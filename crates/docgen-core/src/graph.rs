@@ -20,8 +20,10 @@ pub fn build_link_graph(
     docs: &[(String, String, Option<String>)],
     outbound: &BTreeMap<String, Vec<String>>,
 ) -> LinkGraph {
-    let title_of: BTreeMap<&str, &str> =
-        docs.iter().map(|(s, t, _)| (s.as_str(), t.as_str())).collect();
+    let title_of: BTreeMap<&str, &str> = docs
+        .iter()
+        .map(|(s, t, _)| (s.as_str(), t.as_str()))
+        .collect();
     let desc_of: BTreeMap<&str, &str> = docs
         .iter()
         .filter_map(|(s, _, d)| d.as_deref().map(|d| (s.as_str(), d)))
@@ -35,8 +37,14 @@ pub fn build_link_graph(
             if to == from {
                 continue;
             }
-            edges.push(LinkEdge { from: from.clone(), to: to.clone() });
-            let title = title_of.get(from.as_str()).copied().unwrap_or(from.as_str());
+            edges.push(LinkEdge {
+                from: from.clone(),
+                to: to.clone(),
+            });
+            let title = title_of
+                .get(from.as_str())
+                .copied()
+                .unwrap_or(from.as_str());
             let description = desc_of.get(from.as_str()).map(|d| d.to_string());
             backlinks.entry(to.clone()).or_default().push(Backlink {
                 slug: from.clone(),
@@ -65,7 +73,11 @@ mod tests {
     fn builds_edges_and_inverted_backlinks() {
         let docs = vec![
             ("index".to_string(), "Home".to_string(), None),
-            ("a".to_string(), "Page A".to_string(), Some("Desc A".to_string())),
+            (
+                "a".to_string(),
+                "Page A".to_string(),
+                Some("Desc A".to_string()),
+            ),
             ("b".to_string(), "Page B".to_string(), None),
         ];
         let mut outbound: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -77,9 +89,18 @@ mod tests {
         assert_eq!(
             g.edges,
             vec![
-                LinkEdge { from: "a".into(), to: "b".into() },
-                LinkEdge { from: "a".into(), to: "index".into() },
-                LinkEdge { from: "b".into(), to: "index".into() },
+                LinkEdge {
+                    from: "a".into(),
+                    to: "b".into()
+                },
+                LinkEdge {
+                    from: "a".into(),
+                    to: "index".into()
+                },
+                LinkEdge {
+                    from: "b".into(),
+                    to: "index".into()
+                },
             ]
         );
         // index is linked from a and b (sorted by linking slug).
@@ -91,7 +112,11 @@ mod tests {
                     title: "Page A".into(),
                     description: Some("Desc A".into())
                 },
-                Backlink { slug: "b".into(), title: "Page B".into(), description: None },
+                Backlink {
+                    slug: "b".into(),
+                    title: "Page B".into(),
+                    description: None
+                },
             ]
         );
         assert_eq!(
@@ -115,7 +140,11 @@ mod tests {
         let g = build_link_graph(&docs, &outbound);
         assert_eq!(
             g.backlinks.get("index").unwrap(),
-            &vec![Backlink { slug: "orphan".into(), title: "orphan".into(), description: None }]
+            &vec![Backlink {
+                slug: "orphan".into(),
+                title: "orphan".into(),
+                description: None
+            }]
         );
     }
 

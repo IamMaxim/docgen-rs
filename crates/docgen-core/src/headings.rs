@@ -38,7 +38,11 @@ pub fn collect_headings<'a>(root: &'a AstNode<'a>) -> Vec<Heading> {
             if h.level == 2 || h.level == 3 {
                 let text = collect_text(node);
                 let id = anchorizer.anchorize(&text);
-                out.push(Heading { id, text: text.trim().to_string(), depth: h.level });
+                out.push(Heading {
+                    id,
+                    text: text.trim().to_string(),
+                    depth: h.level,
+                });
             }
         }
     }
@@ -97,7 +101,9 @@ pub fn stamp_heading_ids(html: &str, headings: &[Heading]) -> String {
 /// Minimal attribute escaping for an anchorized id (anchorize already strips
 /// most markup-significant characters; this guards the remainder).
 fn escape_attr(s: &str) -> String {
-    s.replace('&', "&amp;").replace('"', "&quot;").replace('<', "&lt;")
+    s.replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
 }
 
 #[cfg(test)]
@@ -115,8 +121,22 @@ mod tests {
         );
         let hs = collect_headings(root);
         assert_eq!(hs.len(), 2);
-        assert_eq!(hs[0], Heading { id: "alpha".into(), text: "Alpha".into(), depth: 2 });
-        assert_eq!(hs[1], Heading { id: "beta".into(), text: "Beta".into(), depth: 3 });
+        assert_eq!(
+            hs[0],
+            Heading {
+                id: "alpha".into(),
+                text: "Alpha".into(),
+                depth: 2
+            }
+        );
+        assert_eq!(
+            hs[1],
+            Heading {
+                id: "beta".into(),
+                text: "Beta".into(),
+                depth: 3
+            }
+        );
     }
 
     #[test]
@@ -136,8 +156,16 @@ mod tests {
     fn stamps_ids_onto_heading_tags_in_order() {
         let html = "<h2>Alpha</h2>\n<p>x</p>\n<h3>Beta</h3>\n";
         let headings = vec![
-            Heading { id: "alpha".into(), text: "Alpha".into(), depth: 2 },
-            Heading { id: "beta".into(), text: "Beta".into(), depth: 3 },
+            Heading {
+                id: "alpha".into(),
+                text: "Alpha".into(),
+                depth: 2,
+            },
+            Heading {
+                id: "beta".into(),
+                text: "Beta".into(),
+                depth: 3,
+            },
         ];
         let out = stamp_heading_ids(html, &headings);
         assert!(out.contains(r#"<h2 id="alpha">Alpha</h2>"#));

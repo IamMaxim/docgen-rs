@@ -158,7 +158,11 @@ fn parse_fence(line: &str) -> Option<Fence> {
     if ch == '`' && info.contains('`') {
         return None;
     }
-    Some(Fence { ch, len, has_info: !info.is_empty() })
+    Some(Fence {
+        ch,
+        len,
+        has_info: !info.is_empty(),
+    })
 }
 
 /// Pass 1: scan `body_md`, replace directives with sentinels, return instances
@@ -483,7 +487,9 @@ mod substitute_tests {
 
     fn reg_with(name: &str, tpl: &str) -> docgen_components::Registry {
         let mut r = docgen_components::Registry::empty();
-        r.insert(docgen_components::Component::from_parts(name, tpl, None, None));
+        r.insert(docgen_components::Component::from_parts(
+            name, tpl, None, None,
+        ));
         r
     }
 
@@ -592,8 +598,7 @@ mod extract_tests {
 
     #[test]
     fn nested_block_directives_match_outermost() {
-        let src =
-            ":::callout{type=note}\nouter\n:::callout{type=warning}\ninner\n:::\n:::\n";
+        let src = ":::callout{type=note}\nouter\n:::callout{type=warning}\ninner\n:::\n:::\n";
         let (_out, inst) = extract(src);
         assert_eq!(inst.len(), 1); // only the outer is extracted at this level
         assert!(inst[0].inner_md.contains(":::callout{type=warning}"));
@@ -622,7 +627,10 @@ mod extract_tests {
         // verbatim — comrak then renders the fence as a literal code block.
         let src = "```\n:::callout{type=note}\nhello\n:::\n```\n";
         let (out, inst) = extract(src);
-        assert!(inst.is_empty(), "directive inside a code fence must not be extracted");
+        assert!(
+            inst.is_empty(),
+            "directive inside a code fence must not be extracted"
+        );
         assert!(out.contains(":::callout{type=note}"));
         assert!(out.contains("hello"));
         assert!(!out.contains("docgen-directive"));
@@ -641,7 +649,10 @@ mod extract_tests {
     fn leaf_directive_inside_inline_code_is_left_literal() {
         let src = "Use `:youtube[x]{id=1}` syntax.\n";
         let (out, inst) = extract(src);
-        assert!(inst.is_empty(), "directive inside inline code must not be extracted");
+        assert!(
+            inst.is_empty(),
+            "directive inside inline code must not be extracted"
+        );
         assert!(out.contains("`:youtube[x]{id=1}`"));
         assert!(!out.contains("docgen-directive"));
     }

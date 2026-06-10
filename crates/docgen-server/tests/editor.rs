@@ -110,7 +110,10 @@ async fn put_source_persists_in_bounds_write_and_rebuilds() {
 
     // The in-handler rebuild regenerated the page.
     let html = fs::read_to_string(out.path().join("index/index.html")).unwrap();
-    assert!(html.contains("Edited Title"), "rebuild missed the edit: {html}");
+    assert!(
+        html.contains("Edited Title"),
+        "rebuild missed the edit: {html}"
+    );
 
     // A reload was broadcast.
     assert_eq!(rx.recv().await.unwrap(), ReloadEvent::Reload);

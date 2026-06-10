@@ -115,12 +115,18 @@ impl Registry {
     /// All components with an `island.js`, in BTreeMap name-key order — the
     /// concatenation order for the emitted `components.js` (deterministic).
     pub fn islands(&self) -> Vec<&Component> {
-        self.map.values().filter(|c| c.island_js.is_some()).collect()
+        self.map
+            .values()
+            .filter(|c| c.island_js.is_some())
+            .collect()
     }
 
     /// All components with a `style.css`, in BTreeMap name-key order (deterministic).
     pub fn styles(&self) -> Vec<&Component> {
-        self.map.values().filter(|c| c.style_css.is_some()).collect()
+        self.map
+            .values()
+            .filter(|c| c.style_css.is_some())
+            .collect()
     }
 }
 
@@ -204,8 +210,12 @@ mod registry_tests {
             "callout",
             "<div class=\"project-callout\">{{ content | safe }}</div>",
         );
-        let builtin =
-            Component::from_parts("callout", "<div class=\"builtin-callout\"></div>", None, None);
+        let builtin = Component::from_parts(
+            "callout",
+            "<div class=\"builtin-callout\"></div>",
+            None,
+            None,
+        );
         let reg = build_registry(vec![builtin], dir.path()).unwrap();
         let c = reg.get("callout").unwrap();
         assert!(c.template.contains("project-callout"));
@@ -287,7 +297,12 @@ mod render_tests {
 
     #[test]
     fn attrs_and_label_are_html_escaped() {
-        let c = Component::from_parts("x", "<i title=\"{{ label }}\">{{ attrs.a }}</i>", None, None);
+        let c = Component::from_parts(
+            "x",
+            "<i title=\"{{ label }}\">{{ attrs.a }}</i>",
+            None,
+            None,
+        );
         let html = c
             .render(&DirectiveContext {
                 attrs: attrs(&[("a", "<script>")]),

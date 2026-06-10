@@ -77,7 +77,11 @@ fn build_renders_builtin_callout_and_project_component() {
     // project component `note` (leaf) with a style
     let nd = root.path().join("components/note");
     fs::create_dir_all(&nd).unwrap();
-    fs::write(nd.join("template.html"), "<span class=\"note\">{{ label }}</span>").unwrap();
+    fs::write(
+        nd.join("template.html"),
+        "<span class=\"note\">{{ label }}</span>",
+    )
+    .unwrap();
     fs::write(nd.join("style.css"), ".note{color:teal}").unwrap();
 
     let out = tempfile::tempdir().unwrap();
@@ -138,11 +142,7 @@ fn island_component_emits_components_js_only_on_pages_that_use_it() {
         "# Home\n\n:::rating{id=p max=5}\n:::\n",
     )
     .unwrap();
-    fs::write(
-        root.path().join("docs/plain.md"),
-        "# Plain\nno directive\n",
-    )
-    .unwrap();
+    fs::write(root.path().join("docs/plain.md"), "# Plain\nno directive\n").unwrap();
     let rd = root.path().join("components/rating");
     fs::create_dir_all(&rd).unwrap();
     fs::write(
@@ -150,11 +150,7 @@ fn island_component_emits_components_js_only_on_pages_that_use_it() {
         "<div x-data=\"docgenRating()\" data-id=\"{{ attrs.id }}\"></div>",
     )
     .unwrap();
-    fs::write(
-        rd.join("island.js"),
-        "Alpine.data('docgenRating',()=>({}))",
-    )
-    .unwrap();
+    fs::write(rd.join("island.js"), "Alpine.data('docgenRating',()=>({}))").unwrap();
     let out = tempfile::tempdir().unwrap();
     build_site(&BuildOptions {
         project_root: root.path(),
@@ -191,7 +187,10 @@ fn build_files(files: &[(&str, &str)]) -> tempfile::TempDir {
 #[test]
 fn include_directive_transcludes_partial_and_excludes_it_as_page() {
     let out = build_files(&[
-        ("docs/guide/index.md", "# Guide\n\n:include{src=\"./_facts.gen.md\"}\n"),
+        (
+            "docs/guide/index.md",
+            "# Guide\n\n:include{src=\"./_facts.gen.md\"}\n",
+        ),
         ("docs/guide/_facts.gen.md", "## Facts\n\n- alpha\n- beta\n"),
     ]);
     // The partial's content is spliced into the host page...
@@ -199,13 +198,19 @@ fn include_directive_transcludes_partial_and_excludes_it_as_page() {
     assert!(host.contains("Facts"), "partial heading missing: {host}");
     assert!(host.contains("alpha"), "partial list missing");
     // ...and the partial never becomes its own page.
-    assert!(!out.path().join("guide/_facts.gen/index.html").exists(), "partial leaked as a page");
+    assert!(
+        !out.path().join("guide/_facts.gen/index.html").exists(),
+        "partial leaked as a page"
+    );
 }
 
 #[test]
 fn include_missing_src_degrades_to_error_span() {
     let out = build_files(&[("docs/index.md", "# Home\n\n:include{src=\"./_nope.md\"}\n")]);
     let html = fs::read_to_string(out.path().join("index/index.html")).unwrap();
-    assert!(html.contains("docgen-directive-error"), "expected inert error span: {html}");
+    assert!(
+        html.contains("docgen-directive-error"),
+        "expected inert error span: {html}"
+    );
     // Reaching here means the build did not panic / fail.
 }

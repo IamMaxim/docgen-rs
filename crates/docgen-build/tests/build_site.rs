@@ -78,7 +78,11 @@ fn base_subpath_prefixes_assets_and_wikilinks_end_to_end() {
         "title = \"My Docs\"\nbase = \"/docs\"\n",
     )
     .unwrap();
-    fs::write(root.path().join("docs/index.md"), "# Home\n\nSee [[guide]] now.\n").unwrap();
+    fs::write(
+        root.path().join("docs/index.md"),
+        "# Home\n\nSee [[guide]] now.\n",
+    )
+    .unwrap();
     fs::write(root.path().join("docs/guide.md"), "# Guide\n\nBody.\n").unwrap();
     let out = tempfile::tempdir().unwrap();
 
@@ -93,7 +97,10 @@ fn base_subpath_prefixes_assets_and_wikilinks_end_to_end() {
     // No <base> tag — links are prefixed directly so they resolve.
     assert!(!html.contains("<base"), "should not emit a <base> tag");
     // Asset under base.
-    assert!(html.contains(r#"href="/docs/docgen.css""#), "asset href: {html}");
+    assert!(
+        html.contains(r#"href="/docs/docgen.css""#),
+        "asset href: {html}"
+    );
     assert!(html.contains(r#"src="/docs/bootstrap.js""#));
     // Resolved wikilink under base.
     assert!(
@@ -104,7 +111,10 @@ fn base_subpath_prefixes_assets_and_wikilinks_end_to_end() {
     assert!(!html.contains(r#"href="/docgen.css""#));
     assert!(!html.contains(r#"href="/guide""#));
     // The client (search.js etc.) learns the base via a JS global.
-    assert!(html.contains(r#"window.DOCGEN_BASE = "/docs";"#), "DOCGEN_BASE: {html}");
+    assert!(
+        html.contains(r#"window.DOCGEN_BASE = "/docs";"#),
+        "DOCGEN_BASE: {html}"
+    );
 }
 
 #[test]
@@ -184,7 +194,10 @@ fn dev_emits_no_dev_only_surface_only_the_mermaid_superset() {
     // preview can render a just-typed diagram (production gates it on usage).
     let only_in_dev: std::collections::BTreeSet<_> = dev.difference(&prod).cloned().collect();
     let only_in_prod: std::collections::BTreeSet<_> = prod.difference(&dev).cloned().collect();
-    assert!(only_in_prod.is_empty(), "production emitted files dev lacks: {only_in_prod:?}");
+    assert!(
+        only_in_prod.is_empty(),
+        "production emitted files dev lacks: {only_in_prod:?}"
+    );
     assert_eq!(
         only_in_dev,
         ["islands/mermaid.js", "vendor/mermaid/mermaid.min.js"]
@@ -247,7 +260,11 @@ fn no_home_doc_means_no_root_index_page() {
 fn graph_feature_off_skips_graph_page_and_island() {
     let root = tempfile::tempdir().unwrap();
     setup_fixture(root.path());
-    std::fs::write(root.path().join("docgen.toml"), "[features]\ngraph = false\n").unwrap();
+    std::fs::write(
+        root.path().join("docgen.toml"),
+        "[features]\ngraph = false\n",
+    )
+    .unwrap();
     let out = tempfile::tempdir().unwrap();
     build_site(&BuildOptions {
         project_root: root.path(),
@@ -263,7 +280,11 @@ fn graph_feature_off_skips_graph_page_and_island() {
 fn search_feature_off_skips_index_and_client() {
     let root = tempfile::tempdir().unwrap();
     setup_fixture(root.path());
-    std::fs::write(root.path().join("docgen.toml"), "[features]\nsearch = false\n").unwrap();
+    std::fs::write(
+        root.path().join("docgen.toml"),
+        "[features]\nsearch = false\n",
+    )
+    .unwrap();
     let out = tempfile::tempdir().unwrap();
     build_site(&BuildOptions {
         project_root: root.path(),

@@ -22,7 +22,12 @@ pub struct Features {
 
 impl Default for Features {
     fn default() -> Self {
-        Self { graph: true, math: true, mermaid: true, search: true }
+        Self {
+            graph: true,
+            math: true,
+            mermaid: true,
+            search: true,
+        }
     }
 }
 
@@ -36,7 +41,9 @@ pub struct ComponentsConfig {
 
 impl Default for ComponentsConfig {
     fn default() -> Self {
-        Self { dir: "components".to_string() }
+        Self {
+            dir: "components".to_string(),
+        }
     }
 }
 
@@ -78,9 +85,7 @@ pub fn load(project_root: &Path) -> Result<SiteConfig, ConfigError> {
     let path = project_root.join("docgen.toml");
     let text = match std::fs::read_to_string(&path) {
         Ok(t) => t,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(SiteConfig::default())
-        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(SiteConfig::default()),
         Err(e) => {
             return Err(ConfigError::Io {
                 path: path.display().to_string(),
@@ -134,7 +139,11 @@ mod tests {
     #[test]
     fn partial_features_table_keeps_other_defaults() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("docgen.toml"), "[features]\nsearch = false\n").unwrap();
+        std::fs::write(
+            dir.path().join("docgen.toml"),
+            "[features]\nsearch = false\n",
+        )
+        .unwrap();
         let c = load(dir.path()).unwrap();
         assert!(!c.features.search);
         assert!(c.features.graph);

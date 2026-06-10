@@ -330,10 +330,10 @@ mod tests {
         assert!(paths.contains(&"docs/a.md"));
         assert!(paths.contains(&"docs/sub/c.md"));
         // Block html rendered for the detail report.
-        assert!(head
-            .files
-            .iter()
-            .any(|f| f.blocks.as_ref().is_some_and(|b| b.iter().any(|x| x.html.contains("<p>")))));
+        assert!(head.files.iter().any(|f| f
+            .blocks
+            .as_ref()
+            .is_some_and(|b| b.iter().any(|x| x.html.contains("<p>")))));
         // File tree nests docs/sub.
         assert!(!head.file_tree.is_empty());
 

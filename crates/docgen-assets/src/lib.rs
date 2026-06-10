@@ -40,8 +40,7 @@ pub fn builtin_components() -> Vec<BuiltinComponent> {
             .file_name()
             .and_then(|n| n.to_str())
             .expect("component dir has a utf-8 name");
-        let template =
-            text(name, "template.html").expect("builtin component needs template.html");
+        let template = text(name, "template.html").expect("builtin component needs template.html");
         out.push(BuiltinComponent {
             name,
             template,
@@ -104,7 +103,11 @@ pub fn core_assets() -> Vec<Asset> {
             "islands/theme-toggle.js",
             AssetKind::Js,
         ),
-        embed("docgen/islands/layout.js", "islands/layout.js", AssetKind::Js),
+        embed(
+            "docgen/islands/layout.js",
+            "islands/layout.js",
+            AssetKind::Js,
+        ),
         embed(
             "docgen/islands/scrollspy.js",
             "islands/scrollspy.js",
@@ -357,7 +360,11 @@ mod tests {
 
     #[test]
     fn embeds_authored_docgen_files() {
-        for p in ["docgen/docgen.css", "docgen/search.js", "docgen/bootstrap.js"] {
+        for p in [
+            "docgen/docgen.css",
+            "docgen/search.js",
+            "docgen/bootstrap.js",
+        ] {
             assert!(ASSETS.get_file(p).is_some(), "missing embedded {p}");
         }
     }
@@ -502,7 +509,11 @@ mod tests {
     #[test]
     fn shared_css_styles_search_modal_and_results() {
         let s = shared_css();
-        for sel in [".docgen-search-box", ".docgen-search-result", ".is-selected"] {
+        for sel in [
+            ".docgen-search-box",
+            ".docgen-search-result",
+            ".is-selected",
+        ] {
             assert!(s.contains(sel), "search css missing {sel}");
         }
     }
@@ -521,7 +532,10 @@ mod tests {
         // skip-to-content link, Alpine cloak (ships, not dev-only), and a
         // reduced-motion guard.
         assert!(s.contains(".docgen-skip-link"), "missing skip link style");
-        assert!(s.contains("[x-cloak]"), "x-cloak must ship to avoid flashes");
+        assert!(
+            s.contains("[x-cloak]"),
+            "x-cloak must ship to avoid flashes"
+        );
         assert!(
             s.contains("prefers-reduced-motion"),
             "must honor reduced-motion"
@@ -825,12 +839,8 @@ mod tests {
     #[test]
     fn emit_component_bundle_writes_when_nonempty_and_skips_when_empty() {
         let tmp = tempfile::tempdir().unwrap();
-        emit_component_bundle(
-            tmp.path(),
-            ".docgen-callout{}",
-            "Alpine.data('x',()=>({}))",
-        )
-        .unwrap();
+        emit_component_bundle(tmp.path(), ".docgen-callout{}", "Alpine.data('x',()=>({}))")
+            .unwrap();
         assert!(tmp.path().join("components.css").is_file());
         assert!(tmp.path().join("components.js").is_file());
         let tmp2 = tempfile::tempdir().unwrap();
@@ -843,8 +853,7 @@ mod tests {
 
     #[test]
     fn emit_writes_core_assets_to_disk() {
-        let tmp =
-            std::env::temp_dir().join(format!("docgen_assets_emit_{}", std::process::id()));
+        let tmp = std::env::temp_dir().join(format!("docgen_assets_emit_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);
         emit(&assets_for(&EmitOptions::default()), &tmp).unwrap();
         assert!(tmp.join("vendor/alpine/alpine.min.js").is_file());
@@ -881,9 +890,7 @@ mod tests {
     fn default_build_always_emits_katex_css() {
         // Build-time math HTML always needs the css + fonts, even with no flags.
         let base = assets_for(&EmitOptions::default());
-        assert!(base
-            .iter()
-            .any(|a| a.path == "vendor/katex/katex.min.css"));
+        assert!(base.iter().any(|a| a.path == "vendor/katex/katex.min.css"));
         assert_eq!(
             base.iter().filter(|a| a.kind == AssetKind::Font).count(),
             16

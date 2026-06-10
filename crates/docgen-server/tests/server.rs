@@ -73,7 +73,10 @@ async fn serves_built_index_with_injected_dev_html() {
     assert_eq!(resp.status(), StatusCode::OK);
     let body = resp.into_body().collect().await.unwrap().to_bytes();
     let html = String::from_utf8(body.to_vec()).unwrap();
-    assert!(html.contains("<title>Home</title>"), "not the index: {html}");
+    assert!(
+        html.contains("<title>Home</title>"),
+        "not the index: {html}"
+    );
     // Serve-time injection added the reload client.
     assert!(html.contains("/__docgen/livereload.js"));
 }
@@ -136,7 +139,10 @@ async fn unknown_path_404() {
     let html = String::from_utf8(body.to_vec()).unwrap();
     assert!(html.contains("docgen-sidebar"), "404 lacks the nav shell");
     assert!(html.contains("404"), "404 body missing the 404 marker");
-    assert!(html.contains("/__docgen/livereload.js"), "404 missing dev injection");
+    assert!(
+        html.contains("/__docgen/livereload.js"),
+        "404 missing dev injection"
+    );
 }
 
 #[tokio::test]
@@ -213,8 +219,7 @@ async fn rejects_cross_site_origin_on_mutating_put() {
     // A PUT with a valid loopback Host but a cross-site Origin (the cross-origin
     // write a rebinding/preflight-skipping attacker would attempt) -> 403.
     let (root, _out, state) = state_with_built_site();
-    let secret_before =
-        fs::read_to_string(root.path().join("docs/index.md")).unwrap();
+    let secret_before = fs::read_to_string(root.path().join("docs/index.md")).unwrap();
     let app = router(state);
     let resp = app
         .oneshot(
@@ -225,8 +230,7 @@ async fn rejects_cross_site_origin_on_mutating_put() {
                 .header("origin", "http://attacker.com")
                 .header("content-type", "application/json")
                 .body(Body::from(
-                    serde_json::json!({ "path": "index.md", "source": "HACKED" })
-                        .to_string(),
+                    serde_json::json!({ "path": "index.md", "source": "HACKED" }).to_string(),
                 ))
                 .unwrap(),
         )

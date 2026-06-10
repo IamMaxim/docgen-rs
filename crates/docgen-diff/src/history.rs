@@ -288,7 +288,9 @@ pub fn global_doc_revisions(
             } else {
                 new_path
             };
-            let Some(touch_path) = touch_path else { continue };
+            let Some(touch_path) = touch_path else {
+                continue;
+            };
             if !under_prefix(touch_path, docs_prefix) {
                 continue;
             }

@@ -633,8 +633,11 @@ mod tests {
     fn base_prefixes_every_asset_and_nav_link_and_emits_no_base_tag() {
         // A sub-path deployment must rewrite every root-absolute URL to live under
         // `base`; <base> alone cannot do this (it only affects relative URLs).
-        let tree =
-            vec![TreeNode::Doc { name: "guide".into(), slug: "guide".into(), title: "Guide".into() }];
+        let tree = vec![TreeNode::Doc {
+            name: "guide".into(),
+            slug: "guide".into(),
+            title: "Guide".into(),
+        }];
         let html = renderer()
             .render_page(&PageContext {
                 title: "X",
@@ -1200,8 +1203,7 @@ mod tests {
     #[test]
     fn embedded_json_neutralizes_script_close() {
         let r = Renderer::new(DEFAULT_PAGE_TEMPLATE).unwrap();
-        let json =
-            r#"{"nodes":[{"slug":"x","title":"a</script>b","x":0.0,"y":0.0,"degree":0}],"edges":[]}"#;
+        let json = r#"{"nodes":[{"slug":"x","title":"a</script>b","x":0.0,"y":0.0,"degree":0}],"edges":[]}"#;
         let html = r
             .render_graph(&GraphContext {
                 tree: &[],
@@ -1401,9 +1403,7 @@ mod tests {
         let script_at = html
             .find("localStorage.getItem('doc-theme')")
             .expect("no-flash script present");
-        let css_at = html
-            .find("/docgen.css")
-            .expect("docgen.css link present");
+        let css_at = html.find("/docgen.css").expect("docgen.css link present");
         assert!(
             script_at < css_at,
             "no-flash script must precede docgen.css link"

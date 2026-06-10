@@ -70,7 +70,11 @@ fn static_build_has_no_editor_or_reload() {
 
     for f in &files {
         // No dev-namespaced paths on disk.
-        let rel = f.strip_prefix(out.path()).unwrap().to_string_lossy().to_string();
+        let rel = f
+            .strip_prefix(out.path())
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
         assert!(
             !rel.contains("__codemirror") && !rel.contains("__docgen"),
             "dev path leaked into static dist: {rel}"

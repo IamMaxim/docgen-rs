@@ -303,9 +303,7 @@ pub fn serve(opts: DevOptions) -> anyhow::Result<()> {
 async fn serve_async(opts: DevOptions) -> anyhow::Result<()> {
     let project_root = opts.project_root.clone();
     let docs_dir = project_root.join("docs");
-    let docs_canon = docs_dir
-        .canonicalize()
-        .unwrap_or_else(|_| docs_dir.clone());
+    let docs_canon = docs_dir.canonicalize().unwrap_or_else(|_| docs_dir.clone());
 
     // A process-owned output dir; kept alive for the whole run, auto-cleaned.
     let out_tmp = tempfile::tempdir()?;
@@ -371,7 +369,10 @@ mod tests {
         // Every injected marker precedes the closing body tag.
         let body = out.rfind("</body>").unwrap();
         for marker in ["__docgen/livereload.js", "docgen-ctl--edit"] {
-            assert!(out.find(marker).unwrap() < body, "{marker} not before </body>");
+            assert!(
+                out.find(marker).unwrap() < body,
+                "{marker} not before </body>"
+            );
         }
         // The static build never contains the dev edit affordance.
         assert!(!"<html><body></body></html>".contains("docgen-ctl--edit"));

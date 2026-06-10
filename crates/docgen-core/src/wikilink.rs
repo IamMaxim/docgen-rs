@@ -131,8 +131,10 @@ pub fn transform_wikilinks<'a>(
 
     // Collect every node that has children, so we can scan their direct child
     // runs. We snapshot the list first to avoid iterating while mutating.
-    let parents: Vec<&'a AstNode<'a>> =
-        root.descendants().filter(|n| n.first_child().is_some()).collect();
+    let parents: Vec<&'a AstNode<'a>> = root
+        .descendants()
+        .filter(|n| n.first_child().is_some())
+        .collect();
 
     for parent in parents {
         // Snapshot direct children.
@@ -220,19 +222,31 @@ mod tests {
 
     #[test]
     fn resolves_exact_slug() {
-        assert_eq!(resolve_target("guide/intro", &slugs()), Some("guide/intro".to_string()));
+        assert_eq!(
+            resolve_target("guide/intro", &slugs()),
+            Some("guide/intro".to_string())
+        );
     }
 
     #[test]
     fn resolves_basename_case_insensitive() {
         // "advanced" matches the basename of "guide/Advanced".
-        assert_eq!(resolve_target("advanced", &slugs()), Some("guide/Advanced".to_string()));
-        assert_eq!(resolve_target("INTRO", &slugs()), Some("guide/intro".to_string()));
+        assert_eq!(
+            resolve_target("advanced", &slugs()),
+            Some("guide/Advanced".to_string())
+        );
+        assert_eq!(
+            resolve_target("INTRO", &slugs()),
+            Some("guide/intro".to_string())
+        );
     }
 
     #[test]
     fn trims_surrounding_whitespace() {
-        assert_eq!(resolve_target("  index  ", &slugs()), Some("index".to_string()));
+        assert_eq!(
+            resolve_target("  index  ", &slugs()),
+            Some("index".to_string())
+        );
     }
 
     #[test]
@@ -243,10 +257,16 @@ mod tests {
 
     #[test]
     fn parse_splits_label() {
-        assert_eq!(parse_wikilink("target|Label"), ("target".to_string(), Some("Label".to_string())));
+        assert_eq!(
+            parse_wikilink("target|Label"),
+            ("target".to_string(), Some("Label".to_string()))
+        );
         assert_eq!(parse_wikilink("target"), ("target".to_string(), None));
         // Only the first pipe splits; extra pipes belong to the label.
-        assert_eq!(parse_wikilink("a|b|c"), ("a".to_string(), Some("b|c".to_string())));
+        assert_eq!(
+            parse_wikilink("a|b|c"),
+            ("a".to_string(), Some("b|c".to_string()))
+        );
     }
 
     fn render(md: &str, slugs: &SlugSet) -> (String, Vec<String>) {
@@ -299,7 +319,10 @@ mod tests {
     fn resolved_targets_are_deduped_in_order() {
         let (_html, resolved) = render("[[guide/intro]] and [[index]] and [[intro]]\n", &slugs());
         // "intro" resolves to guide/intro (already present) -> deduped.
-        assert_eq!(resolved, vec!["guide/intro".to_string(), "index".to_string()]);
+        assert_eq!(
+            resolved,
+            vec!["guide/intro".to_string(), "index".to_string()]
+        );
     }
 
     #[test]
@@ -322,8 +345,7 @@ mod tests {
     #[test]
     fn ambiguous_basename_resolves_deterministically() {
         // Two slugs share the basename `dup`; resolution is first by BTreeSet order.
-        let amb: SlugSet =
-            ["a/dup", "b/dup"].iter().map(|s| s.to_string()).collect();
+        let amb: SlugSet = ["a/dup", "b/dup"].iter().map(|s| s.to_string()).collect();
         assert_eq!(resolve_target("dup", &amb), Some("a/dup".to_string()));
     }
 
