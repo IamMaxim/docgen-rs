@@ -66,6 +66,12 @@ pub struct AppState {
     self_write_at_ms: Arc<AtomicU64>,
     /// Monotonic reference instant for `self_write_at_ms`.
     epoch: Instant,
+    /// The incremental build engine, shared (and serialized) across the watcher
+    /// thread and the editor-write handler so a single doc edit re-renders only
+    /// the changed page instead of the whole O(n²) site. `None` in handler tests
+    /// that construct an `AppState` without a live engine — those fall back to a
+    /// full [`docgen_build::build_site`] in [`rebuild_and_reload`].
+    engine: Option<Arc<std::sync::Mutex<docgen_build::DevState>>>,
 }
 
 impl AppState {
@@ -86,7 +92,15 @@ impl AppState {
             reload_tx,
             self_write_at_ms: Arc::new(AtomicU64::new(0)),
             epoch: Instant::now(),
+            engine: None,
         }
+    }
+
+    /// Attach the incremental build engine. Builder-style so the `new()` call
+    /// sites (including tests) stay untouched. Only `serve_async` sets one.
+    pub fn with_engine(mut self, engine: docgen_build::DevState) -> Self {
+        self.engine = Some(Arc::new(std::sync::Mutex::new(engine)));
+        self
     }
 
     /// Set the site `base` path, normalized to a leading-slash, no-trailing-slash
@@ -299,25 +313,48 @@ pub fn router(state: AppState) -> Router {
 /// Rebuild the site into `state.out_dir` (Dev mode + dev-asset emission), then
 /// broadcast a reload. Called on every debounced fs change AND after a successful
 /// editor write. Returns `Err` only on a hard build failure; the caller logs and
-/// keeps serving the last good build. This guarantee holds because
-/// [`docgen_build::build_site`] is atomic — it stages into a temp dir and only
-/// swaps `out_dir` on full success, so a failed rebuild leaves the served dir
-/// (the previous good build) untouched rather than torn down.
+/// keeps serving the last good build.
+///
+/// When the incremental [`engine`](AppState::engine) is present (the live dev
+/// server), each rebuild re-renders only the doc(s) that actually changed and
+/// leaves the rest of the site untouched — turning a ~10s full rebuild of a large
+/// corpus into milliseconds. The dev-only assets (CodeMirror, editor island,
+/// reload client) are re-emitted only after a *full* rebuild, since the atomic
+/// staging swap that backs a full build wipes `out_dir`; an incremental rebuild
+/// writes pages in place and leaves the dev assets intact.
+///
+/// Without an engine (handler tests constructing a bare `AppState`), this falls
+/// back to a full atomic [`docgen_build::build_site`] + dev-asset emit — a failed
+/// rebuild leaves the served dir (the previous good build) untouched.
 pub fn rebuild_and_reload(state: &AppState) -> anyhow::Result<()> {
     let start = std::time::Instant::now();
-    let outcome = docgen_build::build_site(&docgen_build::BuildOptions {
-        project_root: &state.project_root,
-        out_dir: &state.out_dir,
-        mode: docgen_build::BuildMode::Dev,
-    })?;
-    // The dev-only extra step build_site never performs: emit CodeMirror + the
-    // editor island + the reload client into the served dir.
-    docgen_assets::emit(&docgen_assets::dev_assets(), &state.out_dir)?;
+
+    let (page_count, kind) = if let Some(engine) = &state.engine {
+        let mut engine = engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let rebuilt = engine.rebuild()?;
+        // A full fallback re-creates `out_dir` from scratch, wiping the dev-only
+        // assets; re-emit them. The incremental path leaves them in place.
+        if rebuilt.kind == docgen_build::RebuildKind::Full {
+            docgen_assets::emit(&docgen_assets::dev_assets(), &state.out_dir)?;
+        }
+        (rebuilt.page_count, Some(rebuilt.kind))
+    } else {
+        let outcome = docgen_build::build_site(&docgen_build::BuildOptions {
+            project_root: &state.project_root,
+            out_dir: &state.out_dir,
+            mode: docgen_build::BuildMode::Dev,
+        })?;
+        docgen_assets::emit(&docgen_assets::dev_assets(), &state.out_dir)?;
+        (outcome.page_count, None)
+    };
 
     // Ignore "no subscribers" — a reload with nobody listening is fine.
     let _ = state.reload_tx.send(ReloadEvent::Reload);
     tracing::info!(
-        pages = outcome.page_count,
+        pages = page_count,
+        kind = ?kind,
         elapsed_ms = start.elapsed().as_millis(),
         "rebuilt + reloaded"
     );
@@ -360,6 +397,22 @@ async fn serve_async(opts: DevOptions) -> anyhow::Result<()> {
         .unwrap_or_default();
 
     let (reload_tx, _rx) = broadcast::channel(16);
+
+    // Initial full build (Dev mode), which also seeds the incremental engine.
+    // Subsequent rebuilds (watcher / editor write) go through the engine and
+    // re-render only what changed. The user accepts a slower first build for
+    // blazingly fast incremental updates.
+    let start = std::time::Instant::now();
+    let (engine, first) = docgen_build::DevState::initial(&project_root, &out_dir)?;
+    // Dev-only assets (editor island, CodeMirror, reload client) — emitted once
+    // after the initial build; the incremental path leaves them in place.
+    docgen_assets::emit(&docgen_assets::dev_assets(), &out_dir)?;
+    tracing::info!(
+        pages = first.page_count,
+        elapsed_ms = start.elapsed().as_millis(),
+        "initial build"
+    );
+
     let state = AppState::new(
         project_root,
         out_dir,
@@ -367,10 +420,11 @@ async fn serve_async(opts: DevOptions) -> anyhow::Result<()> {
         opts.port,
         reload_tx,
     )
-    .with_base(&base);
+    .with_base(&base)
+    .with_engine(engine);
 
-    // Initial build (Dev mode + dev assets).
-    rebuild_and_reload(&state)?;
+    // Tell any (re)connecting browser the first build is ready.
+    let _ = state.reload_tx.send(ReloadEvent::Reload);
 
     // Spawn the debounced fs watcher; it rebuilds + reloads on every change.
     let _watcher = watch::spawn_watcher(state.clone(), &docs_canon)?;

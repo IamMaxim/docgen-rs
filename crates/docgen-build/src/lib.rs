@@ -14,6 +14,10 @@
 #[allow(dead_code)]
 mod history;
 
+pub mod incremental;
+
+pub use incremental::{DevState, RebuildKind, Rebuilt};
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -28,6 +32,52 @@ use docgen_render::{
 
 /// The slug docgen treats as the site home (served at `/`).
 const HOME_SLUG: &str = "index";
+
+/// Lightweight per-phase build timer. Inert unless `DOCGEN_TIMINGS` is set in
+/// the environment, in which case each [`mark`](PhaseTimer::mark) records the
+/// elapsed time since the previous mark and [`report`](PhaseTimer::report)
+/// prints the breakdown to stderr. Used to profile where a (re)build spends its
+/// time — see the dev-server incremental-rebuild work.
+struct PhaseTimer {
+    enabled: bool,
+    last: std::time::Instant,
+    start: std::time::Instant,
+    rows: Vec<(&'static str, u128)>,
+}
+
+impl PhaseTimer {
+    fn new() -> Self {
+        let now = std::time::Instant::now();
+        Self {
+            enabled: std::env::var_os("DOCGEN_TIMINGS").is_some(),
+            last: now,
+            start: now,
+            rows: Vec::new(),
+        }
+    }
+
+    fn mark(&mut self, label: &'static str) {
+        if !self.enabled {
+            return;
+        }
+        let now = std::time::Instant::now();
+        self.rows
+            .push((label, now.duration_since(self.last).as_millis()));
+        self.last = now;
+    }
+
+    fn report(&self) {
+        if !self.enabled {
+            return;
+        }
+        let total = self.start.elapsed().as_millis();
+        eprintln!("── build timings (ms) ──");
+        for (label, ms) in &self.rows {
+            eprintln!("  {label:<16} {ms:>6}");
+        }
+        eprintln!("  {:<16} {total:>6}", "TOTAL");
+    }
+}
 
 /// Default per-doc commit-history depth (parity with the original `diffLimit`).
 const DEFAULT_DIFF_LIMIT: usize = 50;
@@ -104,6 +154,135 @@ pub fn build(project_root: &Path) -> Result<BuildOutcome> {
     })
 }
 
+/// Whole-site inputs shared by every per-page render — everything a
+/// [`PageContext`] needs that is NOT derived from the individual [`Doc`]. Built
+/// once per (re)build and reused for every page, so the dev server's incremental
+/// path can re-render a single changed page (via [`render_one_page`]) without
+/// recomputing the rest of the site.
+pub(crate) struct PageShared<'a> {
+    pub tree: &'a [docgen_core::model::TreeNode],
+    pub graph: &'a docgen_core::graph::LinkGraph,
+    pub commit: &'a str,
+    pub built: &'a str,
+    pub base: &'a str,
+    pub site_title: &'a str,
+    pub search_enabled: bool,
+    pub has_diff: bool,
+    pub has_components_css: bool,
+    pub island_components: &'a std::collections::BTreeSet<String>,
+    pub graph_payload: &'a Option<(String, usize, usize)>,
+    pub home_sections: &'a [HomeSection<'a>],
+    pub home_recent: &'a [HomeRecent<'a>],
+    pub pages_count: usize,
+    pub total_links: usize,
+}
+
+/// Render ONE doc to its full-page HTML. The single source of truth shared by
+/// the full-build page loop and the dev server's incremental re-render, so a
+/// page rebuilt incrementally is byte-identical to the same page in a full
+/// build. Pure (no disk I/O); the caller writes the result.
+pub(crate) fn render_one_page(
+    renderer: &Renderer,
+    shared: &PageShared,
+    doc: &docgen_core::model::Doc,
+) -> Result<String> {
+    // A doc with no inbound links has no backlinks entry; borrow a shared empty.
+    static EMPTY: Vec<docgen_core::model::Backlink> = Vec::new();
+    let backlinks = shared.graph.backlinks.get(&doc.slug).unwrap_or(&EMPTY);
+    let is_home = doc.slug == HOME_SLUG;
+    // Only the home doc carries the graph payload (empty graph_json → the
+    // template skips the block + the graph island script).
+    let (graph_json, graph_node_count, graph_edge_count) = match (is_home, shared.graph_payload) {
+        (true, Some((json, nodes, edges))) => (json.as_str(), *nodes, *edges),
+        _ => ("", 0, 0),
+    };
+    Ok(renderer.render_page(&PageContext {
+        title: &doc.title,
+        // Frontmatter description → page header lede (non-home pages). The home
+        // dashboard consumes it via `HomeData.description` instead.
+        description: if is_home {
+            ""
+        } else {
+            doc.description.as_deref().unwrap_or("")
+        },
+        slug: &doc.slug,
+        body_html: &doc.body_html,
+        tree: shared.tree,
+        backlinks,
+        headings: &doc.headings,
+        commit: shared.commit,
+        built: shared.built,
+        has_history: false,
+        has_mermaid: doc.has_mermaid,
+        has_math: doc.has_math,
+        base: shared.base,
+        site_title: shared.site_title,
+        search_enabled: shared.search_enabled,
+        has_diff: shared.has_diff,
+        has_components_css: shared.has_components_css,
+        has_component_island: doc
+            .components_used
+            .iter()
+            .any(|c| shared.island_components.contains(c)),
+        is_home,
+        graph_json,
+        graph_node_count,
+        graph_edge_count,
+        home: if is_home {
+            Some(HomeData {
+                description: doc.description.as_deref().unwrap_or(""),
+                pages: shared.pages_count,
+                links: shared.total_links,
+                sections: shared.home_sections,
+                recent: shared.home_recent,
+            })
+        } else {
+            None
+        },
+    })?)
+}
+
+/// Compute the home dashboard's section + recent rows from the doc set (owned, so
+/// the caller can hold them across the borrowed [`HomeSection`]/[`HomeRecent`]
+/// views). "Sections" = top-level folders ordered by first appearance, each with
+/// a doc count and a link to its first page; "Recent" = the first 6 docs in build
+/// order (home excluded). Shared by the full build and the incremental engine.
+#[allow(clippy::type_complexity)]
+pub(crate) fn compute_home_rows(
+    docs: &[docgen_core::model::Doc],
+) -> (Vec<(String, String, usize)>, Vec<(String, String, String)>) {
+    let mut section_rows: Vec<(String, String, usize)> = Vec::new();
+    let mut section_idx: std::collections::BTreeMap<String, usize> =
+        std::collections::BTreeMap::new();
+    for doc in docs {
+        if doc.slug == HOME_SLUG || !doc.slug.contains('/') {
+            continue;
+        }
+        let label = doc.slug.split('/').next().unwrap_or("").to_string();
+        match section_idx.get(&label) {
+            Some(&i) => section_rows[i].2 += 1,
+            None => {
+                section_idx.insert(label.clone(), section_rows.len());
+                section_rows.push((label, doc.slug.clone(), 1));
+            }
+        }
+    }
+    let recent_rows: Vec<(String, String, String)> = docs
+        .iter()
+        .filter(|d| d.slug != HOME_SLUG)
+        .take(6)
+        .map(|d| {
+            let section = d
+                .slug
+                .split_once('/')
+                .map(|(s, _)| s.to_string())
+                .unwrap_or_default();
+            (d.title.clone(), d.slug.clone(), section)
+        })
+        .collect();
+    (section_rows, recent_rows)
+}
+
 /// Discover -> render -> emit the whole site into `opts.out_dir`. This is the
 /// single pipeline both `docgen build` and `docgen dev` call.
 ///
@@ -116,17 +295,39 @@ pub fn build(project_root: &Path) -> Result<BuildOutcome> {
 /// The one mode-dependent emission is the mermaid runtime: Dev ships it
 /// unconditionally so the editor preview can render a just-typed diagram.
 pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
+    Ok(build_site_inner(opts, false)?.0)
+}
+
+/// The full-build implementation behind [`build_site`]. When `capture` is true it
+/// additionally returns a [`CapturedBuild`] holding the in-memory artifacts (docs,
+/// graph, layout, tree, …) so the dev server can seed its incremental engine from
+/// the initial build without a second pass. `capture = false` (the production
+/// path) clones nothing extra.
+pub(crate) fn build_site_inner(
+    opts: &BuildOptions,
+    capture: bool,
+) -> Result<(BuildOutcome, Option<crate::incremental::CapturedBuild>)> {
     let docs_dir = opts.project_root.join("docs");
     let final_dir = opts.out_dir;
+    let mut t = PhaseTimer::new();
 
     let raws = discover_docs(&docs_dir)
         .with_context(|| format!("reading docs from {}", docs_dir.display()))?;
+    t.mark("discover");
 
     // Split include-only partials (`_*.md`) out of the page set; they render
     // only where a `:include` transcludes them, never as standalone pages.
     let (pages, partials) = docgen_core::pipeline::partition_partials(raws);
     // Two-pass: prepare all pages, then render with full slug knowledge.
     let prepared: Vec<_> = pages.into_iter().map(prepare).collect();
+    t.mark("prepare");
+    // Only the incremental engine needs the prepared docs preserved past the
+    // render pass; the production path skips the clone.
+    let prepared_cap = if capture {
+        Some(prepared.clone())
+    } else {
+        None
+    };
     // Load `docgen.toml` (absent → defaults reproduce pre-P6 behaviour).
     let config = docgen_config::load(opts.project_root)
         .with_context(|| format!("loading docgen.toml from {}", opts.project_root.display()))?;
@@ -146,8 +347,11 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
     let components_dir = opts.project_root.join(&config.components.dir);
     let registry = docgen_components::build_registry(builtins, &components_dir)
         .with_context(|| format!("discovering components in {}", components_dir.display()))?;
+    t.mark("config+registry");
     let site = render_docs(prepared, &partials, &config, &registry);
+    t.mark("render_docs");
     let tree = build_tree(&site.docs);
+    t.mark("build_tree");
 
     // Concatenate the component asset bundle. `components.css` carries every
     // registry component's style (small + cacheable, linked on every page that
@@ -226,6 +430,7 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
                         .with_context(|| {
                             format!("building global doc diff report for {docs_prefix}")
                         })?;
+                t.mark("diff_report");
                 if let Some(report) = report {
                     let diff_dir = dist_dir.join("diff");
                     fs::create_dir_all(diff_dir.join("revisions"))?;
@@ -270,6 +475,7 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
     } else {
         None
     };
+    t.mark("graph_layout");
 
     // Home dashboard data (mirrors the original home: title/stats/sections/recent).
     // "Sections" = top-level folders (the sidebar's grouping), ordered by first
@@ -277,36 +483,7 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
     // first docs in build order (home excluded). Computed once; only the index
     // doc's render consumes it (every other page passes `home: None`).
     let total_links = site.graph.edges.len();
-    let mut section_rows: Vec<(String, String, usize)> = Vec::new();
-    let mut section_idx: std::collections::BTreeMap<String, usize> =
-        std::collections::BTreeMap::new();
-    for doc in &site.docs {
-        if doc.slug == HOME_SLUG || !doc.slug.contains('/') {
-            continue;
-        }
-        let label = doc.slug.split('/').next().unwrap_or("").to_string();
-        match section_idx.get(&label) {
-            Some(&i) => section_rows[i].2 += 1,
-            None => {
-                section_idx.insert(label.clone(), section_rows.len());
-                section_rows.push((label, doc.slug.clone(), 1));
-            }
-        }
-    }
-    let recent_rows: Vec<(String, String, String)> = site
-        .docs
-        .iter()
-        .filter(|d| d.slug != HOME_SLUG)
-        .take(6)
-        .map(|d| {
-            let section = d
-                .slug
-                .split_once('/')
-                .map(|(s, _)| s.to_string())
-                .unwrap_or_default();
-            (d.title.clone(), d.slug.clone(), section)
-        })
-        .collect();
+    let (section_rows, recent_rows) = compute_home_rows(&site.docs);
     let home_sections: Vec<HomeSection> = section_rows
         .iter()
         .map(|(label, slug, count)| HomeSection {
@@ -324,63 +501,28 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
         })
         .collect();
 
-    // Phase 2: render the doc pages, linking to history where one was emitted.
-    let empty: Vec<docgen_core::model::Backlink> = Vec::new();
+    let shared = PageShared {
+        tree: &tree,
+        graph: &site.graph,
+        commit: &commit_hash,
+        built: &built_stamp,
+        base: &config.base,
+        site_title: config.title.as_deref().unwrap_or(""),
+        search_enabled: config.features.search,
+        has_diff,
+        has_components_css,
+        island_components: &island_components,
+        graph_payload: &graph_payload,
+        home_sections: &home_sections,
+        home_recent: &home_recent,
+        pages_count: site.docs.len(),
+        total_links,
+    };
+
+    // Phase 2: render the doc pages via the shared per-page renderer.
     let mut home_html: Option<String> = None;
     for doc in &site.docs {
-        let backlinks = site.graph.backlinks.get(&doc.slug).unwrap_or(&empty);
-        let is_home = doc.slug == HOME_SLUG;
-        // Only the home doc carries the graph payload (empty graph_json → the
-        // template skips the block + the graph island script).
-        let (graph_json, graph_node_count, graph_edge_count) = match (is_home, &graph_payload) {
-            (true, Some((json, nodes, edges))) => (json.as_str(), *nodes, *edges),
-            _ => ("", 0, 0),
-        };
-        let html = renderer.render_page(&PageContext {
-            title: &doc.title,
-            // Frontmatter description → page header lede (non-home pages). The home
-            // dashboard consumes it via `HomeData.description` instead.
-            description: if is_home {
-                ""
-            } else {
-                doc.description.as_deref().unwrap_or("")
-            },
-            slug: &doc.slug,
-            body_html: &doc.body_html,
-            tree: &tree,
-            backlinks,
-            headings: &doc.headings,
-            commit: &commit_hash,
-            built: &built_stamp,
-            has_history: false,
-            has_mermaid: doc.has_mermaid,
-            has_math: doc.has_math,
-            base: &config.base,
-            site_title: config.title.as_deref().unwrap_or(""),
-            search_enabled: config.features.search,
-            has_diff,
-            has_components_css,
-            has_component_island: doc
-                .components_used
-                .iter()
-                .any(|c| island_components.contains(c)),
-            is_home,
-            graph_json,
-            graph_node_count,
-            graph_edge_count,
-            home: if is_home {
-                Some(HomeData {
-                    description: doc.description.as_deref().unwrap_or(""),
-                    pages: site.docs.len(),
-                    links: total_links,
-                    sections: &home_sections,
-                    recent: &home_recent,
-                })
-            } else {
-                None
-            },
-        })?;
-
+        let html = render_one_page(&renderer, &shared, doc)?;
         // `guide/intro` -> `dist/guide/intro/index.html` (clean URLs).
         let out_dir = dist_dir.join(&doc.slug);
         fs::create_dir_all(&out_dir)?;
@@ -389,6 +531,8 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
             home_html = Some(html);
         }
     }
+
+    t.mark("render_pages");
 
     // Root page: serve the home doc at `/` too, so the site has a real index.
     // The nested `dist/index/index.html` is still emitted above, so existing
@@ -409,7 +553,7 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
             Use the navigation sidebar or search (<kbd class=\"docgen-kbd\">⌘K</kbd>) \
             to find your way.</p>",
         tree: &tree,
-        backlinks: &empty,
+        backlinks: &[],
         headings: &[],
         commit: &commit_hash,
         built: &built_stamp,
@@ -486,15 +630,47 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
     // Empty strings skip their file.
     docgen_assets::emit_component_bundle(dist_dir, &component_css, &component_js)?;
 
+    t.mark("emit_assets");
+
     // Everything rendered cleanly: atomically swap staging into place. Only now
     // is the previously-served `final_dir` replaced.
     staging.commit(final_dir)?;
+    t.mark("commit");
+    t.report();
 
-    Ok(BuildOutcome {
-        page_count: site.docs.len(),
-        any_mermaid: site.any_mermaid,
+    let page_count = site.docs.len();
+    let any_mermaid = site.any_mermaid;
+    let outcome = BuildOutcome {
+        page_count,
+        any_mermaid,
         out_dir: final_dir.to_path_buf(),
-    })
+    };
+
+    // Seed the dev server's incremental engine from the artifacts this build
+    // already computed — no second render pass.
+    let captured = if capture {
+        Some(crate::incremental::CapturedBuild {
+            config,
+            registry,
+            partials,
+            prepared: prepared_cap.expect("prepared is cloned whenever capture is set"),
+            docs: site.docs,
+            outbound: site.outbound,
+            graph: site.graph,
+            tree,
+            graph_payload,
+            island_components,
+            has_components_css,
+            commit_hash,
+            built_stamp,
+            has_diff,
+            search: site.search,
+        })
+    } else {
+        None
+    };
+
+    Ok((outcome, captured))
 }
 
 /// A staging directory for an atomic build. Renders happen here; [`commit`]

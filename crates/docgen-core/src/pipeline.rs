@@ -80,6 +80,11 @@ pub struct PreparedDoc {
 pub struct SiteBuild {
     pub docs: Vec<Doc>,
     pub graph: LinkGraph,
+    /// Per-doc resolved outbound link targets (slug → target slugs), the input
+    /// the link graph was built from. Retained so an incremental rebuild can
+    /// reconstruct the graph after re-rendering only the changed docs (swapping
+    /// their entries) instead of re-rendering every doc.
+    pub outbound: BTreeMap<String, Vec<String>>,
     pub search: Vec<SearchEntry>,
     /// True if any doc contains a mermaid diagram. Lets the build subcommand flip
     /// `EmitOptions.include_mermaid` once for the whole site.
@@ -357,6 +362,7 @@ pub fn render_docs(
     SiteBuild {
         docs,
         graph,
+        outbound,
         search,
         any_mermaid,
         any_components,
