@@ -2,3 +2,4 @@
 /dist
 fixtures/**/dist
 /docs
+/.overnight
