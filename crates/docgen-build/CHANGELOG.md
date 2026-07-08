@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-build-v0.2.0...docgen-build-v0.3.0) - 2026-07-08
+
+### Other
+
+- Merge pull request #3 from IamMaxim/perf/incremental-dev-rebuild
+
 ## [0.2.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-build-v0.1.1...docgen-build-v0.2.0) - 2026-07-08
 
 ### Fixed
