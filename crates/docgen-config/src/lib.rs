@@ -99,6 +99,76 @@ pub fn load(project_root: &Path) -> Result<SiteConfig, ConfigError> {
     })
 }
 
+/// Normalize a configured/derived `base` into a leading-slash, no-trailing-slash
+/// form: `""`/`"/"` -> `""`, `"docs"`/`"/docs/"`/`"docs/"` -> `"/docs"`,
+/// `"/group/project/"` -> `"/group/project"`. Interior slashes are preserved so
+/// multi-segment sub-paths (GitLab's `namespace/project`) round-trip correctly.
+pub fn normalize_base(base: &str) -> String {
+    let trimmed = base.trim().trim_matches('/');
+    if trimmed.is_empty() {
+        String::new()
+    } else {
+        format!("/{trimmed}")
+    }
+}
+
+/// Extract the path component of an absolute URL without pulling in a URL parser.
+/// `https://ns.gitlab.io/proj` -> `/proj`; `https://host/a/b` -> `/a/b`;
+/// `https://ns.gitlab.io` (no path) -> `""`. This is what makes GitLab's subdomain
+/// Pages layout (`ns.gitlab.io/project`) and subpath layout (`host/group/project`)
+/// both resolve to the right base: `CI_PAGES_URL` already encodes which one is in
+/// effect, so its path is authoritative.
+fn url_path(url: &str) -> &str {
+    let after_scheme = url.split_once("://").map_or(url, |(_, rest)| rest);
+    match after_scheme.find('/') {
+        Some(i) => &after_scheme[i..],
+        None => "",
+    }
+}
+
+/// Resolve the effective deploy base path from config plus environment, applying
+/// this precedence (first match wins), then [`normalize_base`]:
+///  1. `DOCGEN_BASE` — explicit override. Present-but-empty forces the root
+///     (an escape hatch for a custom-domain deploy under CI).
+///  2. `docgen.toml`'s `base`, when non-empty — the project author's intent.
+///  3. `CI_PAGES_URL` — the *path* of GitLab's actual Pages URL. Correct for both
+///     subdomain (`ns.gitlab.io/project`) and subpath (`host/group/project`)
+///     layouts, with zero CI config.
+///  4. `CI_PROJECT_PATH` — `/<namespace>/<project>`, a fallback for older GitLab
+///     that doesn't expose `CI_PAGES_URL` to the job.
+///  5. `""` — served at the domain root.
+pub fn resolve_base(config_base: &str) -> String {
+    resolve_base_from(
+        config_base,
+        std::env::var("DOCGEN_BASE").ok().as_deref(),
+        std::env::var("CI_PAGES_URL").ok().as_deref(),
+        std::env::var("CI_PROJECT_PATH").ok().as_deref(),
+    )
+}
+
+/// Pure core of [`resolve_base`] — env values are passed in so the precedence
+/// logic is testable without mutating process-global environment.
+fn resolve_base_from(
+    config_base: &str,
+    docgen_base_env: Option<&str>,
+    ci_pages_url: Option<&str>,
+    ci_project_path: Option<&str>,
+) -> String {
+    if let Some(explicit) = docgen_base_env {
+        return normalize_base(explicit);
+    }
+    if !config_base.trim().is_empty() {
+        return normalize_base(config_base);
+    }
+    if let Some(url) = ci_pages_url.filter(|u| !u.trim().is_empty()) {
+        return normalize_base(url_path(url));
+    }
+    if let Some(path) = ci_project_path.filter(|p| !p.trim().is_empty()) {
+        return normalize_base(path);
+    }
+    String::new()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,5 +224,100 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("docgen.toml"), "title = = =\n").unwrap();
         assert!(load(dir.path()).is_err());
+    }
+
+    #[test]
+    fn normalize_base_canonicalizes() {
+        assert_eq!(normalize_base(""), "");
+        assert_eq!(normalize_base("/"), "");
+        assert_eq!(normalize_base("docs"), "/docs");
+        assert_eq!(normalize_base("/docs/"), "/docs");
+        assert_eq!(normalize_base("docs/"), "/docs");
+        // multi-segment sub-path (GitLab namespace/project) round-trips
+        assert_eq!(normalize_base("/group/project/"), "/group/project");
+        assert_eq!(normalize_base("group/project"), "/group/project");
+    }
+
+    #[test]
+    fn url_path_extracts_path_component() {
+        // subdomain layout -> just the project segment
+        assert_eq!(url_path("https://group.gitlab.io/project"), "/project");
+        // subpath layout -> full group/project path
+        assert_eq!(
+            url_path("https://gitlab.example.com/group/project"),
+            "/group/project"
+        );
+        // custom domain at root -> no path
+        assert_eq!(url_path("https://docs.example.com"), "");
+        assert_eq!(url_path("http://host/a/b/"), "/a/b/");
+    }
+
+    #[test]
+    fn resolve_base_precedence() {
+        // 1. DOCGEN_BASE wins over everything (and is normalized).
+        assert_eq!(
+            resolve_base_from(
+                "/from-toml",
+                Some("/override/"),
+                Some("https://x.io/pages"),
+                Some("g/p")
+            ),
+            "/override"
+        );
+        // 1b. present-but-empty DOCGEN_BASE forces root even when others are set.
+        assert_eq!(
+            resolve_base_from(
+                "/from-toml",
+                Some(""),
+                Some("https://x.io/pages"),
+                Some("g/p")
+            ),
+            ""
+        );
+        // 2. docgen.toml base beats CI auto-detect.
+        assert_eq!(
+            resolve_base_from("/from-toml", None, Some("https://x.io/pages"), Some("g/p")),
+            "/from-toml"
+        );
+        // 3. CI_PAGES_URL path used when config base is empty; subdomain layout.
+        assert_eq!(
+            resolve_base_from(
+                "",
+                None,
+                Some("https://group.gitlab.io/project"),
+                Some("group/project")
+            ),
+            "/project"
+        );
+        // 3b. subpath layout via CI_PAGES_URL.
+        assert_eq!(
+            resolve_base_from(
+                "",
+                None,
+                Some("https://gitlab.example.com/group/project"),
+                Some("group/project")
+            ),
+            "/group/project"
+        );
+        // 4. CI_PROJECT_PATH fallback when CI_PAGES_URL is absent.
+        assert_eq!(
+            resolve_base_from("", None, None, Some("group/project")),
+            "/group/project"
+        );
+        // 4b. CI_PAGES_URL is authoritative when present: a root custom domain
+        // (no path) means the site really is at root, so base is "" — we do NOT
+        // fall through to CI_PROJECT_PATH and wrongly re-add a sub-path.
+        assert_eq!(
+            resolve_base_from(
+                "",
+                None,
+                Some("https://docs.example.com"),
+                Some("group/project")
+            ),
+            ""
+        );
+        // 5. nothing set -> root.
+        assert_eq!(resolve_base_from("", None, None, None), "");
+        assert_eq!(resolve_base_from("  ", None, None, Some("  ")), "");
     }
 }
