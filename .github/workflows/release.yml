@@ -16,7 +16,10 @@ jobs:
           - { os: ubuntu-latest,  target: aarch64-unknown-linux-gnu, ext: tgz }
           - { os: macos-latest,   target: x86_64-apple-darwin,       ext: tgz }
           - { os: macos-latest,   target: aarch64-apple-darwin,      ext: tgz }
-          - { os: windows-latest, target: x86_64-pc-windows-msvc,    ext: zip }
+          # Windows (x86_64-pc-windows-msvc) is intentionally omitted: the
+          # `katex` crate's default quick-js backend does not compile on the
+          # Windows MSVC target. Revisit if katex moves to a cross-platform
+          # backend (e.g. wasm-js).
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -29,24 +32,13 @@ jobs:
           echo 'CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc' >> "$GITHUB_ENV"
       - name: Build
         run: cargo build --release --locked -p docgen-rs --target ${{ matrix.target }}
-      - name: Package (unix)
-        if: matrix.ext == 'tgz'
+      - name: Package
         run: |
           dir="docgen-${{ matrix.target }}"
           mkdir "$dir"
           cp "target/${{ matrix.target }}/release/docgen" "$dir/"
           tar czf "$dir.tgz" "$dir"
-      - name: Package (windows)
-        if: matrix.ext == 'zip'
-        shell: pwsh
-        run: |
-          $dir = "docgen-${{ matrix.target }}"
-          New-Item -ItemType Directory $dir | Out-Null
-          Copy-Item "target/${{ matrix.target }}/release/docgen.exe" $dir
-          Compress-Archive -Path $dir -DestinationPath "$dir.zip"
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            docgen-${{ matrix.target }}.tgz
-            docgen-${{ matrix.target }}.zip
+          files: docgen-${{ matrix.target }}.tgz
