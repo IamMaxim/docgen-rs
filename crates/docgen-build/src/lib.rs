@@ -128,8 +128,13 @@ pub fn build_site(opts: &BuildOptions) -> Result<BuildOutcome> {
     // Two-pass: prepare all pages, then render with full slug knowledge.
     let prepared: Vec<_> = pages.into_iter().map(prepare).collect();
     // Load `docgen.toml` (absent → defaults reproduce pre-P6 behaviour).
-    let config = docgen_config::load(opts.project_root)
+    let mut config = docgen_config::load(opts.project_root)
         .with_context(|| format!("loading docgen.toml from {}", opts.project_root.display()))?;
+    // Resolve the effective deploy base: DOCGEN_BASE override → docgen.toml `base`
+    // → GitLab Pages auto-detect (CI_PAGES_URL / CI_PROJECT_PATH) → root. This is
+    // what makes a sub-path Pages deploy work with no per-project CI config, and
+    // it normalizes hand-written `base` values too.
+    config.base = docgen_config::resolve_base(&config.base);
     // Build the component registry: embedded built-ins first, then project
     // `components/<name>/` (which override a built-in of the same name).
     let builtins: Vec<docgen_components::Component> = docgen_assets::builtin_components()

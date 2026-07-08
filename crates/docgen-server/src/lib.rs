@@ -120,14 +120,9 @@ impl AppState {
 
 /// Normalize a configured `base` into a leading-slash, no-trailing-slash form
 /// for prefix matching: `""` -> `""`, `"docs"` / `"/docs/"` / `"docs/"` -> `"/docs"`.
-pub fn normalize_base(base: &str) -> String {
-    let trimmed = base.trim().trim_matches('/');
-    if trimmed.is_empty() {
-        String::new()
-    } else {
-        format!("/{trimmed}")
-    }
-}
+/// Re-exported from `docgen-config` so the dev server's request-path stripping
+/// and the build's URL prefixing share one canonicalization.
+pub use docgen_config::normalize_base;
 
 /// Strip the site `base` prefix from a (already percent-decoded) request path so
 /// it can be resolved against `out_dir`. `base` must be normalized
@@ -352,11 +347,15 @@ async fn serve_async(opts: DevOptions) -> anyhow::Result<()> {
     let out_tmp = tempfile::tempdir()?;
     let out_dir = out_tmp.path().to_path_buf();
 
-    // The built HTML prefixes every URL with the configured `base`; the server
-    // must strip it off incoming requests. A malformed config here is non-fatal
-    // for serving (the build step reports it) — fall back to "served at root".
+    // The built HTML prefixes every URL with the *resolved* `base`; the server
+    // must strip that same prefix off incoming requests. Resolve it exactly as
+    // `build_site` does (DOCGEN_BASE / CI Pages env override docgen.toml) so dev
+    // and build never disagree — otherwise `DOCGEN_BASE=/x docgen dev`, or a dev
+    // run under CI, would serve links the request router can't strip and 404.
+    // A malformed config here is non-fatal for serving (the build step reports
+    // it) — fall back to "served at root".
     let base = docgen_config::load(&project_root)
-        .map(|c| c.base)
+        .map(|c| docgen_config::resolve_base(&c.base))
         .unwrap_or_default();
 
     let (reload_tx, _rx) = broadcast::channel(16);

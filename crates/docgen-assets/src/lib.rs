@@ -672,6 +672,11 @@ mod tests {
         assert!(js.contains("http://www.w3.org/2000/svg")); // builds SVG via createElementNS
         assert!(!js.contains("import ")); // no ESM / npm
         assert!(!js.to_lowercase().contains("d3")); // no vendored graph lib
+                                                    // Node links must be base-prefixed so a sub-path deploy navigates
+                                                    // correctly (regression: href was a bare `'/' + slug`, ignoring the base).
+        assert!(js.contains("window.DOCGEN_BASE"));
+        assert!(js.contains("var href = base + '/'"));
+        assert!(!js.contains("var href = '/'")); // the old base-less href is gone
     }
 
     // ---- B-2: graph_assets() slice + include_graph gate ----

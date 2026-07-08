@@ -94,6 +94,10 @@ window.docgen.island('docgenGraph', function (Alpine) {
         gNodes.setAttribute('class', 'docgen-graph__nodes');
         this.nodeEls = {};
         var self = this;
+        // Prefix node links with the deployed base path so a sub-path deploy
+        // (e.g. GitLab Pages at /group/project) navigates correctly. Matches the
+        // root-absolute, base-prefixed links the build emits in page templates.
+        var base = (typeof window !== 'undefined' && window.DOCGEN_BASE) || '';
         for (var n = 0; n < nodes.length; n++) {
           var node = nodes[n];
           var r = clamp(5 + Math.sqrt(node.degree || 0) * 1.4, 6, 14);
@@ -101,7 +105,7 @@ window.docgen.island('docgenGraph', function (Alpine) {
           // segment so slugs with spaces/#/?/% produce a well-formed URL that
           // matches the build's directory-emit path.
           var link = document.createElementNS(SVGNS, 'a');
-          var href = '/' + node.slug.split('/').map(encodeURIComponent).join('/');
+          var href = base + '/' + node.slug.split('/').map(encodeURIComponent).join('/');
           link.setAttributeNS('http://www.w3.org/1999/xlink', 'href', href);
           link.setAttribute('href', href);
           var circle = document.createElementNS(SVGNS, 'circle');
