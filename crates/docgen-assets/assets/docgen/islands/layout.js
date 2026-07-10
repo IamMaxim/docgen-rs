@@ -24,6 +24,8 @@
 //   doc-right-rail-collapsed  "true"/"false"  default false (rail VISIBLE)
 //   doc-left-rail-width       int px, 180..560, default 264
 //   doc-sidebar-collapsed     JSON array of collapsed folder paths, default []
+// sessionStorage keys (transient, per-tab):
+//   doc-sidebar-scroll        sidebar scrollTop in px, restored across nav
 // State classes on `.docgen-app`:
 //   .is-full-width        content drops its max-width
 //   .is-rail-collapsed    right rail hidden + layout track collapsed
@@ -32,6 +34,8 @@
   var RAIL_KEY = 'doc-right-rail-collapsed';
   var WIDTH_KEY = 'doc-left-rail-width';
   var TREE_KEY = 'doc-sidebar-collapsed';
+  // sessionStorage (per-tab, transient) — sidebar scroll offset in px.
+  var SCROLL_KEY = 'doc-sidebar-scroll';
   var WIDTH_MIN = 180;
   var WIDTH_MAX = 560;
   var WIDTH_DEFAULT = 264;
@@ -95,6 +99,55 @@
 
     wireResizer();
     wireTreeCollapse();
+    wireSidebarScroll();
+  }
+
+  // Preserve the sidebar's scroll offset across the full-page reloads that every
+  // nav link triggers. Without this the `#docgen-sidebar` scroll container (its
+  // own `overflow-y:auto` element) is rebuilt on each navigation and snaps back
+  // to the top — losing your place in a long tree. We stash `scrollTop` in
+  // sessionStorage (transient, per-tab: it should not leak across browser
+  // sessions or into unrelated tabs the way the width/collapse prefs do) and
+  // restore it on the next load. Restore runs after `wireTreeCollapse` so the
+  // stored offset is measured against the same (collapsed) tree height.
+  function wireSidebarScroll() {
+    var sidebar = document.getElementById('docgen-sidebar');
+    if (!sidebar) return;
+
+    // Restore first, clamped to the current scrollable range (the tree height can
+    // differ between pages, e.g. the active branch expanded elsewhere).
+    var stored = parseInt(sessionStorage.getItem(SCROLL_KEY), 10);
+    if (isFinite(stored)) {
+      var max = sidebar.scrollHeight - sidebar.clientHeight;
+      sidebar.scrollTop = max > 0 ? Math.min(stored, max) : 0;
+    }
+
+    // Persist as the user scrolls (throttled to animation frames) and once more
+    // on the way out, so a click that navigates captures the latest offset even
+    // if the last scroll frame hadn't flushed.
+    var pending = false;
+    sidebar.addEventListener(
+      'scroll',
+      function () {
+        if (pending) return;
+        pending = true;
+        requestAnimationFrame(function () {
+          pending = false;
+          saveScroll(sidebar);
+        });
+      },
+      { passive: true }
+    );
+    // `pagehide` fires on navigation (and is bfcache-friendly, unlike unload).
+    window.addEventListener('pagehide', function () {
+      saveScroll(sidebar);
+    });
+  }
+
+  function saveScroll(sidebar) {
+    try {
+      sessionStorage.setItem(SCROLL_KEY, String(sidebar.scrollTop));
+    } catch (e) {}
   }
 
   // Persist the sidebar folder tree's open/closed state. Folders render `open`
