@@ -176,6 +176,9 @@ pub fn render_block_markdown(
     // Resolve wikilinks in the directive body the same way top-level body content
     // does, before math/mermaid rewrite their nodes.
     let _pass = transform_wikilinks(root, &arena, slugs, &config.base);
+    // Relative asset references inside a directive body resolve against the same
+    // source directory the directive/include lives in (`base_dir`).
+    crate::assetpass::transform_asset_urls(root, &config.base, base_dir, slugs);
     if config.features.math {
         crate::mathpass::transform_math(root);
     }
@@ -275,6 +278,11 @@ pub fn render_doc(
     // Wikilink AST pass (mutates `root`) + highlighted HTML.
     let pass = transform_wikilinks(root, &arena, slugs, &config.base);
     let resolved_links = pass.resolved;
+    // Rewrite relative asset references (`![](./img.png)`, `[x](./y.pdf)`) to
+    // base-absolute URLs resolved against this page's source directory, so they
+    // survive clean-URL nesting and point at the copied asset.
+    let source_dir = p.rel_path.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
+    crate::assetpass::transform_asset_urls(root, &config.base, source_dir, slugs);
     // Build-time math: replace math nodes with KaTeX HTML before formatting.
     let math_count = if config.features.math {
         crate::mathpass::transform_math(root)

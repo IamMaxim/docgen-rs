@@ -113,7 +113,16 @@ impl DevState {
     /// structural; otherwise falls back to a full build and re-seeds the cache.
     pub fn rebuild(&mut self) -> Result<Rebuilt> {
         match self.try_incremental()? {
-            Some(rebuilt) => Ok(rebuilt),
+            Some(rebuilt) => {
+                // The fast path rewrites only changed pages and never touches the
+                // static-asset tree. A watcher event for an added/edited image
+                // takes this path (the doc set is unchanged), so refresh the
+                // copied assets here — otherwise a new image wouldn't appear until
+                // a structural change forced a full rebuild. Full builds copy
+                // assets themselves via `build_site_inner`.
+                crate::copy_assets(&self.project_root.join("docs"), &self.out_dir)?;
+                Ok(rebuilt)
+            }
             None => self.full(),
         }
     }

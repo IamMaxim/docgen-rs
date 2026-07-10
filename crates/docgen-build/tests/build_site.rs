@@ -118,6 +118,100 @@ fn base_subpath_prefixes_assets_and_wikilinks_end_to_end() {
 }
 
 #[test]
+fn relative_image_is_copied_and_url_rewritten_end_to_end() {
+    // The reported bug: a page at docs/system/index.md references an image with a
+    // relative path (./attachments/image.png). The image must be copied into the
+    // output mirroring the docs tree, and the rendered <img> src must point at it
+    // absolutely (surviving the clean-URL `/system/index/` nesting).
+    let root = tempfile::tempdir().unwrap();
+    fs::create_dir_all(root.path().join("docs/system/attachments")).unwrap();
+    fs::write(
+        root.path().join("docs/system/index.md"),
+        "# System\n\n![Diagram](./attachments/image.png)\n\n[spec](./attachments/spec.pdf)\n",
+    )
+    .unwrap();
+    let png = b"\x89PNG\r\n\x1a\n";
+    fs::write(root.path().join("docs/system/attachments/image.png"), png).unwrap();
+    fs::write(
+        root.path().join("docs/system/attachments/spec.pdf"),
+        b"%PDF-1.4",
+    )
+    .unwrap();
+    let out = tempfile::tempdir().unwrap();
+
+    build_site(&BuildOptions {
+        project_root: root.path(),
+        out_dir: out.path(),
+        mode: BuildMode::Production,
+    })
+    .unwrap();
+
+    // (1) The asset was copied mirroring the docs tree.
+    let copied = out.path().join("system/attachments/image.png");
+    assert!(copied.is_file(), "image should be copied to {copied:?}");
+    assert_eq!(fs::read(&copied).unwrap(), png, "copied bytes must match");
+    assert!(out.path().join("system/attachments/spec.pdf").is_file());
+
+    // (2) The page (served at /system/index/) references the image absolutely, so
+    // the browser requests /system/attachments/image.png — where the file landed.
+    let html = fs::read_to_string(out.path().join("system/index/index.html")).unwrap();
+    assert!(
+        html.contains(r#"src="/system/attachments/image.png""#),
+        "img src should be base-absolute: {html}"
+    );
+    assert!(
+        html.contains(r#"href="/system/attachments/spec.pdf""#),
+        "asset link should be base-absolute: {html}"
+    );
+    // The un-rewritten relative form must not survive.
+    assert!(!html.contains(r#"src="./attachments/image.png""#));
+}
+
+#[test]
+fn relative_md_link_between_pages_resolves_to_clean_url_end_to_end() {
+    // A standard markdown link between pages: docs/system/index.md links to a
+    // sibling page via `[Other](./other.md)`. Served at /system/index/, the raw
+    // relative href would resolve to the wrong place; it must be rewritten to the
+    // target page's clean URL (/system/other). A link to a non-existent page is
+    // left untouched.
+    let root = tempfile::tempdir().unwrap();
+    fs::create_dir_all(root.path().join("docs/system")).unwrap();
+    fs::write(
+        root.path().join("docs/system/index.md"),
+        "# System\n\n[Other](./other.md) and [Missing](./ghost.md)\n",
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("docs/system/other.md"),
+        "# Other\n\nBody.\n",
+    )
+    .unwrap();
+    let out = tempfile::tempdir().unwrap();
+
+    build_site(&BuildOptions {
+        project_root: root.path(),
+        out_dir: out.path(),
+        mode: BuildMode::Production,
+    })
+    .unwrap();
+
+    let html = fs::read_to_string(out.path().join("system/index/index.html")).unwrap();
+    assert!(
+        html.contains(r#"href="/system/other""#),
+        "known page link should resolve to its clean URL: {html}"
+    );
+    assert!(
+        !html.contains(r#"href="./other.md""#),
+        "raw relative page link must not survive: {html}"
+    );
+    // The link to a page that doesn't exist is left as the author wrote it.
+    assert!(
+        html.contains(r#"href="./ghost.md""#),
+        "unknown page link should be untouched: {html}"
+    );
+}
+
+#[test]
 fn build_compat_wrapper_writes_dist() {
     let root = tempfile::tempdir().unwrap();
     setup_fixture(root.path());

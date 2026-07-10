@@ -610,6 +610,9 @@ async fn not_found(state: &AppState) -> Response {
 }
 
 fn content_type_for(path: &str) -> &'static str {
+    // Match on a lowercased extension so `IMAGE.PNG` / `Photo.JPG` are typed
+    // correctly, not just their all-lowercase forms.
+    let path = &path.to_ascii_lowercase();
     if path.ends_with(".html") {
         "text/html; charset=utf-8"
     } else if path.ends_with(".css") {
@@ -620,9 +623,53 @@ fn content_type_for(path: &str) -> &'static str {
         "application/json"
     } else if path.ends_with(".woff2") {
         "font/woff2"
+    } else if path.ends_with(".woff") {
+        "font/woff"
     } else if path.ends_with(".svg") {
         "image/svg+xml"
+    } else if path.ends_with(".png") {
+        "image/png"
+    } else if path.ends_with(".jpg") || path.ends_with(".jpeg") {
+        "image/jpeg"
+    } else if path.ends_with(".gif") {
+        "image/gif"
+    } else if path.ends_with(".webp") {
+        "image/webp"
+    } else if path.ends_with(".avif") {
+        "image/avif"
+    } else if path.ends_with(".ico") {
+        "image/x-icon"
+    } else if path.ends_with(".pdf") {
+        "application/pdf"
     } else {
         "application/octet-stream"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::content_type_for;
+
+    #[test]
+    fn images_get_correct_mime_types() {
+        assert_eq!(content_type_for("a/b/image.png"), "image/png");
+        assert_eq!(content_type_for("photo.jpg"), "image/jpeg");
+        assert_eq!(content_type_for("photo.jpeg"), "image/jpeg");
+        assert_eq!(content_type_for("anim.gif"), "image/gif");
+        assert_eq!(content_type_for("pic.webp"), "image/webp");
+        assert_eq!(content_type_for("pic.avif"), "image/avif");
+        assert_eq!(content_type_for("favicon.ico"), "image/x-icon");
+        assert_eq!(content_type_for("doc.pdf"), "application/pdf");
+    }
+
+    #[test]
+    fn extension_match_is_case_insensitive() {
+        assert_eq!(content_type_for("IMAGE.PNG"), "image/png");
+        assert_eq!(content_type_for("Photo.JPG"), "image/jpeg");
+    }
+
+    #[test]
+    fn unknown_extension_falls_back_to_octet_stream() {
+        assert_eq!(content_type_for("data.bin"), "application/octet-stream");
     }
 }
