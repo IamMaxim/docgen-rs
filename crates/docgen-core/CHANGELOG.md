@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1](https://github.com/IamMaxim/docgen-rs/compare/docgen-core-v0.3.0...docgen-core-v0.3.1) - 2026-07-10
+
+### Fixed
+
+- resolve relative asset and page URLs to base-absolute clean URLs
+
 ## [0.3.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-core-v0.2.0...docgen-core-v0.3.0) - 2026-07-08
 
 ### Other
