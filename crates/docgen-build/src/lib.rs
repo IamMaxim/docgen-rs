@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use chrono::Local;
-use docgen_core::discover::discover_docs;
+use docgen_core::discover::{discover_assets, discover_docs};
 use docgen_core::pipeline::{prepare, render_docs};
 use docgen_core::tree::build_tree;
 use docgen_render::{
@@ -90,6 +90,31 @@ fn diff_limit() -> usize {
         .and_then(|v| v.parse::<usize>().ok())
         .unwrap_or(DEFAULT_DIFF_LIMIT)
         .clamp(1, MAX_DIFF_LIMIT)
+}
+
+/// Copy every authored static asset (non-`.md` file) from `docs_dir` into
+/// `out_dir`, mirroring its relative path. Parent dirs are created as needed. A
+/// clean-URL page like `docs/system/index.md` (served at `/system/index/`) can
+/// then reference `./attachments/img.png`, which the asset pass rewrote to
+/// `/system/attachments/img.png` — exactly where this writes the file.
+pub(crate) fn copy_assets(docs_dir: &Path, out_dir: &Path) -> Result<()> {
+    let assets = discover_assets(docs_dir)
+        .with_context(|| format!("discovering assets in {}", docs_dir.display()))?;
+    for asset in &assets {
+        let dest = out_dir.join(&asset.rel_path);
+        if let Some(parent) = dest.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("creating asset dir {}", parent.display()))?;
+        }
+        fs::copy(&asset.src_path, &dest).with_context(|| {
+            format!(
+                "copying asset {} -> {}",
+                asset.src_path.display(),
+                dest.display()
+            )
+        })?;
+    }
+    Ok(())
 }
 
 /// Compute the doc path as git sees it, relative to the repo working directory.
@@ -538,6 +563,13 @@ pub(crate) fn build_site_inner(
     }
 
     t.mark("render_pages");
+
+    // Copy authored static assets (images, PDFs, …) from the docs tree into the
+    // output, mirroring their relative path. Pages reference these relatively
+    // (`![](./attachments/img.png)`); the asset pass rewrote those refs to
+    // base-absolute URLs pointing exactly here (`/system/attachments/img.png`).
+    copy_assets(&docs_dir, dist_dir)?;
+    t.mark("copy_assets");
 
     // Root page: serve the home doc at `/` too, so the site has a real index.
     // The nested `dist/index/index.html` is still emitted above, so existing
