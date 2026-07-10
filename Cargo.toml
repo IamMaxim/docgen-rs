@@ -5,19 +5,19 @@ members = ["crates/docgen-config", "crates/docgen-components", "crates/docgen-co
 [workspace.package]
 edition = "2021"
 license = "MIT"
-version = "0.3.0"
+version = "0.3.1"
 repository = "https://github.com/IamMaxim/docgen-rs"
 readme = "README.md"
 authors = ["Maxim Stepanov"]
 rust-version = "1.74"
 
 [workspace.dependencies]
-docgen-config = { version = "0.3.0", path = "crates/docgen-config" }
-docgen-components = { version = "0.3.0", path = "crates/docgen-components" }
-docgen-core = { version = "0.3.0", path = "crates/docgen-core" }
-docgen-diff = { version = "0.3.0", path = "crates/docgen-diff" }
-docgen-assets = { version = "0.3.0", path = "crates/docgen-assets" }
-docgen-render = { version = "0.3.0", path = "crates/docgen-render" }
-docgen-build = { version = "0.3.0", path = "crates/docgen-build" }
-docgen-server = { version = "0.3.0", path = "crates/docgen-server" }
-docgen-init = { version = "0.3.0", path = "crates/docgen-init" }
+docgen-config = { version = "0.3.1", path = "crates/docgen-config" }
+docgen-components = { version = "0.3.1", path = "crates/docgen-components" }
+docgen-core = { version = "0.3.1", path = "crates/docgen-core" }
+docgen-diff = { version = "0.3.1", path = "crates/docgen-diff" }
+docgen-assets = { version = "0.3.1", path = "crates/docgen-assets" }
+docgen-render = { version = "0.3.1", path = "crates/docgen-render" }
+docgen-build = { version = "0.3.1", path = "crates/docgen-build" }
+docgen-server = { version = "0.3.1", path = "crates/docgen-server" }
+docgen-init = { version = "0.3.1", path = "crates/docgen-init" }

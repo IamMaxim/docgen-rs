@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1](https://github.com/IamMaxim/docgen-rs/compare/docgen-assets-v0.3.0...docgen-assets-v0.3.1) - 2026-07-10
+
+### Fixed
+
+- preserve sidebar scroll position across page navigation
+
 ## [0.2.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-assets-v0.1.1...docgen-assets-v0.2.0) - 2026-07-08
 
 ### Fixed
