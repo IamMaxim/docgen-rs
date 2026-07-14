@@ -124,6 +124,12 @@ public_url = "https://cdn.example.com"
 path_style = true                    # required by MinIO and some S3-compatibles
 ```
 
+`public_url` must actually be reachable by readers: docgen uploads objects to
+the bucket but does not set an ACL or otherwise configure bucket permissions.
+The bucket policy (or the CDN/custom domain in front of it) must grant public
+read access to the uploaded objects, or images and attachments will 403 on a
+successfully built site.
+
 Credentials are never stored in `docgen.toml`; they are read from the
 environment: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
 
@@ -133,6 +139,11 @@ environment: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
   (`cargo install docgen-rs --features s3` — it is off by default);
 - `[s3]` is present in `docgen.toml`;
 - both credential env vars are set at build time.
+
+Building with `--features s3` requires a C/C++ compiler and `cmake` on the
+build machine (pulled in transitively for TLS); on a minimal CI image, install
+`build-essential` and `cmake` (or your distro's equivalents) before
+`cargo install`.
 
 If the feature is off, or `[s3]` is absent, or credentials are missing,
 `docgen build` falls back to copying attachments into `dist/` as usual and
@@ -149,6 +160,7 @@ pages:
     AWS_ACCESS_KEY_ID: $S3_ACCESS_KEY_ID
     AWS_SECRET_ACCESS_KEY: $S3_SECRET_ACCESS_KEY
   script:
+    - apt-get update && apt-get install -y build-essential cmake
     - cargo install docgen-rs --features s3
     - docgen build .
   artifacts:
