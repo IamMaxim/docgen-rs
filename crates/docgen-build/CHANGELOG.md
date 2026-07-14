@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-build-v0.3.1...docgen-build-v0.4.0) - 2026-07-14
+
+### Added
+
+- *(build)* offload attachments to S3 when [s3] configured and creds present
+- *(core)* add AssetUrlResolver hook to the asset-URL rewrite pass
+
+### Fixed
+
+- *(build)* never offload to S3 in dev mode (only production builds)
+
+### Other
+
+- apply rustfmt and satisfy clippy on the s3 branch
+
 ## [0.3.1](https://github.com/IamMaxim/docgen-rs/compare/docgen-build-v0.3.0...docgen-build-v0.3.1) - 2026-07-10
 
 ### Fixed
