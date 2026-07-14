@@ -1,5 +1,6 @@
 pub mod assemble;
 pub mod assetpass;
+pub mod asseturl;
 pub mod directivepass;
 pub mod discover;
 pub mod frontmatter;

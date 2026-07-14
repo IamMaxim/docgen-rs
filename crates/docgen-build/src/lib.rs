@@ -378,7 +378,42 @@ pub(crate) fn build_site_inner(
     let registry = docgen_components::build_registry(builtins, &components_dir)
         .with_context(|| format!("discovering components in {}", components_dir.display()))?;
     t.mark("config+registry");
-    let site = render_docs(prepared, &partials, &config, &registry);
+    // --- S3 asset offload decision (only affects non-.md attachments) -------
+    // `s3_manifest` is Some only when the `s3` feature is on AND [s3] config is
+    // present. `s3_creds` additionally requires credentials in the environment.
+    #[cfg(feature = "s3")]
+    let (s3_manifest, s3_creds): (Option<docgen_s3::AssetManifest>, _) = match &config.s3 {
+        Some(s3cfg) if opts.mode == BuildMode::Production => {
+            let assets = discover_assets(&docs_dir)
+                .with_context(|| format!("discovering assets in {}", docs_dir.display()))?;
+            let manifest =
+                docgen_s3::build_manifest(&assets, s3cfg).context("building S3 asset manifest")?;
+            let creds = docgen_s3::credentials_from_env();
+            (Some(manifest), creds)
+        }
+        _ => (None, None),
+    };
+
+    #[cfg(not(feature = "s3"))]
+    if config.s3.is_some() && opts.mode == BuildMode::Production {
+        eprintln!(
+            "S3: [s3] configured but this docgen build was compiled without the `s3` \
+             feature — copying attachments into dist/ instead"
+        );
+    }
+
+    #[cfg(feature = "s3")]
+    let resolver: Option<&dyn docgen_core::asseturl::AssetUrlResolver> =
+        match (&s3_manifest, &s3_creds) {
+            // Upload active: rewrite to S3 URLs.
+            (Some(m), Some(_)) => Some(m),
+            // Config present but no creds: fall back to local URLs.
+            _ => None,
+        };
+    #[cfg(not(feature = "s3"))]
+    let resolver: Option<&dyn docgen_core::asseturl::AssetUrlResolver> = None;
+
+    let site = render_docs(prepared, &partials, &config, &registry, resolver);
     t.mark("render_docs");
     let tree = build_tree(&site.docs);
     t.mark("build_tree");
@@ -568,6 +603,35 @@ pub(crate) fn build_site_inner(
     // output, mirroring their relative path. Pages reference these relatively
     // (`![](./attachments/img.png)`); the asset pass rewrote those refs to
     // base-absolute URLs pointing exactly here (`/system/attachments/img.png`).
+    #[cfg(feature = "s3")]
+    {
+        match (&s3_manifest, &s3_creds) {
+            (Some(manifest), Some(creds)) => {
+                let s3cfg = config
+                    .s3
+                    .as_ref()
+                    .expect("s3 config present when manifest is");
+                let stats =
+                    docgen_s3::upload(manifest, s3cfg, creds).context("uploading assets to S3")?;
+                let prefix = s3cfg.prefix.as_deref().unwrap_or("");
+                eprintln!(
+                    "S3: {} uploaded, {} already present -> s3://{}/{} (public: {})",
+                    stats.uploaded, stats.skipped, s3cfg.bucket, prefix, s3cfg.public_url
+                );
+                // Attachments intentionally NOT copied into dist/ (that is the point).
+            }
+            (Some(manifest), None) => {
+                eprintln!(
+                    "S3: [s3] configured but AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY not \
+                     set — copying {} attachments into dist/ instead",
+                    manifest.entries().len()
+                );
+                copy_assets(&docs_dir, dist_dir)?;
+            }
+            (None, _) => copy_assets(&docs_dir, dist_dir)?,
+        }
+    }
+    #[cfg(not(feature = "s3"))]
     copy_assets(&docs_dir, dist_dir)?;
     t.mark("copy_assets");
 
