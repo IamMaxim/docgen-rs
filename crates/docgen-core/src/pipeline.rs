@@ -160,6 +160,7 @@ pub fn prepare(raw: RawDoc) -> PreparedDoc {
 /// the link graph / backlinks (the graph is built from the top-level pass only);
 /// the rendered HTML is correct, but a wikilink that *only* appears inside a
 /// directive body does not yet create a graph edge.
+#[allow(clippy::too_many_arguments)]
 pub fn render_block_markdown(
     md: &str,
     config: &docgen_config::SiteConfig,
@@ -211,6 +212,7 @@ pub fn render_block_markdown(
 /// the recursive pipeline. Missing target or an include cycle degrades to an
 /// inert error span (never panics). `stack` holds the include keys currently on
 /// the rendering path, for cycle detection.
+#[allow(clippy::too_many_arguments)]
 fn resolve_include_src(
     src: &str,
     base_dir: &str,

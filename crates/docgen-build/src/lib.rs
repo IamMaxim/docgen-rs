@@ -386,8 +386,8 @@ pub(crate) fn build_site_inner(
         Some(s3cfg) if opts.mode == BuildMode::Production => {
             let assets = discover_assets(&docs_dir)
                 .with_context(|| format!("discovering assets in {}", docs_dir.display()))?;
-            let manifest = docgen_s3::build_manifest(&assets, s3cfg)
-                .context("building S3 asset manifest")?;
+            let manifest =
+                docgen_s3::build_manifest(&assets, s3cfg).context("building S3 asset manifest")?;
             let creds = docgen_s3::credentials_from_env();
             (Some(manifest), creds)
         }
@@ -607,9 +607,12 @@ pub(crate) fn build_site_inner(
     {
         match (&s3_manifest, &s3_creds) {
             (Some(manifest), Some(creds)) => {
-                let s3cfg = config.s3.as_ref().expect("s3 config present when manifest is");
-                let stats = docgen_s3::upload(manifest, s3cfg, creds)
-                    .context("uploading assets to S3")?;
+                let s3cfg = config
+                    .s3
+                    .as_ref()
+                    .expect("s3 config present when manifest is");
+                let stats =
+                    docgen_s3::upload(manifest, s3cfg, creds).context("uploading assets to S3")?;
                 let prefix = s3cfg.prefix.as_deref().unwrap_or("");
                 eprintln!(
                     "S3: {} uploaded, {} already present -> s3://{}/{} (public: {})",

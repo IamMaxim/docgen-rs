@@ -479,8 +479,7 @@ fn s3_fallback_and_dev_mode_never_upload() {
         "dev build should copy the attachment locally, not upload it"
     );
     assert_eq!(fs::read(&copied).unwrap(), png, "copied bytes must match");
-    let dev_html =
-        fs::read_to_string(dev_out.path().join("system/index/index.html")).unwrap();
+    let dev_html = fs::read_to_string(dev_out.path().join("system/index/index.html")).unwrap();
     assert!(
         dev_html.contains(r#"src="/system/attachments/image.png""#),
         "dev build must use a local url, never an S3 url: {dev_html}"

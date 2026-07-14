@@ -25,10 +25,20 @@ pub struct Credentials {
 /// Read credentials from the standard AWS env vars. `None` if either the access
 /// key or the secret is absent (the signal to fall back to local copy).
 pub fn credentials_from_env() -> Option<Credentials> {
-    let access_key = std::env::var("AWS_ACCESS_KEY_ID").ok().filter(|s| !s.is_empty())?;
-    let secret_key = std::env::var("AWS_SECRET_ACCESS_KEY").ok().filter(|s| !s.is_empty())?;
-    let session_token = std::env::var("AWS_SESSION_TOKEN").ok().filter(|s| !s.is_empty());
-    Some(Credentials { access_key, secret_key, session_token })
+    let access_key = std::env::var("AWS_ACCESS_KEY_ID")
+        .ok()
+        .filter(|s| !s.is_empty())?;
+    let secret_key = std::env::var("AWS_SECRET_ACCESS_KEY")
+        .ok()
+        .filter(|s| !s.is_empty())?;
+    let session_token = std::env::var("AWS_SESSION_TOKEN")
+        .ok()
+        .filter(|s| !s.is_empty());
+    Some(Credentials {
+        access_key,
+        secret_key,
+        session_token,
+    })
 }
 
 /// PURE: the manifest entries whose keys are NOT already in the bucket.
@@ -117,7 +127,11 @@ fn list_existing_keys(bucket: &Bucket, prefix: &str) -> Result<HashSet<String>> 
 /// Upload every manifest object not already present in the bucket. Idempotent:
 /// content-hashed keys mean an existing key is byte-identical, so a re-run after
 /// a transient failure resumes cleanly.
-pub fn upload(manifest: &AssetManifest, config: &S3Config, creds: &Credentials) -> Result<UploadStats> {
+pub fn upload(
+    manifest: &AssetManifest,
+    config: &S3Config,
+    creds: &Credentials,
+) -> Result<UploadStats> {
     let bucket = bucket_handle(config, creds)?;
     let prefix = config.prefix.as_deref().unwrap_or("");
     let existing = list_existing_keys(&bucket, prefix)?;
@@ -180,7 +194,10 @@ mod tests {
             .into_iter()
             .map(|e| e.key.clone())
             .collect();
-        assert_eq!(missing, vec!["p/a.h1.png".to_string(), "p/c.h3.png".to_string()]);
+        assert_eq!(
+            missing,
+            vec!["p/a.h1.png".to_string(), "p/c.h3.png".to_string()]
+        );
     }
 
     #[test]
@@ -196,7 +213,10 @@ mod tests {
         assert_eq!(content_type_for("a/b.png"), "image/png");
         assert_eq!(content_type_for("a/b.PDF"), "application/pdf");
         assert_eq!(content_type_for("a/b.svg"), "image/svg+xml");
-        assert_eq!(content_type_for("a/unknown.xyz"), "application/octet-stream");
+        assert_eq!(
+            content_type_for("a/unknown.xyz"),
+            "application/octet-stream"
+        );
         assert_eq!(content_type_for("noext"), "application/octet-stream");
     }
 }

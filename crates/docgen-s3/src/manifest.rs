@@ -34,7 +34,8 @@ impl AssetManifest {
     /// even though `entries`/`index` are private fields.
     #[cfg(test)]
     pub(crate) fn push_for_test(&mut self, entry: ManifestEntry) {
-        self.index.insert(entry.rel_path.clone(), self.entries.len());
+        self.index
+            .insert(entry.rel_path.clone(), self.entries.len());
         self.entries.push(entry);
     }
 }
@@ -119,7 +120,10 @@ mod tests {
 
     #[test]
     fn key_without_prefix() {
-        assert_eq!(hashed_key("", "system/img.png", "abc123"), "system/img.abc123.png");
+        assert_eq!(
+            hashed_key("", "system/img.png", "abc123"),
+            "system/img.abc123.png"
+        );
     }
 
     #[test]
@@ -145,7 +149,10 @@ mod tests {
 
     #[test]
     fn key_multi_dot_uses_last_extension() {
-        assert_eq!(hashed_key("", "a/archive.tar.gz", "h"), "a/archive.tar.h.gz");
+        assert_eq!(
+            hashed_key("", "a/archive.tar.gz", "h"),
+            "a/archive.tar.h.gz"
+        );
     }
 
     #[test]
