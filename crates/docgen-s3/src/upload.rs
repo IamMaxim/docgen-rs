@@ -110,6 +110,20 @@ fn bucket_handle(config: &S3Config, creds: &Credentials) -> Result<Box<Bucket>> 
     Ok(bucket)
 }
 
+/// The prefix to list under. Trimmed of surrounding slashes so it matches the
+/// prefix `hashed_key` embeds in every key (which also trims). Without this, a
+/// config `prefix = "/docs-assets"` lists under `/docs-assets` while keys live
+/// under `docs-assets/…`, so the diff finds nothing present and re-uploads the
+/// whole set on every build.
+fn list_prefix(config: &S3Config) -> String {
+    config
+        .prefix
+        .as_deref()
+        .unwrap_or("")
+        .trim_matches('/')
+        .to_string()
+}
+
 /// One paginated `ListObjectsV2` over the prefix; collect every existing key.
 fn list_existing_keys(bucket: &Bucket, prefix: &str) -> Result<HashSet<String>> {
     let results = bucket
@@ -133,8 +147,8 @@ pub fn upload(
     creds: &Credentials,
 ) -> Result<UploadStats> {
     let bucket = bucket_handle(config, creds)?;
-    let prefix = config.prefix.as_deref().unwrap_or("");
-    let existing = list_existing_keys(&bucket, prefix)?;
+    let prefix = list_prefix(config);
+    let existing = list_existing_keys(&bucket, &prefix)?;
     let pending = keys_to_upload(manifest, &existing);
 
     let mut uploaded = 0usize;
@@ -179,6 +193,39 @@ mod tests {
             });
         }
         m
+    }
+
+    fn cfg_with_prefix(prefix: Option<&str>) -> S3Config {
+        S3Config {
+            bucket: "b".into(),
+            region: "us-east-1".into(),
+            endpoint: None,
+            prefix: prefix.map(String::from),
+            public_url: "https://cdn".into(),
+            path_style: false,
+        }
+    }
+
+    #[test]
+    fn list_prefix_matches_key_prefix() {
+        // The prefix we list under must equal the prefix embedded in every key,
+        // or the diff finds nothing present and re-uploads on every build.
+        for p in [
+            Some("docs-assets"),
+            Some("/docs-assets"),
+            Some("/docs-assets/"),
+        ] {
+            let cfg = cfg_with_prefix(p);
+            let listed = list_prefix(&cfg);
+            let key = crate::manifest::hashed_key(&listed, "system/img.png", "hash");
+            assert_eq!(listed, "docs-assets");
+            assert!(
+                key.starts_with(&format!("{listed}/")),
+                "key {key} must live under listed prefix {listed}"
+            );
+        }
+        // No prefix configured lists (and keys) at the bucket root.
+        assert_eq!(list_prefix(&cfg_with_prefix(None)), "");
     }
 
     #[test]

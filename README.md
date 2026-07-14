@@ -151,6 +151,15 @@ prints a one-line explanation to stderr — it never fails the build for a
 missing/incomplete S3 setup. `docgen dev` never uploads, regardless of
 configuration.
 
+**Limitations.** Only asset references written in Markdown syntax
+(`![](…)` images and `[](…)` links) are rewritten to bucket URLs. A raw HTML
+`<img src>` / `<a href>` embedded in a doc is left untouched — and because
+offload mode skips the local copy, such a reference will 404 on the deployed
+site. Keep attachment references in Markdown syntax when offload is active.
+For non-AWS providers (R2, MinIO, B2, Spaces) you must set `endpoint`; without
+it the client targets `https://s3.<region>.amazonaws.com`, so a bare
+`region = "auto"` with no `endpoint` will not resolve.
+
 Minimal GitLab CI example:
 
 ```yaml
