@@ -13,6 +13,12 @@ categories = ["command-line-utilities", "development-tools"]
 name = "docgen"
 path = "src/main.rs"
 
+[features]
+# Optional S3-compatible asset offload. Forwards to `docgen-build`'s `s3`
+# feature, which pulls in `docgen-s3`. Off by default; enable at install time
+# with `cargo install docgen-rs --features s3`.
+s3 = ["docgen-build/s3"]
+
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/docgen-{ target }{ archive-suffix }"
 bin-dir = "docgen-{ target }/{ bin }{ binary-ext }"
