@@ -383,7 +383,7 @@ pub(crate) fn build_site_inner(
     // present. `s3_creds` additionally requires credentials in the environment.
     #[cfg(feature = "s3")]
     let (s3_manifest, s3_creds): (Option<docgen_s3::AssetManifest>, _) = match &config.s3 {
-        Some(s3cfg) => {
+        Some(s3cfg) if opts.mode == BuildMode::Production => {
             let assets = discover_assets(&docs_dir)
                 .with_context(|| format!("discovering assets in {}", docs_dir.display()))?;
             let manifest = docgen_s3::build_manifest(&assets, s3cfg)
@@ -391,11 +391,11 @@ pub(crate) fn build_site_inner(
             let creds = docgen_s3::credentials_from_env();
             (Some(manifest), creds)
         }
-        None => (None, None),
+        _ => (None, None),
     };
 
     #[cfg(not(feature = "s3"))]
-    if config.s3.is_some() {
+    if config.s3.is_some() && opts.mode == BuildMode::Production {
         eprintln!(
             "S3: [s3] configured but this docgen build was compiled without the `s3` \
              feature — copying attachments into dist/ instead"

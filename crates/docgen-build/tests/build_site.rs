@@ -392,7 +392,13 @@ fn search_feature_off_skips_index_and_client() {
 }
 
 #[test]
-fn s3_configured_without_credentials_falls_back_to_local_copy() {
+fn s3_fallback_and_dev_mode_never_upload() {
+    // Both halves of this test manipulate the process-global AWS_* env vars, and
+    // Rust runs tests in the same binary concurrently. Merging them into one
+    // test (run sequentially within a single function) avoids racing against
+    // any other test that might touch these same vars.
+
+    // --- Part 1: no credentials -> Production build falls back to local copy.
     // Guard against ambient AWS creds in the dev environment leaking in and
     // flipping this into a real-upload attempt.
     std::env::remove_var("AWS_ACCESS_KEY_ID");
@@ -429,6 +435,55 @@ fn s3_configured_without_credentials_falls_back_to_local_copy() {
     assert!(
         html.contains(r#"src="/system/img.png""#),
         "expected local url in html: {html}"
+    );
+
+    // --- Part 2: credentials present, but BuildMode::Dev -> must never upload.
+    // If the mode gate were missing, this would attempt a real (failing/hanging)
+    // network upload against the fake credentials below.
+    std::env::set_var("AWS_ACCESS_KEY_ID", "test-fake");
+    std::env::set_var("AWS_SECRET_ACCESS_KEY", "test-fake");
+
+    let dev_root = tempfile::tempdir().unwrap();
+    fs::create_dir_all(dev_root.path().join("docs/system/attachments")).unwrap();
+    fs::write(
+        dev_root.path().join("docs/system/index.md"),
+        "# System\n\n![Diagram](./attachments/image.png)\n",
+    )
+    .unwrap();
+    let png = b"\x89PNG\r\n\x1a\n";
+    fs::write(
+        dev_root.path().join("docs/system/attachments/image.png"),
+        png,
+    )
+    .unwrap();
+    fs::write(
+        dev_root.path().join("docgen.toml"),
+        "[s3]\nbucket=\"b\"\nregion=\"auto\"\npublic_url=\"https://cdn.example.com\"\n",
+    )
+    .unwrap();
+    let dev_out = tempfile::tempdir().unwrap();
+
+    build_site(&BuildOptions {
+        project_root: dev_root.path(),
+        out_dir: dev_out.path(),
+        mode: BuildMode::Dev,
+    })
+    .unwrap();
+
+    std::env::remove_var("AWS_ACCESS_KEY_ID");
+    std::env::remove_var("AWS_SECRET_ACCESS_KEY");
+
+    let copied = dev_out.path().join("system/attachments/image.png");
+    assert!(
+        copied.is_file(),
+        "dev build should copy the attachment locally, not upload it"
+    );
+    assert_eq!(fs::read(&copied).unwrap(), png, "copied bytes must match");
+    let dev_html =
+        fs::read_to_string(dev_out.path().join("system/index/index.html")).unwrap();
+    assert!(
+        dev_html.contains(r#"src="/system/attachments/image.png""#),
+        "dev build must use a local url, never an S3 url: {dev_html}"
     );
 }
 
