@@ -28,6 +28,15 @@ impl AssetManifest {
     pub fn entries(&self) -> &[ManifestEntry] {
         &self.entries
     }
+
+    /// Test-only constructor: push an entry directly, without touching the
+    /// filesystem. Lets `upload.rs`'s pure-function tests build a manifest
+    /// even though `entries`/`index` are private fields.
+    #[cfg(test)]
+    pub(crate) fn push_for_test(&mut self, entry: ManifestEntry) {
+        self.index.insert(entry.rel_path.clone(), self.entries.len());
+        self.entries.push(entry);
+    }
 }
 
 impl AssetUrlResolver for AssetManifest {
