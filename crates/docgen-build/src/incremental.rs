@@ -203,6 +203,7 @@ impl DevState {
                 &self.cap.registry,
                 &slugs,
                 &partials_new,
+                None,
             );
             rerendered.push((i, rd));
         }

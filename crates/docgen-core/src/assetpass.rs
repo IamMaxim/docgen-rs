@@ -46,19 +46,22 @@ pub fn transform_asset_urls<'a>(
     base: &str,
     source_dir: &str,
     slugs: &SlugSet,
+    asset_urls: Option<&dyn crate::asseturl::AssetUrlResolver>,
 ) {
     for node in root.descendants() {
         let mut data = node.data.borrow_mut();
         match &mut data.value {
             NodeValue::Image(link) => {
-                if let Some(rewritten) = rewrite_url(&link.url, base, source_dir, true) {
+                if let Some(rewritten) = rewrite_url(&link.url, base, source_dir, true, asset_urls)
+                {
                     link.url = rewritten;
                 }
             }
             NodeValue::Link(link) => {
                 // Try an asset rewrite first (non-`.md` file); if the target is a
                 // page, fall back to resolving it to a clean URL.
-                if let Some(rewritten) = rewrite_url(&link.url, base, source_dir, false) {
+                if let Some(rewritten) = rewrite_url(&link.url, base, source_dir, false, asset_urls)
+                {
                     link.url = rewritten;
                 } else if let Some(rewritten) =
                     rewrite_page_link(&link.url, base, source_dir, slugs)
@@ -101,7 +104,13 @@ fn split_relative(url: &str) -> Option<(&str, &str)> {
 /// return the rewritten base-absolute URL. `is_image` skips the extension check
 /// (images are always assets); for links, only non-`.md` targets with a real
 /// file extension are rewritten.
-fn rewrite_url(url: &str, base: &str, source_dir: &str, is_image: bool) -> Option<String> {
+fn rewrite_url(
+    url: &str,
+    base: &str,
+    source_dir: &str,
+    is_image: bool,
+    asset_urls: Option<&dyn crate::asseturl::AssetUrlResolver>,
+) -> Option<String> {
     let (path_part, suffix) = split_relative(url)?;
 
     // Links to pages (a `.md` target or an extensionless clean-URL target) are not
@@ -111,6 +120,11 @@ fn rewrite_url(url: &str, base: &str, source_dir: &str, is_image: bool) -> Optio
     }
 
     let resolved = normalize_join(source_dir, path_part);
+    if let Some(resolver) = asset_urls {
+        if let Some(public_url) = resolver.resolve(&resolved) {
+            return Some(format!("{public_url}{suffix}"));
+        }
+    }
     Some(format!("{base}/{resolved}{suffix}"))
 }
 
@@ -222,12 +236,86 @@ mod tests {
         let arena = Arena::new();
         let opts = comrak_options();
         let root = parse_document(&arena, md, &opts);
-        transform_asset_urls(root, base, source_dir, slugs);
+        transform_asset_urls(root, base, source_dir, slugs, None);
         format_ast(root, &opts)
     }
 
     fn slugset(items: &[&str]) -> SlugSet {
         items.iter().map(|s| s.to_string()).collect()
+    }
+
+    struct MapResolver(std::collections::HashMap<String, String>);
+    impl crate::asseturl::AssetUrlResolver for MapResolver {
+        fn resolve(&self, rel_path: &str) -> Option<String> {
+            self.0.get(rel_path).cloned()
+        }
+    }
+
+    fn render_with_resolver(
+        md: &str,
+        base: &str,
+        source_dir: &str,
+        resolver: &dyn crate::asseturl::AssetUrlResolver,
+    ) -> String {
+        let arena = Arena::new();
+        let opts = comrak_options();
+        let root = parse_document(&arena, md, &opts);
+        transform_asset_urls(root, base, source_dir, &SlugSet::new(), Some(resolver));
+        format_ast(root, &opts)
+    }
+
+    #[test]
+    fn resolver_rewrites_image_to_public_url() {
+        let mut m = std::collections::HashMap::new();
+        m.insert(
+            "system/attachments/image.png".to_string(),
+            "https://cdn.example.com/docs-assets/system/attachments/image.abcdef0123456789.png"
+                .to_string(),
+        );
+        let html = render_with_resolver(
+            "![](./attachments/image.png)\n",
+            "",
+            "system",
+            &MapResolver(m),
+        );
+        assert!(
+            html.contains(
+                r#"src="https://cdn.example.com/docs-assets/system/attachments/image.abcdef0123456789.png""#
+            ),
+            "{html}"
+        );
+    }
+
+    #[test]
+    fn resolver_miss_falls_back_to_base_absolute() {
+        // Resolver present but path not in the map -> today's local URL.
+        let html = render_with_resolver(
+            "![](./attachments/image.png)\n",
+            "",
+            "system",
+            &MapResolver(std::collections::HashMap::new()),
+        );
+        assert!(
+            html.contains(r#"src="/system/attachments/image.png""#),
+            "{html}"
+        );
+    }
+
+    #[test]
+    fn resolver_not_consulted_for_page_links() {
+        // A `.md` page link is never an asset; resolver must not affect it.
+        let mut m = std::collections::HashMap::new();
+        m.insert(
+            "system/other".to_string(),
+            "https://cdn.example.com/WRONG".to_string(),
+        );
+        let slugs = slugset(&["system/other"]);
+        let arena = Arena::new();
+        let opts = comrak_options();
+        let root = parse_document(&arena, "[x](./other.md)\n", &opts);
+        transform_asset_urls(root, "", "system", &slugs, Some(&MapResolver(m)));
+        let html = format_ast(root, &opts);
+        assert!(html.contains(r#"href="/system/other""#), "{html}");
     }
 
     #[test]

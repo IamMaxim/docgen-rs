@@ -378,7 +378,7 @@ pub(crate) fn build_site_inner(
     let registry = docgen_components::build_registry(builtins, &components_dir)
         .with_context(|| format!("discovering components in {}", components_dir.display()))?;
     t.mark("config+registry");
-    let site = render_docs(prepared, &partials, &config, &registry);
+    let site = render_docs(prepared, &partials, &config, &registry, None);
     t.mark("render_docs");
     let tree = build_tree(&site.docs);
     t.mark("build_tree");

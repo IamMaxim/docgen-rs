@@ -168,6 +168,7 @@ pub fn render_block_markdown(
     partials: &Partials,
     base_dir: &str,
     stack: &[String],
+    asset_urls: Option<&dyn crate::asseturl::AssetUrlResolver>,
 ) -> String {
     let (rewritten, instances) = crate::directivepass::extract(md);
     let options = comrak_options();
@@ -178,7 +179,7 @@ pub fn render_block_markdown(
     let _pass = transform_wikilinks(root, &arena, slugs, &config.base);
     // Relative asset references inside a directive body resolve against the same
     // source directory the directive/include lives in (`base_dir`).
-    crate::assetpass::transform_asset_urls(root, &config.base, base_dir, slugs);
+    crate::assetpass::transform_asset_urls(root, &config.base, base_dir, slugs, asset_urls);
     if config.features.math {
         crate::mathpass::transform_math(root);
     }
@@ -186,10 +187,16 @@ pub fn render_block_markdown(
         crate::mermaidpass::transform_mermaid(root);
     }
     let inner_html = format_ast(root, &options);
-    let render_inner =
-        |m: &str| render_block_markdown(m, config, registry, slugs, partials, base_dir, stack);
-    let resolve_include =
-        |src: &str| resolve_include_src(src, base_dir, partials, stack, config, registry, slugs);
+    let render_inner = |m: &str| {
+        render_block_markdown(
+            m, config, registry, slugs, partials, base_dir, stack, asset_urls,
+        )
+    };
+    let resolve_include = |src: &str| {
+        resolve_include_src(
+            src, base_dir, partials, stack, config, registry, slugs, asset_urls,
+        )
+    };
     let (out, _used) = crate::directivepass::substitute(
         &inner_html,
         &instances,
@@ -212,6 +219,7 @@ fn resolve_include_src(
     config: &docgen_config::SiteConfig,
     registry: &docgen_components::Registry,
     slugs: &SlugSet,
+    asset_urls: Option<&dyn crate::asseturl::AssetUrlResolver>,
 ) -> String {
     let key = match resolve_include_key(base_dir, src) {
         Some(k) => k,
@@ -226,7 +234,9 @@ fn resolve_include_src(
     let mut next = stack.to_vec();
     next.push(key.clone());
     let child_dir = key.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
-    render_block_markdown(body, config, registry, slugs, partials, child_dir, &next)
+    render_block_markdown(
+        body, config, registry, slugs, partials, child_dir, &next, asset_urls,
+    )
 }
 
 /// A single rendered doc plus the by-products the site assembly needs: its
@@ -256,6 +266,7 @@ pub fn render_doc(
     registry: &docgen_components::Registry,
     slugs: &SlugSet,
     partials: &Partials,
+    asset_urls: Option<&dyn crate::asseturl::AssetUrlResolver>,
 ) -> RenderedDoc {
     let options = comrak_options();
 
@@ -282,7 +293,7 @@ pub fn render_doc(
     // base-absolute URLs resolved against this page's source directory, so they
     // survive clean-URL nesting and point at the copied asset.
     let source_dir = p.rel_path.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
-    crate::assetpass::transform_asset_urls(root, &config.base, source_dir, slugs);
+    crate::assetpass::transform_asset_urls(root, &config.base, source_dir, slugs, asset_urls);
     // Build-time math: replace math nodes with KaTeX HTML before formatting.
     let math_count = if config.features.math {
         crate::mathpass::transform_math(root)
@@ -305,10 +316,16 @@ pub fn render_doc(
     // the full recursive pipeline. `used` drives per-page island/style gating.
     let base_dir = p.rel_path.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
     let stack: Vec<String> = Vec::new();
-    let render_inner =
-        |m: &str| render_block_markdown(m, config, registry, slugs, partials, base_dir, &stack);
-    let resolve_include =
-        |src: &str| resolve_include_src(src, base_dir, partials, &stack, config, registry, slugs);
+    let render_inner = |m: &str| {
+        render_block_markdown(
+            m, config, registry, slugs, partials, base_dir, &stack, asset_urls,
+        )
+    };
+    let resolve_include = |src: &str| {
+        resolve_include_src(
+            src, base_dir, partials, &stack, config, registry, slugs, asset_urls,
+        )
+    };
     let (body_html, used) = crate::directivepass::substitute(
         &formatted,
         &instances,
@@ -341,6 +358,7 @@ pub fn render_docs(
     partials: &Partials,
     config: &docgen_config::SiteConfig,
     registry: &docgen_components::Registry,
+    asset_urls: Option<&dyn crate::asseturl::AssetUrlResolver>,
 ) -> SiteBuild {
     let slugs: SlugSet = prepared.iter().map(|p| p.slug.clone()).collect();
     let doc_meta: Vec<(String, String, Option<String>)> = prepared
@@ -354,7 +372,7 @@ pub fn render_docs(
 
     for p in &prepared {
         // Same per-doc pipeline the editor preview runs (single source of truth).
-        let rendered = render_doc(p, config, registry, &slugs, partials);
+        let rendered = render_doc(p, config, registry, &slugs, partials, asset_urls);
         search.push(SearchEntry {
             slug: p.slug.clone(),
             title: p.title.clone(),
@@ -457,8 +475,8 @@ mod tests {
         let cfg = docgen_config::SiteConfig::default();
         let reg = docgen_components::Registry::empty();
 
-        let site = render_docs(prepared.clone(), &Partials::new(), &cfg, &reg);
-        let single = render_doc(&prepared[1], &cfg, &reg, &slugs, &Partials::new());
+        let site = render_docs(prepared.clone(), &Partials::new(), &cfg, &reg, None);
+        let single = render_doc(&prepared[1], &cfg, &reg, &slugs, &Partials::new(), None);
 
         assert_eq!(single.doc.body_html, site.docs[1].body_html);
         assert_eq!(single.doc.has_mermaid, site.docs[1].has_mermaid);
@@ -484,6 +502,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
+            None,
         );
 
         // Doc order preserved.
@@ -534,6 +553,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
+            None,
         );
         assert!(site.docs[0].body_html.contains("katex"));
         assert!(site.docs[0].has_math);
@@ -550,6 +570,7 @@ mod tests {
             &Partials::new(),
             &cfg,
             &docgen_components::Registry::empty(),
+            None,
         );
         assert!(!site.docs[0].has_math);
         assert!(!site.docs[0].body_html.contains("katex"));
@@ -568,6 +589,7 @@ mod tests {
             &Partials::new(),
             &cfg,
             &docgen_components::Registry::empty(),
+            None,
         );
         assert!(!site.docs[0].has_mermaid);
         assert!(!site.any_mermaid);
@@ -584,6 +606,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
+            None,
         );
         assert!(site.docs[0].has_mermaid && site.docs[0].body_html.contains("docgen-mermaid"));
         assert!(!site.docs[1].has_mermaid);
@@ -601,6 +624,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
+            None,
         );
         let gd = site.graph_data(crate::graphlayout::LayoutParams::default());
         assert_eq!(gd.nodes.len(), 2);
@@ -629,6 +653,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
+            None,
         );
         assert!(!site.any_mermaid);
     }
@@ -651,6 +676,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &reg,
+            None,
         );
         let h = &site.docs[0].body_html;
         assert!(h.contains("docgen-callout--warning"));
@@ -667,6 +693,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
+            None,
         );
         assert!(site.docs[0].body_html.contains("docgen-directive-error"));
         assert!(!site.any_components);
@@ -693,6 +720,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &reg,
+            None,
         );
         assert!(site.docs[0].body_html.contains(r#"href="/guide""#));
     }
@@ -718,6 +746,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &reg,
+            None,
         );
         let h = &site.docs[0].body_html;
         // The resolved wikilink inside the directive body is a real anchor with the
@@ -740,6 +769,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
+            None,
         );
 
         assert!(site.docs[0].body_html.contains(r#"href="/index""#));

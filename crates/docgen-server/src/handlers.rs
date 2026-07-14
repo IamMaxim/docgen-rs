@@ -316,7 +316,7 @@ fn render_preview_document(
         rel_path: doc_rel_path.to_string(),
         raw: source.to_string(),
     });
-    let rendered = render_doc(&prepared, &config, &registry, &slugs, &partials);
+    let rendered = render_doc(&prepared, &config, &registry, &slugs, &partials, None);
 
     // Per-page asset gating, mirroring the build's page render.
     let has_components_css = !registry.styles().is_empty();

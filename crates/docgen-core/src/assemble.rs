@@ -16,6 +16,7 @@ pub fn assemble(raw: RawDoc) -> Doc {
         &crate::pipeline::Partials::new(),
         &docgen_config::SiteConfig::default(),
         &docgen_components::Registry::empty(),
+        None,
     )
     .docs
     .pop()
