@@ -47,6 +47,27 @@ impl Default for ComponentsConfig {
     }
 }
 
+/// `[s3]` section — optional S3-compatible asset offload. Absent = feature off.
+/// Non-secret settings only; credentials come from the environment.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct S3Config {
+    /// Target bucket name.
+    pub bucket: String,
+    /// Region string (e.g. `us-east-1`; use `auto` / any value for R2).
+    pub region: String,
+    /// Custom endpoint for non-AWS S3-compatible services. Omit for AWS.
+    #[serde(default)]
+    pub endpoint: Option<String>,
+    /// Optional key prefix within the bucket (e.g. `docs-assets`).
+    #[serde(default)]
+    pub prefix: Option<String>,
+    /// Base URL that goes into the generated HTML (bucket website or CDN in front).
+    pub public_url: String,
+    /// Path-style addressing (required by MinIO and some S3-compatibles).
+    #[serde(default)]
+    pub path_style: bool,
+}
+
 /// The whole resolved site config. `Default` == pre-P6 behaviour.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
 #[serde(default)]
@@ -61,6 +82,8 @@ pub struct SiteConfig {
     pub base: String,
     pub features: Features,
     pub components: ComponentsConfig,
+    /// Optional S3 asset offload. `None` = disabled (local copy).
+    pub s3: Option<S3Config>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -319,5 +342,69 @@ mod tests {
         // 5. nothing set -> root.
         assert_eq!(resolve_base_from("", None, None, None), "");
         assert_eq!(resolve_base_from("  ", None, None, Some("  ")), "");
+    }
+}
+
+#[cfg(test)]
+mod s3_tests {
+    use super::*;
+
+    #[test]
+    fn s3_section_parses_all_fields() {
+        let cfg: SiteConfig = toml::from_str(
+            r#"
+            [s3]
+            bucket = "my-docs-assets"
+            region = "us-east-1"
+            endpoint = "https://minio.local:9000"
+            prefix = "docs-assets"
+            public_url = "https://cdn.example.com"
+            path_style = true
+            "#,
+        )
+        .expect("parse");
+        let s3 = cfg.s3.expect("s3 present");
+        assert_eq!(s3.bucket, "my-docs-assets");
+        assert_eq!(s3.region, "us-east-1");
+        assert_eq!(s3.endpoint.as_deref(), Some("https://minio.local:9000"));
+        assert_eq!(s3.prefix.as_deref(), Some("docs-assets"));
+        assert_eq!(s3.public_url, "https://cdn.example.com");
+        assert!(s3.path_style);
+    }
+
+    #[test]
+    fn s3_optional_fields_default() {
+        let cfg: SiteConfig = toml::from_str(
+            r#"
+            [s3]
+            bucket = "b"
+            region = "auto"
+            public_url = "https://x"
+            "#,
+        )
+        .expect("parse");
+        let s3 = cfg.s3.expect("s3 present");
+        assert_eq!(s3.endpoint, None);
+        assert_eq!(s3.prefix, None);
+        assert!(!s3.path_style);
+    }
+
+    #[test]
+    fn s3_missing_required_field_errors() {
+        // `bucket` omitted -> serde error.
+        let err = toml::from_str::<SiteConfig>(
+            r#"
+            [s3]
+            region = "auto"
+            public_url = "https://x"
+            "#,
+        );
+        assert!(err.is_err(), "expected missing-field error, got {err:?}");
+    }
+
+    #[test]
+    fn no_s3_section_is_none() {
+        let cfg: SiteConfig = toml::from_str(r#"title = "Docs""#).expect("parse");
+        assert_eq!(cfg.s3, None);
     }
 }
