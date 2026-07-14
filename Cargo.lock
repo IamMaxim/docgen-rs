@@ -676,6 +676,7 @@ dependencies = [
  "docgen-core",
  "docgen-diff",
  "docgen-render",
+ "docgen-s3",
  "serde_json",
  "tempfile",
 ]

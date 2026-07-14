@@ -15,7 +15,12 @@ docgen-core = { workspace = true }
 docgen-diff = { workspace = true }
 docgen-assets = { workspace = true }
 docgen-render = { workspace = true }
+docgen-s3 = { workspace = true, optional = true }
 serde_json = "1"
+
+[features]
+default = []
+s3 = ["dep:docgen-s3"]
 
 [dev-dependencies]
 tempfile = "3"

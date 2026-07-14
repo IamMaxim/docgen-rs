@@ -392,6 +392,47 @@ fn search_feature_off_skips_index_and_client() {
 }
 
 #[test]
+fn s3_configured_without_credentials_falls_back_to_local_copy() {
+    // Guard against ambient AWS creds in the dev environment leaking in and
+    // flipping this into a real-upload attempt.
+    std::env::remove_var("AWS_ACCESS_KEY_ID");
+    std::env::remove_var("AWS_SECRET_ACCESS_KEY");
+
+    let root = tempfile::tempdir().unwrap();
+    fs::create_dir_all(root.path().join("docs/system")).unwrap();
+    fs::write(
+        root.path().join("docs/system/index.md"),
+        "# System\n\n![](./img.png)\n",
+    )
+    .unwrap();
+    fs::write(root.path().join("docs/system/img.png"), b"PNGDATA").unwrap();
+    fs::write(
+        root.path().join("docgen.toml"),
+        "[s3]\nbucket=\"b\"\nregion=\"auto\"\npublic_url=\"https://cdn.example.com\"\n",
+    )
+    .unwrap();
+    let out = tempfile::tempdir().unwrap();
+
+    build_site(&BuildOptions {
+        project_root: root.path(),
+        out_dir: out.path(),
+        mode: BuildMode::Production,
+    })
+    .unwrap();
+
+    // Attachment copied locally (NOT offloaded), HTML uses the local base URL.
+    assert!(
+        out.path().join("system/img.png").is_file(),
+        "attachment should be copied locally"
+    );
+    let html = fs::read_to_string(out.path().join("system/index/index.html")).unwrap();
+    assert!(
+        html.contains(r#"src="/system/img.png""#),
+        "expected local url in html: {html}"
+    );
+}
+
+#[test]
 fn title_from_config_suffixes_page_titles() {
     let root = tempfile::tempdir().unwrap();
     setup_fixture(root.path());

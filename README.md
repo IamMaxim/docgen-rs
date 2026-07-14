@@ -105,6 +105,59 @@ on the doc page. Notes:
 - **Depth** — each doc walks up to 50 commits by default; override with the
   `DOC_DIFF_LIMIT` env var (clamped to `1..=200`).
 
+### S3 asset offload
+
+Large attachments (images, PDFs, etc. referenced from docs) can be offloaded
+to an S3-compatible bucket instead of being copied into `dist/`. This keeps
+generated sites small and lets CDNs serve binaries directly.
+
+Add an `[s3]` section to `docgen.toml`:
+
+```toml
+[s3]
+bucket = "my-bucket"
+region = "auto"                      # "auto" works for R2/MinIO; use a real
+                                      # AWS region (e.g. "us-east-1") for AWS S3
+endpoint = "https://<account>.r2.cloudflarestorage.com"  # omit for AWS S3
+prefix = "docs-assets"               # optional key prefix within the bucket
+public_url = "https://cdn.example.com"
+path_style = true                    # required by MinIO and some S3-compatibles
+```
+
+Credentials are never stored in `docgen.toml`; they are read from the
+environment: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
+
+**Auto-activation:** offload only activates when *all* of these hold:
+
+- the installed `docgen` binary was built with the `s3` cargo feature
+  (`cargo install docgen-rs --features s3` — it is off by default);
+- `[s3]` is present in `docgen.toml`;
+- both credential env vars are set at build time.
+
+If the feature is off, or `[s3]` is absent, or credentials are missing,
+`docgen build` falls back to copying attachments into `dist/` as usual and
+prints a one-line explanation to stderr — it never fails the build for a
+missing/incomplete S3 setup. `docgen dev` never uploads, regardless of
+configuration.
+
+Minimal GitLab CI example:
+
+```yaml
+pages:
+  stage: deploy
+  variables:
+    AWS_ACCESS_KEY_ID: $S3_ACCESS_KEY_ID
+    AWS_SECRET_ACCESS_KEY: $S3_SECRET_ACCESS_KEY
+  script:
+    - cargo install docgen-rs --features s3
+    - docgen build .
+  artifacts:
+    paths: [dist]
+```
+
+(Set `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` as masked CI/CD variables in
+your project settings.)
+
 ## Project layout
 
 This is a Cargo workspace of ten crates. `docgen-rs` is the CLI; the rest are
