@@ -376,9 +376,14 @@ kbd,
 	height: 15px;
 }
 
-/* hamburger — only shown < 768px */
-.docgen-sidebar-toggle {
+/* compact-only topbar icon buttons: nav hamburger (left), page-contents / rail
+   toggle and overflow (⋯) menu (right). All hidden on desktop; the compact
+   media query below reveals them. They share the same square icon-button chrome. */
+.docgen-sidebar-toggle,
+.docgen-rail-toggle,
+.docgen-overflow-toggle {
 	display: none;
+	flex-shrink: 0;
 	width: 34px;
 	height: 32px;
 	border: 1px solid var(--border);
@@ -386,7 +391,18 @@ kbd,
 	background: var(--surface);
 	color: var(--text);
 }
-.docgen-sidebar-backdrop {
+.docgen-sidebar-toggle:hover,
+.docgen-rail-toggle:hover,
+.docgen-overflow-toggle:hover {
+	border-color: var(--border-strong);
+}
+.docgen-overflow-toggle[aria-expanded='true'],
+.docgen-rail-toggle[aria-expanded='true'] {
+	background: var(--bg-soft);
+	border-color: var(--border-strong);
+}
+.docgen-sidebar-backdrop,
+.docgen-rail-backdrop {
 	display: none;
 }
 
@@ -447,11 +463,17 @@ kbd,
 .docgen-app.is-full-width .docgen-doc-content {
 	max-width: none;
 }
-.docgen-app.is-rail-collapsed .docgen-rail {
-	display: none;
-}
-.docgen-app.is-rail-collapsed .docgen-layout {
-	grid-template-columns: var(--left-rail-width) 5px minmax(0, 1fr);
+/* The desktop rail-collapse toggle only applies while the rail is an in-layout
+   column. Below the compact flip (≤1100px) the rail is an off-canvas drawer, so
+   these must NOT hide it — otherwise a user who collapsed the rail on desktop
+   would find the mobile drawer stuck at display:none. */
+@media (min-width: 1101px) {
+	.docgen-app.is-rail-collapsed .docgen-rail {
+		display: none;
+	}
+	.docgen-app.is-rail-collapsed .docgen-layout {
+		grid-template-columns: var(--left-rail-width) 5px minmax(0, 1fr);
+	}
 }
 
 /* =============================== sidebar =============================== */
@@ -929,14 +951,27 @@ kbd,
 	margin-left: -18px;
 }
 
-/* tables */
+/* tables — every table is wrapped at render time (tablepass.rs) in a
+   `.docgen-table-scroll` div that owns the horizontal-scroll region and the
+   block margin. The table itself uses `table-layout: auto` so columns size to
+   their content (the width heuristic); a per-cell `min-width` floor keeps a
+   short column from collapsing to a couple of characters. When the natural
+   width exceeds the reading column the wrapper scrolls — on desktop and mobile
+   alike — instead of squishing. */
+.docgen-table-scroll {
+	margin: 18px 0 24px;
+	overflow-x: auto;
+	/* clip the table's rounded corners to the scroll box */
+	border-radius: var(--r-sm);
+}
 .docgen-doc-content table {
 	display: table;
-	width: 100%;
-	margin: 18px 0 24px;
+	width: auto;
+	min-width: 100%;
+	margin: 0;
 	border-collapse: separate;
 	border-spacing: 0;
-	table-layout: fixed;
+	table-layout: auto;
 	border: 1px solid var(--border);
 	border-radius: var(--r-sm);
 }
@@ -947,6 +982,11 @@ kbd,
 	border-bottom: 1px solid var(--border);
 	vertical-align: top;
 	text-align: left;
+	/* content-sizing floor: no column narrower than ~7em, so headers/values
+	   stay legible; long prose still wraps (the ceiling) rather than forcing a
+	   single column to dominate. `max-width` on a table-cell is not honored by
+	   browsers, so wrapping — not a cap — is what bounds a wide column. */
+	min-width: 7em;
 	overflow-wrap: break-word;
 }
 .docgen-doc-content th:first-child,
@@ -1591,60 +1631,75 @@ kbd,
 }
 
 /* ============================== responsive ============================== */
+/* One compact flip at ≤1100px turns the whole shell mobile: both rails become
+   off-canvas drawers, and the topbar's layout buttons + theme toggle collapse
+   into the ⋯ overflow menu. Above 1100px the desktop layout is untouched. A
+   second pass at ≤600px tightens things for phones. */
 @media (max-width: 1100px) {
-	/* the right rail reflows to a card under the content; the sidebar + drag
-	   handle stay (matches the original, which keeps the resizer on narrow
-	   viewports). Keep the 5px resizer track so the handle stays aligned. */
-	.docgen-layout {
-		grid-template-columns: var(--left-rail-width) 5px minmax(0, 1fr);
-	}
-	.docgen-rail {
-		grid-column: 3;
-		position: static;
-		max-height: none;
-		margin: 0 32px 32px;
-		padding: 16px;
-		border: 1px solid var(--border);
-		border-radius: var(--r-md);
-		background: var(--bg-elev);
-	}
-	.docgen-content {
-		padding: 32px 32px 80px;
-	}
-}
-
-@media (max-width: 860px) {
+	/* --- topbar: reveal the compact icon buttons, collapse the actions --- */
+	/* brand shrinks to its content so the nav hamburger (first child of __main)
+	   sits just left of the search field. */
 	.docgen-topbar {
-		grid-template-columns: 1fr;
-	}
-	.docgen-topbar__brand {
-		display: none;
+		grid-template-columns: auto minmax(0, 1fr);
 	}
 	.docgen-topbar__main {
-		padding: 0 12px;
+		gap: 8px;
+		padding: 0 10px;
 	}
 	.docgen-search-trigger {
 		min-width: 0;
 		flex: 1;
 	}
-}
-
-@media (max-width: 768px) {
-	.docgen-sidebar-toggle {
+	.docgen-sidebar-toggle,
+	.docgen-rail-toggle,
+	.docgen-overflow-toggle {
 		display: inline-grid;
 		place-items: center;
 	}
+	/* the layout button strip + theme toggle relocate into a dropdown panel
+	   under the ⋯ button (no markup duplication — just position + visibility). */
+	.docgen-topbar__actions {
+		position: absolute;
+		top: calc(100% + 6px);
+		right: 8px;
+		z-index: 45;
+		display: none;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 10px;
+		width: max-content;
+		min-width: 176px;
+		padding: 10px;
+		border: 1px solid var(--border-strong);
+		border-radius: var(--r-md);
+		background: var(--bg-elev);
+		box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
+	}
+	.docgen-topbar__actions.is-menu-open {
+		display: flex;
+	}
+	.docgen-btn-strip {
+		align-self: stretch;
+	}
+	/* the desktop rail-collapse toggle is meaningless in compact (the rail is a
+	   drawer), so drop it from the menu. */
+	.docgen-ctl--rail {
+		display: none;
+	}
+
+	/* --- both rails become off-canvas drawers --- */
 	.docgen-layout {
 		grid-template-columns: 1fr;
 	}
-	/* sidebar collapses to an off-canvas drawer here, so the inline resize
-	   handle no longer applies */
+	/* the sidebar is a drawer now, so the inline drag handle no longer applies */
 	.docgen-rail-resizer {
 		display: none;
 	}
 	.docgen-content {
-		padding: 24px 18px 64px;
+		padding: 32px 28px 80px;
 	}
+
+	/* left drawer (doc tree) */
 	.docgen-sidebar {
 		position: fixed;
 		inset: var(--topbar-height) auto 0 0;
@@ -1659,22 +1714,61 @@ kbd,
 		transform: none;
 		box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
 	}
-	.docgen-sidebar-backdrop {
+
+	/* right drawer (On this page / info / backlinks) */
+	.docgen-rail {
+		position: fixed;
+		inset: var(--topbar-height) 0 0 auto;
+		width: min(86vw, 340px);
+		max-height: none;
+		margin: 0;
+		padding: 20px 18px;
+		transform: translateX(100%);
+		transition: transform 0.2s ease;
+		z-index: 40;
+		background: var(--bg-elev);
+		border-left: 1px solid var(--border);
+		overflow-y: auto;
+	}
+	.docgen-rail.is-open {
+		transform: none;
+		box-shadow: -16px 0 48px rgba(0, 0, 0, 0.18);
+	}
+
+	/* one shared backdrop style for whichever drawer is open */
+	.docgen-sidebar-backdrop,
+	.docgen-rail-backdrop {
 		display: block;
 		position: fixed;
 		inset: var(--topbar-height) 0 0 0;
 		z-index: 35;
 		background: rgba(0, 0, 0, 0.4);
 	}
+
+	/* roomier touch targets in the tree */
 	.docgen-tree__summary,
 	.docgen-tree__link {
 		min-height: 36px;
 	}
-	/* Let wide tables establish their own scroll region instead of forcing
-	   whole-page horizontal overflow on narrow viewports. */
-	.docgen-doc-content table {
-		display: block;
-		overflow-x: auto;
+}
+
+@media (max-width: 600px) {
+	/* phone: reclaim the brand column for content, tighten padding + headings */
+	.docgen-topbar {
+		grid-template-columns: 1fr;
+	}
+	.docgen-topbar__brand {
+		display: none;
+	}
+	.docgen-content {
+		padding: 24px 16px 64px;
+	}
+	.docgen-doc-title,
+	.docgen-doc-content h1 {
+		font-size: 30px;
+	}
+	.docgen-home__title {
+		font-size: 32px;
 	}
 }
 

@@ -543,20 +543,25 @@ mod tests {
     }
 
     #[test]
-    fn shared_css_mobile_tables_scroll_in_place() {
-        // Wide tables must not force whole-page horizontal overflow on mobile.
+    fn shared_css_tables_scroll_in_a_wrapper() {
+        // Wide tables scroll inside a `.docgen-table-scroll` wrapper (emitted by
+        // tablepass) with content-sized columns — never forcing whole-page
+        // horizontal overflow, on desktop or mobile.
         let s = shared_css();
-        assert!(s.contains(".docgen-doc-content table"));
+        assert!(s.contains(".docgen-table-scroll"));
         assert!(s.contains("overflow-x: auto"));
+        assert!(s.contains("table-layout: auto"));
     }
 
     #[test]
-    fn shared_css_responsive_has_mobile_drawer() {
+    fn shared_css_responsive_has_both_drawers() {
         let s = shared_css();
         assert!(s.contains("@media"));
-        assert!(s.contains("max-width: 768px"));
-        // the off-canvas drawer + open state
+        // single compact flip at 1100px drives both drawers + the overflow menu
+        assert!(s.contains("max-width: 1100px"));
+        // off-canvas drawers: left doc tree + right page-info rail
         assert!(s.contains(".docgen-sidebar.is-open"));
+        assert!(s.contains(".docgen-rail.is-open"));
     }
 
     #[test]

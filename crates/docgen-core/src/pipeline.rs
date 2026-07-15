@@ -187,6 +187,9 @@ pub fn render_block_markdown(
     if config.features.mermaid {
         crate::mermaidpass::transform_mermaid(root);
     }
+    // Wrap tables in a horizontal-scroll container (also inside directive/include
+    // bodies, so a table transcluded via `:include` scrolls like a top-level one).
+    crate::tablepass::transform_tables(root, &arena);
     let inner_html = format_ast(root, &options);
     let render_inner = |m: &str| {
         render_block_markdown(
@@ -308,6 +311,9 @@ pub fn render_doc(
     } else {
         0
     };
+    // Wrap every table in a horizontal-scroll container so wide tables scroll
+    // instead of squishing their columns (desktop and mobile alike).
+    crate::tablepass::transform_tables(root, &arena);
     let formatted = format_ast(root, &options);
     // Stamp the anchorized ids onto the `<h2>`/`<h3>` tags so the rail TOC +
     // scroll-spy can target them via `h2[id]` / `h3[id]`.

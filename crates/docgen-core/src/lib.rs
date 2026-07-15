@@ -14,6 +14,7 @@ pub mod mermaidpass;
 pub mod model;
 pub mod pipeline;
 pub mod search;
+pub mod tablepass;
 pub mod tree;
 pub mod util;
 pub mod wikilink;

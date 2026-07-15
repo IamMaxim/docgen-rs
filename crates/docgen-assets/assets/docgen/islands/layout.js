@@ -91,6 +91,11 @@
 
     if (railBtn) {
       railBtn.addEventListener('click', function () {
+        // In compact (≤1100px) the rail is an off-canvas drawer driven by Alpine
+        // (`railOpen`); this desktop persisted-collapse toggle must not fire there
+        // or it would fight the drawer state. The button is also hidden by CSS in
+        // compact, but guard the handler too for safety.
+        if (window.matchMedia('(max-width: 1100px)').matches) return;
         railCollapsed = !railCollapsed;
         writeBool(RAIL_KEY, railCollapsed);
         applyRail();
