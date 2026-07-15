@@ -1,0 +1,15 @@
+# Configuration for docgen's own documentation site.
+# Deployed as a GitHub *project* page at https://iammaxim.github.io/docgen-rs/,
+# so everything lives under the /docgen-rs/ sub-path.
+title = "docgen"
+base = "/docgen-rs"
+
+# Every feature on — this site is also a live demo, so it must exercise them all.
+[features]
+graph = true
+math = true
+mermaid = true
+search = true
+
+[components]
+dir = "components"

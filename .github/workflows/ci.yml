@@ -24,3 +24,25 @@ jobs:
         run: cargo clippy --workspace --all-targets
       - name: Test
         run: cargo test --workspace --locked
+
+  docs:
+    name: docs site builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build docs site
+        run: cargo run -p docgen-rs -- build website
+      - name: Fail on broken wikilinks
+        # docgen renders an unresolved [[link]] as a marked span rather than
+        # failing the build; catch those so a typo'd link can't ship. Match the
+        # exact broken-span attribute, not the bare class name (which also
+        # appears in the stylesheet, the search index, and prose that documents
+        # the marker).
+        run: |
+          if grep -rl 'class="docgen-wikilink docgen-wikilink--broken"' website/dist; then
+            echo "::error::Broken wikilink(s) found in the built docs site (files listed above)."
+            exit 1
+          fi
+          echo "No broken wikilinks."

@@ -1,0 +1,60 @@
+name: pages
+
+# Build the docgen documentation site (in website/) with docgen itself, from
+# workspace source, and publish it to GitHub Pages. The site is a project page
+# at https://iammaxim.github.io/docgen-rs/, so website/docgen.toml sets
+# base = "/docgen-rs".
+#
+# One-time setup by the repo owner: Settings -> Pages -> Source = "GitHub Actions".
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "website/**"
+      - "crates/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never cancel an in-flight deploy; queue instead.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the per-doc git-history timeline is complete.
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build site
+        run: cargo run -p docgen-rs -- build website
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
+
+  deploy:
+    name: deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
