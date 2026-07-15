@@ -185,7 +185,11 @@ kbd,
 .docgen-topbar {
 	position: sticky;
 	top: 0;
-	z-index: 30;
+	/* Above the mobile drawers (z-index 40) and their backdrop (35) so the
+	   drawers slide UNDER the topbar. On phones with an auto-hiding browser
+	   toolbar this keeps the topbar painted over the drawer as the viewport
+	   resizes, instead of the drawer riding up over the topbar. */
+	z-index: 60;
 	grid-column: 1 / -1;
 	display: grid;
 	grid-template-columns: var(--left-rail-width) minmax(0, 1fr);
@@ -1699,16 +1703,32 @@ kbd,
 		padding: 32px 28px 80px;
 	}
 
-	/* left drawer (doc tree) */
-	.docgen-sidebar {
+	/* Both drawers anchor at the true viewport top (top:0) and take the full
+	   dynamic viewport height (100dvh, tracking a phone's auto-hiding toolbar),
+	   sliding UNDER the higher-z topbar. Their content clears the topbar with a
+	   padding-top, so the first row isn't hidden behind it. Anchoring at 0 with
+	   an explicit height — rather than top:var(--topbar-height)+bottom:0 — is
+	   what makes them reliably full-height (the rail has no base `height`, so the
+	   old top/bottom pair let it collapse to content height) and immune to the
+	   topbar shifting during a mobile toolbar show/hide. */
+	.docgen-sidebar,
+	.docgen-rail {
 		position: fixed;
-		inset: var(--topbar-height) auto 0 0;
-		width: min(86vw, 320px);
-		transform: translateX(-100%);
-		transition: transform 0.2s ease;
+		top: 0;
+		height: 100vh;
+		height: 100dvh;
 		z-index: 40;
 		background: var(--bg-elev);
+		transition: transform 0.2s ease;
+	}
+
+	/* left drawer (doc tree) */
+	.docgen-sidebar {
+		left: 0;
+		width: min(86vw, 320px);
+		padding-top: calc(var(--topbar-height) + 16px);
 		border-right: 1px solid var(--border);
+		transform: translateX(-100%);
 	}
 	.docgen-sidebar.is-open {
 		transform: none;
@@ -1717,30 +1737,29 @@ kbd,
 
 	/* right drawer (On this page / info / backlinks) */
 	.docgen-rail {
-		position: fixed;
-		inset: var(--topbar-height) 0 0 auto;
+		right: 0;
 		width: min(86vw, 340px);
 		max-height: none;
 		margin: 0;
-		padding: 20px 18px;
-		transform: translateX(100%);
-		transition: transform 0.2s ease;
-		z-index: 40;
-		background: var(--bg-elev);
+		padding: calc(var(--topbar-height) + 20px) 18px 20px;
 		border-left: 1px solid var(--border);
 		overflow-y: auto;
+		transform: translateX(100%);
 	}
 	.docgen-rail.is-open {
 		transform: none;
 		box-shadow: -16px 0 48px rgba(0, 0, 0, 0.18);
 	}
 
-	/* one shared backdrop style for whichever drawer is open */
+	/* one shared backdrop style for whichever drawer is open — full viewport,
+	   under the topbar (which paints over its top edge). */
 	.docgen-sidebar-backdrop,
 	.docgen-rail-backdrop {
 		display: block;
 		position: fixed;
-		inset: var(--topbar-height) 0 0 0;
+		inset: 0;
+		height: 100vh;
+		height: 100dvh;
 		z-index: 35;
 		background: rgba(0, 0, 0, 0.4);
 	}
