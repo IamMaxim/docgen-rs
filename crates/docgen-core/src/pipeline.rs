@@ -12,6 +12,11 @@ use crate::wikilink::{transform_wikilinks, SlugSet};
 /// Docs-relative path → frontmatter-stripped body, for `:include` targets.
 pub type Partials = std::collections::BTreeMap<String, String>;
 
+/// Docs-relative path → raw PlantUML source, for `:::plantuml{src=...}` targets.
+/// Preloaded by the build (analogous to [`Partials`]) so the render pipeline
+/// itself performs no filesystem reads.
+pub type Diagrams = std::collections::BTreeMap<String, String>;
+
 /// A doc is an include-only *partial* (never its own page) when its filename
 /// starts with `_`. Only the basename matters — a `_dir/` directory does not
 /// hide the pages inside it.
@@ -170,6 +175,7 @@ pub fn render_block_markdown(
     base_dir: &str,
     stack: &[String],
     asset_urls: Option<&dyn crate::asseturl::AssetUrlResolver>,
+    plantuml: Option<&crate::plantuml::PlantumlSupport>,
 ) -> String {
     let (rewritten, instances) = crate::directivepass::extract(md);
     let options = comrak_options();
@@ -193,12 +199,20 @@ pub fn render_block_markdown(
     let inner_html = format_ast(root, &options);
     let render_inner = |m: &str| {
         render_block_markdown(
-            m, config, registry, slugs, partials, base_dir, stack, asset_urls,
+            m, config, registry, slugs, partials, base_dir, stack, asset_urls, plantuml,
         )
     };
     let resolve_include = |src: &str| {
         resolve_include_src(
-            src, base_dir, partials, stack, config, registry, slugs, asset_urls,
+            src, base_dir, partials, stack, config, registry, slugs, asset_urls, plantuml,
+        )
+    };
+    let render_plantuml = |idx: usize, inst: &crate::directivepass::DirectiveInstance| {
+        crate::plantuml::render_directive(
+            inst,
+            base_dir,
+            plantuml,
+            &format!("docgen-plantuml-{idx}"),
         )
     };
     let (out, _used) = crate::directivepass::substitute(
@@ -207,6 +221,7 @@ pub fn render_block_markdown(
         registry,
         &render_inner,
         &resolve_include,
+        &render_plantuml,
     );
     out
 }
@@ -225,6 +240,7 @@ fn resolve_include_src(
     registry: &docgen_components::Registry,
     slugs: &SlugSet,
     asset_urls: Option<&dyn crate::asseturl::AssetUrlResolver>,
+    plantuml: Option<&crate::plantuml::PlantumlSupport>,
 ) -> String {
     let key = match resolve_include_key(base_dir, src) {
         Some(k) => k,
@@ -240,7 +256,7 @@ fn resolve_include_src(
     next.push(key.clone());
     let child_dir = key.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
     render_block_markdown(
-        body, config, registry, slugs, partials, child_dir, &next, asset_urls,
+        body, config, registry, slugs, partials, child_dir, &next, asset_urls, plantuml,
     )
 }
 
@@ -265,6 +281,7 @@ pub struct RenderedDoc {
 /// single source of truth the static build ([`render_docs`]) and the dev server's
 /// editor preview both call, so a doc previewed in the editor renders byte-for-byte
 /// like its published page.
+#[allow(clippy::too_many_arguments)]
 pub fn render_doc(
     p: &PreparedDoc,
     config: &docgen_config::SiteConfig,
@@ -272,6 +289,7 @@ pub fn render_doc(
     slugs: &SlugSet,
     partials: &Partials,
     asset_urls: Option<&dyn crate::asseturl::AssetUrlResolver>,
+    plantuml: Option<&crate::plantuml::PlantumlSupport>,
 ) -> RenderedDoc {
     let options = comrak_options();
 
@@ -326,12 +344,20 @@ pub fn render_doc(
     let stack: Vec<String> = Vec::new();
     let render_inner = |m: &str| {
         render_block_markdown(
-            m, config, registry, slugs, partials, base_dir, &stack, asset_urls,
+            m, config, registry, slugs, partials, base_dir, &stack, asset_urls, plantuml,
         )
     };
     let resolve_include = |src: &str| {
         resolve_include_src(
-            src, base_dir, partials, &stack, config, registry, slugs, asset_urls,
+            src, base_dir, partials, &stack, config, registry, slugs, asset_urls, plantuml,
+        )
+    };
+    let render_plantuml = |idx: usize, inst: &crate::directivepass::DirectiveInstance| {
+        crate::plantuml::render_directive(
+            inst,
+            base_dir,
+            plantuml,
+            &format!("docgen-plantuml-{idx}"),
         )
     };
     let (body_html, used) = crate::directivepass::substitute(
@@ -340,6 +366,7 @@ pub fn render_doc(
         registry,
         &render_inner,
         &resolve_include,
+        &render_plantuml,
     );
 
     RenderedDoc {
@@ -361,12 +388,14 @@ pub fn render_doc(
 
 /// Pass 2: build the slug set, run the wikilink pass + syntect highlight per doc,
 /// assemble the link graph + search index. Input order preserved.
+#[allow(clippy::too_many_arguments)]
 pub fn render_docs(
     prepared: Vec<PreparedDoc>,
     partials: &Partials,
     config: &docgen_config::SiteConfig,
     registry: &docgen_components::Registry,
     asset_urls: Option<&dyn crate::asseturl::AssetUrlResolver>,
+    plantuml: Option<&crate::plantuml::PlantumlSupport>,
 ) -> SiteBuild {
     let slugs: SlugSet = prepared.iter().map(|p| p.slug.clone()).collect();
     let doc_meta: Vec<(String, String, Option<String>)> = prepared
@@ -380,7 +409,7 @@ pub fn render_docs(
 
     for p in &prepared {
         // Same per-doc pipeline the editor preview runs (single source of truth).
-        let rendered = render_doc(p, config, registry, &slugs, partials, asset_urls);
+        let rendered = render_doc(p, config, registry, &slugs, partials, asset_urls, plantuml);
         search.push(SearchEntry {
             slug: p.slug.clone(),
             title: p.title.clone(),
@@ -483,8 +512,16 @@ mod tests {
         let cfg = docgen_config::SiteConfig::default();
         let reg = docgen_components::Registry::empty();
 
-        let site = render_docs(prepared.clone(), &Partials::new(), &cfg, &reg, None);
-        let single = render_doc(&prepared[1], &cfg, &reg, &slugs, &Partials::new(), None);
+        let site = render_docs(prepared.clone(), &Partials::new(), &cfg, &reg, None, None);
+        let single = render_doc(
+            &prepared[1],
+            &cfg,
+            &reg,
+            &slugs,
+            &Partials::new(),
+            None,
+            None,
+        );
 
         assert_eq!(single.doc.body_html, site.docs[1].body_html);
         assert_eq!(single.doc.has_mermaid, site.docs[1].has_mermaid);
@@ -510,6 +547,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
+            None,
             None,
         );
 
@@ -562,6 +600,7 @@ mod tests {
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
             None,
+            None,
         );
         assert!(site.docs[0].body_html.contains("katex"));
         assert!(site.docs[0].has_math);
@@ -578,6 +617,7 @@ mod tests {
             &Partials::new(),
             &cfg,
             &docgen_components::Registry::empty(),
+            None,
             None,
         );
         assert!(!site.docs[0].has_math);
@@ -598,6 +638,7 @@ mod tests {
             &cfg,
             &docgen_components::Registry::empty(),
             None,
+            None,
         );
         assert!(!site.docs[0].has_mermaid);
         assert!(!site.any_mermaid);
@@ -614,6 +655,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
+            None,
             None,
         );
         assert!(site.docs[0].has_mermaid && site.docs[0].body_html.contains("docgen-mermaid"));
@@ -632,6 +674,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
+            None,
             None,
         );
         let gd = site.graph_data(crate::graphlayout::LayoutParams::default());
@@ -662,6 +705,7 @@ mod tests {
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
             None,
+            None,
         );
         assert!(!site.any_mermaid);
     }
@@ -685,6 +729,7 @@ mod tests {
             &docgen_config::SiteConfig::default(),
             &reg,
             None,
+            None,
         );
         let h = &site.docs[0].body_html;
         assert!(h.contains("docgen-callout--warning"));
@@ -701,6 +746,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
+            None,
             None,
         );
         assert!(site.docs[0].body_html.contains("docgen-directive-error"));
@@ -729,6 +775,7 @@ mod tests {
             &docgen_config::SiteConfig::default(),
             &reg,
             None,
+            None,
         );
         assert!(site.docs[0].body_html.contains(r#"href="/guide""#));
     }
@@ -755,6 +802,7 @@ mod tests {
             &docgen_config::SiteConfig::default(),
             &reg,
             None,
+            None,
         );
         let h = &site.docs[0].body_html;
         // The resolved wikilink inside the directive body is a real anchor with the
@@ -777,6 +825,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
+            None,
             None,
         );
 

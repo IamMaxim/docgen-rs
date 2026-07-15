@@ -1322,6 +1322,58 @@ kbd,
 	white-space: pre-wrap;
 }
 
+/* ============================== plantuml ============================== */
+/* Build-time PlantUML: the SVG is inlined into the page. The container owns a
+   horizontal-scroll region (diagrams can be wider than the reading column) and a
+   corner label, mirroring the mermaid container. */
+.docgen-plantuml {
+	position: relative;
+	margin: 16px 0;
+	padding: 16px;
+	border: 1px solid var(--border);
+	border-radius: var(--r-md);
+	background: var(--surface);
+	overflow-x: auto;
+}
+.docgen-plantuml::after {
+	content: 'diagram · plantuml';
+	position: absolute;
+	top: 8px;
+	right: 12px;
+	font-family: var(--font-mono);
+	font-size: 9.5px;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--text-mute);
+	pointer-events: none;
+}
+.docgen-plantuml svg {
+	max-width: 100%;
+	height: auto;
+}
+/* Detailed, visible failure block (server unreachable, syntax error, missing
+   file, feature off). A full block — not the inline directive-error pill — so the
+   detail text is readable. */
+.docgen-plantuml-error {
+	margin: 16px 0;
+	padding: 12px 14px;
+	font-family: var(--font-mono);
+	font-size: 0.9em;
+	color: var(--text-error);
+	background: var(--diff-removed-bg);
+	border: 1px solid var(--diff-removed);
+	border-radius: var(--r-md);
+}
+.docgen-plantuml-error__id {
+	color: var(--text-mute);
+	margin-right: 0.4em;
+}
+.docgen-plantuml-error__reason {
+	display: block;
+	margin-top: 4px;
+	white-space: pre-wrap;
+}
+
 /* =============================== graph =============================== */
 .docgen-graph-page h1 {
 	font-size: 38px;

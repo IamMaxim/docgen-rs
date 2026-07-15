@@ -15,6 +15,7 @@ docgen-core = { workspace = true }
 docgen-diff = { workspace = true }
 docgen-assets = { workspace = true }
 docgen-render = { workspace = true }
+docgen-plantuml = { workspace = true }
 docgen-s3 = { workspace = true, optional = true }
 serde_json = "1"
 

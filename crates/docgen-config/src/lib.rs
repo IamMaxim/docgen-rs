@@ -16,6 +16,9 @@ pub struct Features {
     pub math: bool,
     /// Allow mermaid diagrams + lazy island.
     pub mermaid: bool,
+    /// Render PlantUML diagrams (`:::plantuml`) at build time via an external
+    /// server. Inert (zero server contact) unless a diagram is actually present.
+    pub plantuml: bool,
     /// Emit the search index + search client.
     pub search: bool,
 }
@@ -26,6 +29,7 @@ impl Default for Features {
             graph: true,
             math: true,
             mermaid: true,
+            plantuml: true,
             search: true,
         }
     }
@@ -46,6 +50,28 @@ impl Default for ComponentsConfig {
         }
     }
 }
+
+/// `[plantuml]` section — settings for build-time PlantUML rendering. Absent =
+/// all defaults (server `http://localhost:8080`). The server URL is also
+/// overridable by the `DOCGEN_PLANTUML_SERVER` env var (which wins over this).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct PlantumlConfig {
+    /// Base URL of the PlantUML server (SVG endpoint is `{server}/svg/{encoded}`).
+    pub server: String,
+}
+
+impl Default for PlantumlConfig {
+    fn default() -> Self {
+        Self {
+            server: DEFAULT_PLANTUML_SERVER.to_string(),
+        }
+    }
+}
+
+/// The default PlantUML server URL — matches the port `docgen plantuml` binds and
+/// the `plantuml/plantuml-server:jetty` image's root SVG context.
+pub const DEFAULT_PLANTUML_SERVER: &str = "http://localhost:8080";
 
 /// `[s3]` section — optional S3-compatible asset offload. Absent = feature off.
 /// Non-secret settings only; credentials come from the environment.
@@ -82,8 +108,28 @@ pub struct SiteConfig {
     pub base: String,
     pub features: Features,
     pub components: ComponentsConfig,
+    pub plantuml: PlantumlConfig,
     /// Optional S3 asset offload. `None` = disabled (local copy).
     pub s3: Option<S3Config>,
+}
+
+/// Resolve the effective PlantUML server URL, applying precedence (first match
+/// wins): `DOCGEN_PLANTUML_SERVER` env var → `docgen.toml` `[plantuml] server`
+/// → [`DEFAULT_PLANTUML_SERVER`]. A present-but-empty env var is ignored (falls
+/// through to config). The returned URL has any trailing slash trimmed.
+pub fn resolve_plantuml_server(config_server: &str) -> String {
+    resolve_plantuml_server_from(config_server, std::env::var("DOCGEN_PLANTUML_SERVER").ok())
+}
+
+/// Pure core of [`resolve_plantuml_server`] — env value passed in so precedence
+/// is testable without mutating process-global environment.
+fn resolve_plantuml_server_from(config_server: &str, env: Option<String>) -> String {
+    let chosen = match env {
+        Some(v) if !v.trim().is_empty() => v,
+        _ if !config_server.trim().is_empty() => config_server.to_string(),
+        _ => DEFAULT_PLANTUML_SERVER.to_string(),
+    };
+    chosen.trim().trim_end_matches('/').to_string()
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -202,7 +248,46 @@ mod tests {
         assert_eq!(c.title, None);
         assert_eq!(c.base, "");
         assert!(c.features.graph && c.features.math && c.features.mermaid && c.features.search);
+        assert!(c.features.plantuml);
         assert_eq!(c.components.dir, "components");
+        assert_eq!(c.plantuml.server, DEFAULT_PLANTUML_SERVER);
+    }
+
+    #[test]
+    fn parses_plantuml_section_and_feature_toggle() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("docgen.toml"),
+            "[features]\nplantuml = false\n[plantuml]\nserver = \"http://uml.local:9000/\"\n",
+        )
+        .unwrap();
+        let c = load(dir.path()).unwrap();
+        assert!(!c.features.plantuml);
+        assert_eq!(c.plantuml.server, "http://uml.local:9000/");
+    }
+
+    #[test]
+    fn resolve_plantuml_server_precedence() {
+        // 1. env var wins over config (and is trimmed of a trailing slash).
+        assert_eq!(
+            resolve_plantuml_server_from("http://from-toml", Some("http://env:8080/".into())),
+            "http://env:8080"
+        );
+        // 1b. present-but-empty env var falls through to config.
+        assert_eq!(
+            resolve_plantuml_server_from("http://from-toml", Some("   ".into())),
+            "http://from-toml"
+        );
+        // 2. config used when env absent.
+        assert_eq!(
+            resolve_plantuml_server_from("http://from-toml/", None),
+            "http://from-toml"
+        );
+        // 3. default when both empty.
+        assert_eq!(
+            resolve_plantuml_server_from("", None),
+            DEFAULT_PLANTUML_SERVER
+        );
     }
 
     #[test]

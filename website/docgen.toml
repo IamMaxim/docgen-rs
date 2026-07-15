@@ -10,6 +10,9 @@ graph = true
 math = true
 mermaid = true
 search = true
+# The docs describe PlantUML via fenced examples (no live `:::plantuml`
+# directives), so the CI build needs no PlantUML server.
+plantuml = true
 
 [components]
 dir = "components"

@@ -30,6 +30,7 @@ docgen-diff = { workspace = true }
 docgen-config = { workspace = true }
 docgen-components = { workspace = true }
 docgen-render = { workspace = true }
+docgen-plantuml = { workspace = true }
 
 [dev-dependencies]
 http-body-util = "0.1"

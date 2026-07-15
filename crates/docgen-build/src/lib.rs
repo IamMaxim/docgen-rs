@@ -413,7 +413,42 @@ pub(crate) fn build_site_inner(
     #[cfg(not(feature = "s3"))]
     let resolver: Option<&dyn docgen_core::asseturl::AssetUrlResolver> = None;
 
-    let site = render_docs(prepared, &partials, &config, &registry, resolver);
+    // --- PlantUML build-time rendering ------------------------------------
+    // Load `.puml` sources (docs-relative → source), and, when the feature is on,
+    // construct the networked renderer pointed at the resolved server. `support`
+    // is `None` when the feature is off, which makes every `:::plantuml` emit a
+    // "disabled" notice instead of contacting a server.
+    let diagrams = docgen_core::discover::discover_diagrams(&docs_dir)
+        .with_context(|| format!("loading PlantUML sources in {}", docs_dir.display()))?;
+    let plantuml_server = if config.features.plantuml {
+        Some(docgen_config::resolve_plantuml_server(
+            &config.plantuml.server,
+        ))
+    } else {
+        None
+    };
+    // Render in a scope so the renderer/support borrows of `diagrams` end before
+    // `diagrams` is (optionally) moved into the captured build below.
+    let site = {
+        let plantuml_renderer = plantuml_server.as_ref().map(|server| {
+            docgen_plantuml::HttpRenderer::new(server.clone(), opts.project_root.join(".docgen"))
+        });
+        let plantuml_support =
+            plantuml_renderer
+                .as_ref()
+                .map(|r| docgen_core::plantuml::PlantumlSupport {
+                    diagrams: &diagrams,
+                    renderer: Some(r as &dyn docgen_core::PlantumlRenderer),
+                });
+        render_docs(
+            prepared,
+            &partials,
+            &config,
+            &registry,
+            resolver,
+            plantuml_support.as_ref(),
+        )
+    };
     t.mark("render_docs");
     let tree = build_tree(&site.docs);
     t.mark("build_tree");
@@ -751,6 +786,8 @@ pub(crate) fn build_site_inner(
     // already computed — no second render pass.
     let captured = if capture {
         Some(crate::incremental::CapturedBuild {
+            diagrams,
+            plantuml_server,
             config,
             registry,
             partials,
