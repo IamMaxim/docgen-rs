@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/docgen-config", "crates/docgen-components", "crates/docgen-core", "crates/docgen-diff", "crates/docgen-assets", "crates/docgen-render", "crates/docgen-build", "crates/docgen-server", "crates/docgen-init", "crates/docgen", "crates/docgen-s3", "crates/docgen-plantuml"]
+members = ["crates/docgen-config", "crates/docgen-components", "crates/docgen-core", "crates/docgen-diff", "crates/docgen-assets", "crates/docgen-render", "crates/docgen-build", "crates/docgen-server", "crates/docgen-init", "crates/docgen", "crates/docgen-s3", "crates/docgen-plantuml", "crates/docgen-bases"]
 
 [workspace.package]
 edition = "2021"
@@ -23,3 +23,4 @@ docgen-server = { version = "0.5.0", path = "crates/docgen-server" }
 docgen-init = { version = "0.5.0", path = "crates/docgen-init" }
 docgen-s3 = { version = "0.5.0", path = "crates/docgen-s3" }
 docgen-plantuml = { version = "0.5.0", path = "crates/docgen-plantuml" }
+docgen-bases = { version = "0.5.0", path = "crates/docgen-bases" }
