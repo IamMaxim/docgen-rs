@@ -665,12 +665,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "docgen-bases"
+version = "0.5.0"
+dependencies = [
+ "serde",
+ "serde_yml",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "docgen-build"
 version = "0.5.0"
 dependencies = [
  "anyhow",
  "chrono",
  "docgen-assets",
+ "docgen-bases",
  "docgen-components",
  "docgen-config",
  "docgen-core",
@@ -708,6 +718,7 @@ name = "docgen-core"
 version = "0.5.0"
 dependencies = [
  "comrak",
+ "docgen-bases",
  "docgen-components",
  "docgen-config",
  "katex",

@@ -101,6 +101,11 @@ pub fn discover_assets(root: &Path) -> std::io::Result<Vec<AssetFile>> {
         if path.extension().and_then(|e| e.to_str()) == Some("puml") {
             continue;
         }
+        // Obsidian `.base` files are build inputs (rendered to pages / inline
+        // views), not published assets — never copy them into the site.
+        if path.extension().and_then(|e| e.to_str()) == Some("base") {
+            continue;
+        }
         // Skip hidden files (e.g. `.DS_Store`) even though they aren't dirs.
         if path
             .file_name()
@@ -148,6 +153,50 @@ pub fn discover_diagrams(root: &Path) -> std::io::Result<crate::pipeline::Diagra
             .to_string_lossy()
             .replace('\\', "/");
         out.insert(rel, std::fs::read_to_string(path)?);
+    }
+    Ok(out)
+}
+
+/// An Obsidian `.base` file discovered under the docs root.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BaseFileInput {
+    /// Path relative to the docs root, `/`-separated, e.g. `Bases/Books.base`.
+    pub rel_path: String,
+    /// The page slug: `rel_path` with the `.base` extension removed.
+    pub slug: String,
+    /// The raw YAML source.
+    pub source: String,
+}
+
+/// Walk `root` and load every `.base` file. These become pages (and feed the
+/// embedded-block corpus). Shares the prune rules of [`discover_docs`]; `.base`
+/// files are excluded from [`discover_assets`] (build inputs, not published).
+pub fn discover_bases(root: &Path) -> std::io::Result<Vec<BaseFileInput>> {
+    let mut out = Vec::new();
+    let walker = WalkDir::new(root)
+        .sort_by_file_name()
+        .into_iter()
+        .filter_entry(is_kept);
+    for entry in walker {
+        let entry = entry.map_err(io::Error::from)?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("base") {
+            continue;
+        }
+        let rel = path
+            .strip_prefix(root)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        let slug = rel.strip_suffix(".base").unwrap_or(&rel).to_string();
+        out.push(BaseFileInput {
+            rel_path: rel,
+            slug,
+            source: std::fs::read_to_string(path)?,
+        });
     }
     Ok(out)
 }
@@ -232,6 +281,30 @@ mod tests {
         );
 
         // Assets: the .puml is NOT copied (build input), only the real asset is.
+        let assets = discover_assets(&dir).unwrap();
+        let rels: Vec<&str> = assets.iter().map(|a| a.rel_path.as_str()).collect();
+        assert_eq!(rels, vec!["logo.svg"]);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn discover_bases_loads_base_and_assets_excludes_them() {
+        let dir = std::env::temp_dir().join(format!("docgen_base_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("Bases")).unwrap();
+        std::fs::write(dir.join("index.md"), "# Home\n").unwrap();
+        std::fs::write(dir.join("logo.svg"), "<svg/>").unwrap();
+        std::fs::write(dir.join("Bases/Books.base"), "views:\n  - type: table\n").unwrap();
+
+        // Bases: only the .base, with slug = rel_path minus extension.
+        let bases = discover_bases(&dir).unwrap();
+        assert_eq!(bases.len(), 1);
+        assert_eq!(bases[0].rel_path, "Bases/Books.base");
+        assert_eq!(bases[0].slug, "Bases/Books");
+        assert!(bases[0].source.contains("type: table"));
+
+        // Assets: the .base is NOT copied (build input), only the real asset is.
         let assets = discover_assets(&dir).unwrap();
         let rels: Vec<&str> = assets.iter().map(|a| a.rel_path.as_str()).collect();
         assert_eq!(rels, vec!["logo.svg"]);

@@ -1,0 +1,17 @@
+[package]
+name = "docgen-bases"
+description = "Faithful Obsidian Bases (.base) engine + static HTML renderer for docgen, the Cargo-only static documentation-site generator"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords = ["obsidian", "bases", "documentation", "static-site", "markdown"]
+categories = ["template-engine", "parsing"]
+
+[dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+serde_yml = "0.0.13"
+thiserror = "2.0.18"
+
+[dev-dependencies]

@@ -18,6 +18,7 @@ pub fn assemble(raw: RawDoc) -> Doc {
         &docgen_components::Registry::empty(),
         None,
         None,
+        None,
     )
     .docs
     .pop()

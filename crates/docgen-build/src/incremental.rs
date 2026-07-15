@@ -46,6 +46,22 @@ pub(crate) struct CapturedBuild {
     /// Resolved PlantUML server URL, `Some` iff the feature is on. Reconstructs the
     /// renderer for incremental re-renders without persisting the ureq agent.
     pub plantuml_server: Option<String>,
+    /// The bases corpus (notes queryable by `.base` files / ```base blocks), `Some`
+    /// iff the feature is on. Passed to incremental re-renders so embedded base
+    /// blocks render; a frontmatter change (which would change it) forces a full
+    /// rebuild, so the cached copy is always current for the fast path.
+    pub bases_corpus: Option<docgen_bases::Corpus>,
+    /// Discovered `.base` files. A change here (add/edit/remove) forces a full
+    /// rebuild — base pages and embedded blocks are cross-doc.
+    pub base_inputs: Vec<docgen_core::discover::BaseFileInput>,
+    /// Rendered `.base` pages, kept so the incremental page count stays accurate
+    /// (they persist on disk across incremental rebuilds, which never touch them).
+    pub base_pages: Vec<Doc>,
+    /// Whether the site has any base consumer (a `.base` page or an embedded
+    /// ```base block). When true, a base queries the whole corpus (frontmatter +
+    /// body tags/links), so any content edit invalidates it — the incremental fast
+    /// path is disabled and a full rebuild is taken instead.
+    pub has_base_consumers: bool,
     pub prepared: Vec<PreparedDoc>,
     pub docs: Vec<Doc>,
     pub outbound: BTreeMap<String, Vec<String>>,
@@ -178,6 +194,17 @@ impl DevState {
         if diagrams_new != self.cap.diagrams {
             return Ok(None);
         }
+        // A `.base` file add/edit/remove affects base pages and any ```base block
+        // (cross-doc). Reload and defer to a full rebuild if the set changed.
+        if self.cap.config.features.bases {
+            let bases_new = match docgen_core::discover::discover_bases(&docs_dir) {
+                Ok(b) => b,
+                Err(_) => return Ok(None),
+            };
+            if bases_new != self.cap.base_inputs {
+                return Ok(None);
+            }
+        }
         // The doc set + order must match exactly: an add/remove/rename/reorder
         // changes the tree, sections, recent list, and graph node order.
         if prepared_new.len() != self.cap.prepared.len() {
@@ -193,9 +220,24 @@ impl DevState {
             if new.title != old.title || new.description != old.description {
                 return Ok(None);
             }
+            // A frontmatter change alters the bases corpus (note properties), which
+            // any `.base` page or ```base block queries — cross-doc, so defer to a
+            // full rebuild. (Only matters when the feature is on.)
+            if self.cap.config.features.bases && new.frontmatter != old.frontmatter {
+                return Ok(None);
+            }
             if new.body_md != old.body_md {
                 changed.push(i);
             }
+        }
+
+        // A base queries the whole corpus, and each note's tags/links come from its
+        // BODY (inline `#tags` / `[[wikilinks]]`), not just frontmatter. So any
+        // content edit can change what a base renders — the cached corpus (and the
+        // on-disk base pages, which the fast path never rewrites) would go stale.
+        // When a base consumer exists, defer any real edit to a full rebuild.
+        if self.cap.has_base_consumers && self.cap.config.features.bases && !changed.is_empty() {
+            return Ok(None);
         }
 
         // Nothing actually changed (e.g. a touch / metadata-only fs event): no
@@ -204,7 +246,7 @@ impl DevState {
         if changed.is_empty() {
             return Ok(Some(Rebuilt {
                 kind: RebuildKind::Incremental,
-                page_count: self.cap.docs.len(),
+                page_count: self.cap.docs.len() + self.cap.base_pages.len(),
             }));
         }
 
@@ -239,6 +281,7 @@ impl DevState {
                     &partials_new,
                     None,
                     plantuml_support.as_ref(),
+                    self.cap.bases_corpus.as_ref(),
                 );
                 acc.push((i, rd));
             }
@@ -351,7 +394,7 @@ impl DevState {
 
         Ok(Some(Rebuilt {
             kind: RebuildKind::Incremental,
-            page_count: self.cap.docs.len(),
+            page_count: self.cap.docs.len() + self.cap.base_pages.len(),
         }))
     }
 
@@ -533,6 +576,31 @@ mod tests {
         let (mut state, _) = DevState::initial(root, &out).unwrap();
 
         fs::write(root.join("docs/guide/c.md"), "# Gamma\n\nNew page.\n").unwrap();
+        assert_eq!(state.rebuild().unwrap().kind, RebuildKind::Full);
+    }
+
+    #[test]
+    fn body_edit_forces_full_rebuild_when_a_base_consumer_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let docs = root.join("docs");
+        fs::create_dir_all(docs.join("guide")).unwrap();
+        fs::write(docs.join("index.md"), "# Home\n").unwrap();
+        fs::write(docs.join("guide/a.md"), "# Alpha\n\nBody with #tag.\n").unwrap();
+        // A standalone base makes the whole site corpus-dependent.
+        fs::write(docs.join("all.base"), "views:\n  - type: table\n").unwrap();
+        let out = root.join("out");
+        let (mut state, first) = DevState::initial(root, &out).unwrap();
+        assert_eq!(first.kind, RebuildKind::Full);
+        assert!(state.cap.has_base_consumers);
+
+        // A body-only edit (same title/desc) that changes an inline #tag would
+        // change the corpus — so with a base present it must be a FULL rebuild.
+        fs::write(
+            root.join("docs/guide/a.md"),
+            "# Alpha\n\nBody with #different.\n",
+        )
+        .unwrap();
         assert_eq!(state.rebuild().unwrap().kind, RebuildKind::Full);
     }
 

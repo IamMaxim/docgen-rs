@@ -23,7 +23,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use chrono::Local;
-use docgen_core::discover::{discover_assets, discover_docs};
+use docgen_core::discover::{discover_assets, discover_bases, discover_docs, BaseFileInput};
+use docgen_core::model::{Doc, SearchEntry};
 use docgen_core::pipeline::{prepare, render_docs};
 use docgen_core::tree::build_tree;
 use docgen_render::{
@@ -115,6 +116,79 @@ pub(crate) fn copy_assets(docs_dir: &Path, out_dir: &Path) -> Result<()> {
         })?;
     }
     Ok(())
+}
+
+/// Read filesystem facts for a doc (size + creation/modification time) for the
+/// bases `file.size`/`file.ctime`/`file.mtime` properties. Best-effort: any field
+/// that can't be read (or isn't available on the platform) is left absent. Times
+/// are epoch-milliseconds.
+fn file_facts(docs_dir: &Path, rel_path: &str) -> docgen_core::FileFacts {
+    let path = docs_dir.join(rel_path);
+    let Ok(meta) = fs::metadata(&path) else {
+        return docgen_core::FileFacts::default();
+    };
+    let to_ms = |t: std::io::Result<std::time::SystemTime>| -> Option<i64> {
+        t.ok()
+            .and_then(|st| st.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as i64)
+    };
+    docgen_core::FileFacts {
+        size: meta.len(),
+        ctime_ms: to_ms(meta.created()),
+        mtime_ms: to_ms(meta.modified()),
+    }
+}
+
+/// Render every discovered `.base` file to a synthetic [`Doc`] (its views as
+/// static HTML) plus a search entry. The pages flow through the same tree/page
+/// pipeline as markdown docs, so a `.base` appears in the sidebar and gets a
+/// clean-URL page. `corpus` is the note set the bases query (markdown docs only —
+/// bases never query other bases).
+fn render_base_pages(
+    base_inputs: &[BaseFileInput],
+    corpus: &docgen_bases::Corpus,
+    base_path: &str,
+    taken_slugs: &std::collections::BTreeSet<String>,
+) -> (Vec<Doc>, Vec<SearchEntry>) {
+    let opts = docgen_bases::RenderOptions {
+        base: base_path.to_string(),
+        default_view_name: String::new(),
+    };
+    let mut docs = Vec::with_capacity(base_inputs.len());
+    let mut search = Vec::with_capacity(base_inputs.len());
+    let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for b in base_inputs {
+        // A `.base` whose slug collides with a markdown page (or a previously seen
+        // base, or the site home) would overwrite that page's output. Skip it with
+        // a warning rather than corrupt the site.
+        if taken_slugs.contains(&b.slug) || !seen.insert(b.slug.clone()) {
+            eprintln!(
+                "bases: skipping {} — its slug `{}` collides with another page",
+                b.rel_path, b.slug
+            );
+            continue;
+        }
+        let title = b.slug.rsplit('/').next().unwrap_or(&b.slug).to_string();
+        let body_html = docgen_bases::render_base_source(&b.source, corpus, &opts);
+        docs.push(Doc {
+            rel_path: b.rel_path.clone(),
+            slug: b.slug.clone(),
+            title: title.clone(),
+            description: None,
+            body_html,
+            has_math: false,
+            has_mermaid: false,
+            components_used: Default::default(),
+            headings: Vec::new(),
+        });
+        search.push(SearchEntry {
+            slug: b.slug.clone(),
+            title,
+            // The base's data lives in the rendered HTML; index the title only.
+            text: String::new(),
+        });
+    }
+    (docs, search)
 }
 
 /// Compute the doc path as git sees it, relative to the repo working directory.
@@ -427,9 +501,28 @@ pub(crate) fn build_site_inner(
     } else {
         None
     };
+    // --- Obsidian Bases ---------------------------------------------------
+    // Build the corpus (notes queryable by `.base` files and ```base blocks) from
+    // the prepared docs plus filesystem metadata, and load the `.base` files. Both
+    // are feature-gated: when `bases` is off the corpus is `None` (embedded blocks
+    // render as plain code) and no `.base` pages are emitted.
+    let bases_corpus = if config.features.bases {
+        Some(docgen_core::build_corpus(&prepared, &|rel| {
+            file_facts(&docs_dir, rel)
+        }))
+    } else {
+        None
+    };
+    let base_inputs = if config.features.bases {
+        discover_bases(&docs_dir)
+            .with_context(|| format!("loading .base files in {}", docs_dir.display()))?
+    } else {
+        Vec::new()
+    };
+
     // Render in a scope so the renderer/support borrows of `diagrams` end before
     // `diagrams` is (optionally) moved into the captured build below.
-    let site = {
+    let mut site = {
         let plantuml_renderer = plantuml_server.as_ref().map(|server| {
             docgen_plantuml::HttpRenderer::new(server.clone(), opts.project_root.join(".docgen"))
         });
@@ -447,10 +540,47 @@ pub(crate) fn build_site_inner(
             &registry,
             resolver,
             plantuml_support.as_ref(),
+            bases_corpus.as_ref(),
         )
     };
     t.mark("render_docs");
-    let tree = build_tree(&site.docs);
+
+    // Render each `.base` file to a page (its views as static HTML) and a search
+    // entry, querying the markdown corpus. Kept as a separate list from `site.docs`
+    // so the link graph (and the dev server's incremental equivalence check) stays
+    // computed from markdown docs alone; base pages carry no links.
+    let (base_pages, base_search): (Vec<Doc>, Vec<SearchEntry>) = match &bases_corpus {
+        Some(corpus) => {
+            // Slugs already claimed by markdown pages — a `.base` must not overwrite one.
+            let taken: std::collections::BTreeSet<String> =
+                site.docs.iter().map(|d| d.slug.clone()).collect();
+            render_base_pages(&base_inputs, corpus, &config.base, &taken)
+        }
+        None => (Vec::new(), Vec::new()),
+    };
+    // Fold base search entries into the site index.
+    site.search.extend(base_search);
+    // Whether any base consumer exists (a `.base` page or an embedded ```base
+    // block). Used by the dev server: because a base queries the whole corpus
+    // (frontmatter + body tags/links), any content edit invalidates it, so a
+    // consumer present forces a full rebuild instead of the incremental fast path.
+    let has_base_consumers = config.features.bases
+        && (!base_inputs.is_empty()
+            || site
+                .docs
+                .iter()
+                .any(|d| d.body_html.contains("docgen-base")));
+    t.mark("render_bases");
+
+    // Every downstream consumer (sidebar tree, page loop, home rows, page count)
+    // treats markdown docs and base pages uniformly.
+    let all_docs: Vec<Doc> = site
+        .docs
+        .iter()
+        .cloned()
+        .chain(base_pages.iter().cloned())
+        .collect();
+    let tree = build_tree(&all_docs);
     t.mark("build_tree");
 
     // Concatenate the component asset bundle. `components.css` carries every
@@ -583,7 +713,7 @@ pub(crate) fn build_site_inner(
     // first docs in build order (home excluded). Computed once; only the index
     // doc's render consumes it (every other page passes `home: None`).
     let total_links = site.graph.edges.len();
-    let (section_rows, recent_rows) = compute_home_rows(&site.docs);
+    let (section_rows, recent_rows) = compute_home_rows(&all_docs);
     let home_sections: Vec<HomeSection> = section_rows
         .iter()
         .map(|(label, slug, count)| HomeSection {
@@ -615,13 +745,14 @@ pub(crate) fn build_site_inner(
         graph_payload: &graph_payload,
         home_sections: &home_sections,
         home_recent: &home_recent,
-        pages_count: site.docs.len(),
+        pages_count: all_docs.len(),
         total_links,
     };
 
-    // Phase 2: render the doc pages via the shared per-page renderer.
+    // Phase 2: render the doc pages via the shared per-page renderer (markdown
+    // pages + `.base` pages alike).
     let mut home_html: Option<String> = None;
-    for doc in &site.docs {
+    for doc in &all_docs {
         let html = render_one_page(&renderer, &shared, doc)?;
         // `guide/intro` -> `dist/guide/intro/index.html` (clean URLs).
         let out_dir = dist_dir.join(&doc.slug);
@@ -774,7 +905,7 @@ pub(crate) fn build_site_inner(
     t.mark("commit");
     t.report();
 
-    let page_count = site.docs.len();
+    let page_count = all_docs.len();
     let any_mermaid = site.any_mermaid;
     let outcome = BuildOutcome {
         page_count,
@@ -788,6 +919,10 @@ pub(crate) fn build_site_inner(
         Some(crate::incremental::CapturedBuild {
             diagrams,
             plantuml_server,
+            bases_corpus,
+            base_inputs,
+            base_pages,
+            has_base_consumers,
             config,
             registry,
             partials,
@@ -874,5 +1009,131 @@ impl Drop for StagingDir {
         if !self.committed {
             let _ = fs::remove_dir_all(&self.path);
         }
+    }
+}
+
+#[cfg(test)]
+mod bases_tests {
+    use super::*;
+
+    /// Write a small vault with two book notes, a standalone `.base` file, and a
+    /// page that embeds a ```base block, then build it.
+    fn build_fixture() -> (tempfile::TempDir, PathBuf) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let docs = root.join("docs");
+        fs::create_dir_all(docs.join("Books")).unwrap();
+        fs::create_dir_all(docs.join("Bases")).unwrap();
+        fs::write(docs.join("index.md"), "# Home\n").unwrap();
+        fs::write(
+            docs.join("Books/Dune.md"),
+            "---\ntags: [book]\nrating: 5\n---\n# Dune\n",
+        )
+        .unwrap();
+        fs::write(
+            docs.join("Books/Neuromancer.md"),
+            "---\ntags: [book]\nrating: 4\n---\n# Neuromancer\n",
+        )
+        .unwrap();
+        fs::write(docs.join("Books/NotABook.md"), "# NotABook\n").unwrap();
+        // A standalone `.base` file → its own page.
+        fs::write(
+            docs.join("Bases/Books.base"),
+            "filters:\n  and:\n    - file.hasTag(\"book\")\nviews:\n  - type: table\n    name: All books\n    order: [file.name, note.rating]\n    sort:\n      - property: note.rating\n        direction: DESC\n",
+        )
+        .unwrap();
+        // A page embedding a ```base block.
+        fs::write(
+            docs.join("gallery.md"),
+            "# Gallery\n\n```base\nfilters:\n  and:\n    - file.hasTag(\"book\")\nviews:\n  - type: cards\n    order: [file.name]\n```\n",
+        )
+        .unwrap();
+        let out = build(root).unwrap();
+        (tmp, out.out_dir)
+    }
+
+    #[test]
+    fn standalone_base_file_becomes_a_page() {
+        let (_tmp, dist) = build_fixture();
+        let page = dist.join("Bases/Books/index.html");
+        let html = fs::read_to_string(&page).expect("base page emitted");
+        // Scope assertions to the base content (the sidebar nav lists every doc,
+        // including the filtered-out note, so check inside the base view only).
+        let base = &html[html.find("class=\"docgen-base\"").expect("base present")..];
+        assert!(base.contains("docgen-base-table"));
+        assert!(base.contains("All books"));
+        // Both books present, filtered note excluded from the table.
+        assert!(base.contains(">Dune<"));
+        assert!(base.contains(">Neuromancer<"));
+        assert!(!base.contains("NotABook"));
+        // Descending rating sort: Dune (5) before Neuromancer (4).
+        assert!(base.find("Dune").unwrap() < base.find("Neuromancer").unwrap());
+    }
+
+    #[test]
+    fn base_file_is_not_copied_as_an_asset() {
+        let (_tmp, dist) = build_fixture();
+        assert!(
+            !dist.join("Bases/Books.base").exists(),
+            ".base files are build inputs, never published assets"
+        );
+    }
+
+    #[test]
+    fn embedded_base_block_renders_inline() {
+        let (_tmp, dist) = build_fixture();
+        let html = fs::read_to_string(dist.join("gallery/index.html")).unwrap();
+        assert!(html.contains("docgen-base-cards"));
+        assert!(html.contains(">Dune<"));
+        // The raw fence is gone (rendered, not a code block).
+        assert!(!html.contains("<code class=\"language-base\""));
+    }
+
+    #[test]
+    fn base_page_appears_in_sidebar_nav() {
+        let (_tmp, dist) = build_fixture();
+        // The sidebar tree is embedded in every page; the base page's slug links.
+        let home = fs::read_to_string(dist.join("index.html")).unwrap();
+        assert!(home.contains("/Bases/Books"));
+    }
+
+    #[test]
+    fn base_slug_colliding_with_a_markdown_page_is_skipped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs).unwrap();
+        fs::write(docs.join("index.md"), "# Home\n").unwrap();
+        // A markdown page and a .base with the SAME slug (`Foo`).
+        fs::write(docs.join("Foo.md"), "# Foo Markdown\n").unwrap();
+        fs::write(docs.join("Foo.base"), "views:\n  - type: table\n").unwrap();
+        let out = build(root).unwrap();
+        // The markdown page's content wins; the base did not overwrite it.
+        let html = fs::read_to_string(out.out_dir.join("Foo/index.html")).unwrap();
+        assert!(html.contains("Foo Markdown"));
+        assert!(!html.contains("docgen-base-table"));
+    }
+
+    #[test]
+    fn bases_feature_off_skips_pages_and_leaves_block_as_code() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let docs = root.join("docs");
+        fs::create_dir_all(docs.join("Bases")).unwrap();
+        fs::write(root.join("docgen.toml"), "[features]\nbases = false\n").unwrap();
+        fs::write(docs.join("index.md"), "# Home\n").unwrap();
+        fs::write(docs.join("Bases/X.base"), "views:\n  - type: table\n").unwrap();
+        fs::write(
+            docs.join("p.md"),
+            "# P\n\n```base\nviews:\n  - type: table\n```\n",
+        )
+        .unwrap();
+        let out = build(root).unwrap();
+        // No base page emitted.
+        assert!(!out.out_dir.join("Bases/X/index.html").exists());
+        // The block stays a plain code block.
+        let html = fs::read_to_string(out.out_dir.join("p/index.html")).unwrap();
+        assert!(!html.contains("docgen-base-table"));
+        assert!(html.contains("<code"));
     }
 }

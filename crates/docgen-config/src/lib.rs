@@ -19,6 +19,9 @@ pub struct Features {
     /// Render PlantUML diagrams (`:::plantuml`) at build time via an external
     /// server. Inert (zero server contact) unless a diagram is actually present.
     pub plantuml: bool,
+    /// Render Obsidian Bases: `.base` files become pages, and ` ```base ` fenced
+    /// blocks in markdown render inline. Inert unless a base is present.
+    pub bases: bool,
     /// Emit the search index + search client.
     pub search: bool,
 }
@@ -30,6 +33,7 @@ impl Default for Features {
             math: true,
             mermaid: true,
             plantuml: true,
+            bases: true,
             search: true,
         }
     }
@@ -249,6 +253,7 @@ mod tests {
         assert_eq!(c.base, "");
         assert!(c.features.graph && c.features.math && c.features.mermaid && c.features.search);
         assert!(c.features.plantuml);
+        assert!(c.features.bases);
         assert_eq!(c.components.dir, "components");
         assert_eq!(c.plantuml.server, DEFAULT_PLANTUML_SERVER);
     }

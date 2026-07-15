@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 docgen-config = { workspace = true }
 docgen-components = { workspace = true }
+docgen-bases = { workspace = true }
 comrak = { version = "0.52.0", features = ["syntect"] }
 katex = "0.4.6"
 serde = { version = "1.0.228", features = ["derive"] }
