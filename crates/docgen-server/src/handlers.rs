@@ -291,7 +291,7 @@ fn render_preview_document(
     let raws = discover_docs(docs_dir)?;
     let slugs: SlugSet = raws.iter().map(|r| prepare(r.clone()).slug).collect();
     // Include-only partials (`_*.md`), so `:include` resolves in live preview too.
-    let (_pages, partials) = docgen_core::pipeline::partition_partials(raws.clone());
+    let (pages, partials) = docgen_core::pipeline::partition_partials(raws.clone());
 
     // Same config + component registry the build assembles (built-ins overridden
     // by the project `components/` dir). Mirrors `docgen-build::build_site`.
@@ -334,6 +334,16 @@ fn render_preview_document(
                 diagrams: &diagrams,
                 renderer: Some(r as &dyn docgen_core::PlantumlRenderer),
             });
+    // Bases corpus so a live-edited ```base block renders in preview against the
+    // whole-site note set (on-disk frontmatter; best-effort file facts).
+    let bases_corpus = if config.features.bases {
+        let prepared_pages: Vec<_> = pages.iter().cloned().map(prepare).collect();
+        Some(docgen_core::build_corpus(&prepared_pages, &|_| {
+            docgen_core::FileFacts::default()
+        }))
+    } else {
+        None
+    };
     let rendered = render_doc(
         &prepared,
         &config,
@@ -342,6 +352,7 @@ fn render_preview_document(
         &partials,
         None,
         plantuml_support.as_ref(),
+        bases_corpus.as_ref(),
     );
 
     // Per-page asset gating, mirroring the build's page render.

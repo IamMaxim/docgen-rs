@@ -252,7 +252,7 @@ fn render_table(
 
     let mut html = String::new();
     // Reuse the same horizontal-scroll wrapper docgen uses for wide markdown tables.
-    html.push_str("<div class=\"docgen-table-wrap\"><table class=\"docgen-base-table\">");
+    html.push_str("<div class=\"docgen-table-scroll\"><table class=\"docgen-base-table\">");
 
     // Header row.
     html.push_str("<thead><tr>");

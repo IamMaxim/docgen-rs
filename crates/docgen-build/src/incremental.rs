@@ -46,6 +46,17 @@ pub(crate) struct CapturedBuild {
     /// Resolved PlantUML server URL, `Some` iff the feature is on. Reconstructs the
     /// renderer for incremental re-renders without persisting the ureq agent.
     pub plantuml_server: Option<String>,
+    /// The bases corpus (notes queryable by `.base` files / ```base blocks), `Some`
+    /// iff the feature is on. Passed to incremental re-renders so embedded base
+    /// blocks render; a frontmatter change (which would change it) forces a full
+    /// rebuild, so the cached copy is always current for the fast path.
+    pub bases_corpus: Option<docgen_bases::Corpus>,
+    /// Discovered `.base` files. A change here (add/edit/remove) forces a full
+    /// rebuild — base pages and embedded blocks are cross-doc.
+    pub base_inputs: Vec<docgen_core::discover::BaseFileInput>,
+    /// Rendered `.base` pages, kept so the incremental page count stays accurate
+    /// (they persist on disk across incremental rebuilds, which never touch them).
+    pub base_pages: Vec<Doc>,
     pub prepared: Vec<PreparedDoc>,
     pub docs: Vec<Doc>,
     pub outbound: BTreeMap<String, Vec<String>>,
@@ -178,6 +189,17 @@ impl DevState {
         if diagrams_new != self.cap.diagrams {
             return Ok(None);
         }
+        // A `.base` file add/edit/remove affects base pages and any ```base block
+        // (cross-doc). Reload and defer to a full rebuild if the set changed.
+        if self.cap.config.features.bases {
+            let bases_new = match docgen_core::discover::discover_bases(&docs_dir) {
+                Ok(b) => b,
+                Err(_) => return Ok(None),
+            };
+            if bases_new != self.cap.base_inputs {
+                return Ok(None);
+            }
+        }
         // The doc set + order must match exactly: an add/remove/rename/reorder
         // changes the tree, sections, recent list, and graph node order.
         if prepared_new.len() != self.cap.prepared.len() {
@@ -193,6 +215,12 @@ impl DevState {
             if new.title != old.title || new.description != old.description {
                 return Ok(None);
             }
+            // A frontmatter change alters the bases corpus (note properties), which
+            // any `.base` page or ```base block queries — cross-doc, so defer to a
+            // full rebuild. (Only matters when the feature is on.)
+            if self.cap.config.features.bases && new.frontmatter != old.frontmatter {
+                return Ok(None);
+            }
             if new.body_md != old.body_md {
                 changed.push(i);
             }
@@ -204,7 +232,7 @@ impl DevState {
         if changed.is_empty() {
             return Ok(Some(Rebuilt {
                 kind: RebuildKind::Incremental,
-                page_count: self.cap.docs.len(),
+                page_count: self.cap.docs.len() + self.cap.base_pages.len(),
             }));
         }
 
@@ -239,6 +267,7 @@ impl DevState {
                     &partials_new,
                     None,
                     plantuml_support.as_ref(),
+                    self.cap.bases_corpus.as_ref(),
                 );
                 acc.push((i, rd));
             }
@@ -351,7 +380,7 @@ impl DevState {
 
         Ok(Some(Rebuilt {
             kind: RebuildKind::Incremental,
-            page_count: self.cap.docs.len(),
+            page_count: self.cap.docs.len() + self.cap.base_pages.len(),
         }))
     }
 

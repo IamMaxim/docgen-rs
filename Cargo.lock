@@ -680,6 +680,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "docgen-assets",
+ "docgen-bases",
  "docgen-components",
  "docgen-config",
  "docgen-core",
@@ -717,6 +718,7 @@ name = "docgen-core"
 version = "0.5.0"
 dependencies = [
  "comrak",
+ "docgen-bases",
  "docgen-components",
  "docgen-config",
  "katex",

@@ -1374,6 +1374,113 @@ kbd,
 	white-space: pre-wrap;
 }
 
+/* =============================== bases =============================== */
+/* Obsidian Bases (.base files + embedded ```base blocks) render at build time as
+   static table/cards/list views. Tables reuse the shared `.docgen-table-scroll`
+   wrapper and `.docgen-doc-content table` styling; the rules below add the view
+   title, group rows, card/list layouts, and the failure block. */
+.docgen-base {
+	margin: 18px 0 24px;
+}
+.docgen-base-view {
+	margin-bottom: 20px;
+}
+.docgen-base-view__title {
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--text-dim);
+	margin: 0 0 8px;
+	letter-spacing: -0.01em;
+}
+/* Grouping header row within a table. */
+.docgen-base-table tr.docgen-base-group td {
+	background: var(--surface-hi);
+	color: var(--text-dim);
+	font-weight: 500;
+	font-size: 0.9em;
+}
+.docgen-base-table tfoot td {
+	background: var(--surface);
+	color: var(--text-dim);
+	font-variant-numeric: tabular-nums;
+	font-size: 0.9em;
+	border-top: 1px solid var(--border-strong);
+}
+.docgen-base-empty {
+	color: var(--text-mute);
+	font-style: italic;
+}
+/* An unresolved note reference (a link with no matching page in the corpus). */
+.docgen-base-link--unresolved {
+	color: var(--text-mute);
+	text-decoration: underline dotted;
+}
+.docgen-base-sep {
+	color: var(--text-mute);
+}
+.docgen-base-check {
+	color: var(--accent);
+}
+.docgen-base-check--off {
+	color: var(--text-mute);
+}
+/* Cards view. */
+.docgen-base-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+	gap: 12px;
+}
+.docgen-base-card {
+	padding: 12px 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--r-md);
+	background: var(--surface);
+}
+.docgen-base-card__title {
+	font-weight: 500;
+	margin-bottom: 8px;
+}
+.docgen-base-card__fields {
+	margin: 0;
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 3px 10px;
+	font-size: 0.9em;
+}
+.docgen-base-card__fields dt {
+	color: var(--text-mute);
+}
+.docgen-base-card__fields dd {
+	margin: 0;
+	color: var(--text);
+}
+/* List view. */
+.docgen-base-list {
+	margin: 0;
+	padding-left: 18px;
+}
+.docgen-base-list li {
+	margin: 2px 0;
+}
+/* Non-fatal filter parse warning (a malformed filter expression). */
+.docgen-base-warning {
+	margin: 6px 0;
+	font-size: 0.85em;
+	color: var(--warn);
+}
+/* Detailed, visible failure block for a malformed `.base` (YAML parse error) —
+   a full block, mirroring the PlantUML error component. */
+.docgen-base-error {
+	margin: 16px 0;
+	padding: 12px 14px;
+	font-family: var(--font-mono);
+	font-size: 0.9em;
+	color: var(--text-error);
+	background: var(--diff-removed-bg);
+	border: 1px solid var(--diff-removed);
+	border-radius: var(--r-md);
+}
+
 /* =============================== graph =============================== */
 .docgen-graph-page h1 {
 	font-size: 38px;

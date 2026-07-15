@@ -79,6 +79,9 @@ pub struct PreparedDoc {
     /// Optional `description:` from frontmatter, surfaced in backlink cards.
     pub description: Option<String>,
     pub body_md: String,
+    /// The full parsed frontmatter, retained so the bases engine can build a
+    /// queryable corpus of note properties. `Value::Null` when there is none.
+    pub frontmatter: serde_yml::Value,
 }
 
 /// The fully assembled site after pass 2.
@@ -150,6 +153,7 @@ pub fn prepare(raw: RawDoc) -> PreparedDoc {
         title,
         description,
         body_md: parsed.body,
+        frontmatter: parsed.frontmatter,
     }
 }
 
@@ -290,6 +294,7 @@ pub fn render_doc(
     partials: &Partials,
     asset_urls: Option<&dyn crate::asseturl::AssetUrlResolver>,
     plantuml: Option<&crate::plantuml::PlantumlSupport>,
+    bases: Option<&docgen_bases::Corpus>,
 ) -> RenderedDoc {
     let options = comrak_options();
 
@@ -329,6 +334,14 @@ pub fn render_doc(
     } else {
         0
     };
+    // Obsidian Bases: replace ```base fenced blocks with rendered view HTML,
+    // computed against the whole-site corpus. Feature-gated + inert without a
+    // corpus (embedded bases render as plain code then).
+    if config.features.bases {
+        if let Some(corpus) = bases {
+            crate::basepass::transform_bases(root, corpus, &config.base);
+        }
+    }
     // Wrap every table in a horizontal-scroll container so wide tables scroll
     // instead of squishing their columns (desktop and mobile alike).
     crate::tablepass::transform_tables(root, &arena);
@@ -396,6 +409,7 @@ pub fn render_docs(
     registry: &docgen_components::Registry,
     asset_urls: Option<&dyn crate::asseturl::AssetUrlResolver>,
     plantuml: Option<&crate::plantuml::PlantumlSupport>,
+    bases: Option<&docgen_bases::Corpus>,
 ) -> SiteBuild {
     let slugs: SlugSet = prepared.iter().map(|p| p.slug.clone()).collect();
     let doc_meta: Vec<(String, String, Option<String>)> = prepared
@@ -409,7 +423,9 @@ pub fn render_docs(
 
     for p in &prepared {
         // Same per-doc pipeline the editor preview runs (single source of truth).
-        let rendered = render_doc(p, config, registry, &slugs, partials, asset_urls, plantuml);
+        let rendered = render_doc(
+            p, config, registry, &slugs, partials, asset_urls, plantuml, bases,
+        );
         search.push(SearchEntry {
             slug: p.slug.clone(),
             title: p.title.clone(),
@@ -512,13 +528,22 @@ mod tests {
         let cfg = docgen_config::SiteConfig::default();
         let reg = docgen_components::Registry::empty();
 
-        let site = render_docs(prepared.clone(), &Partials::new(), &cfg, &reg, None, None);
+        let site = render_docs(
+            prepared.clone(),
+            &Partials::new(),
+            &cfg,
+            &reg,
+            None,
+            None,
+            None,
+        );
         let single = render_doc(
             &prepared[1],
             &cfg,
             &reg,
             &slugs,
             &Partials::new(),
+            None,
             None,
             None,
         );
@@ -547,6 +572,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
+            None,
             None,
             None,
         );
@@ -601,6 +627,7 @@ mod tests {
             &docgen_components::Registry::empty(),
             None,
             None,
+            None,
         );
         assert!(site.docs[0].body_html.contains("katex"));
         assert!(site.docs[0].has_math);
@@ -617,6 +644,7 @@ mod tests {
             &Partials::new(),
             &cfg,
             &docgen_components::Registry::empty(),
+            None,
             None,
             None,
         );
@@ -639,6 +667,7 @@ mod tests {
             &docgen_components::Registry::empty(),
             None,
             None,
+            None,
         );
         assert!(!site.docs[0].has_mermaid);
         assert!(!site.any_mermaid);
@@ -655,6 +684,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
+            None,
             None,
             None,
         );
@@ -674,6 +704,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
+            None,
             None,
             None,
         );
@@ -706,6 +737,7 @@ mod tests {
             &docgen_components::Registry::empty(),
             None,
             None,
+            None,
         );
         assert!(!site.any_mermaid);
     }
@@ -730,6 +762,7 @@ mod tests {
             &reg,
             None,
             None,
+            None,
         );
         let h = &site.docs[0].body_html;
         assert!(h.contains("docgen-callout--warning"));
@@ -746,6 +779,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
+            None,
             None,
             None,
         );
@@ -776,6 +810,7 @@ mod tests {
             &reg,
             None,
             None,
+            None,
         );
         assert!(site.docs[0].body_html.contains(r#"href="/guide""#));
     }
@@ -803,6 +838,7 @@ mod tests {
             &reg,
             None,
             None,
+            None,
         );
         let h = &site.docs[0].body_html;
         // The resolved wikilink inside the directive body is a real anchor with the
@@ -825,6 +861,7 @@ mod tests {
             &Partials::new(),
             &docgen_config::SiteConfig::default(),
             &docgen_components::Registry::empty(),
+            None,
             None,
             None,
         );
