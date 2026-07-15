@@ -513,7 +513,15 @@ mod tests {
         let reg = docgen_components::Registry::empty();
 
         let site = render_docs(prepared.clone(), &Partials::new(), &cfg, &reg, None, None);
-        let single = render_doc(&prepared[1], &cfg, &reg, &slugs, &Partials::new(), None, None);
+        let single = render_doc(
+            &prepared[1],
+            &cfg,
+            &reg,
+            &slugs,
+            &Partials::new(),
+            None,
+            None,
+        );
 
         assert_eq!(single.doc.body_html, site.docs[1].body_html);
         assert_eq!(single.doc.has_mermaid, site.docs[1].has_mermaid);

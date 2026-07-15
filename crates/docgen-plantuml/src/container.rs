@@ -46,12 +46,15 @@ pub fn run_container(host_port: u16) -> Result<()> {
     println!("Point docgen at it with the default server URL, or set DOCGEN_PLANTUML_SERVER.");
     println!("Press Ctrl-C to stop.");
 
-    let status = Command::new(&runtime).args(&args).status().with_context(|| {
-        format!(
-            "failed to launch `{runtime}` — is it installed and on your PATH? \
+    let status = Command::new(&runtime)
+        .args(&args)
+        .status()
+        .with_context(|| {
+            format!(
+                "failed to launch `{runtime}` — is it installed and on your PATH? \
              (override with DOCGEN_CONTAINER_RUNTIME)"
-        )
-    })?;
+            )
+        })?;
 
     if !status.success() {
         // A Ctrl-C (SIGINT) terminates the container normally from the user's
@@ -68,10 +71,7 @@ mod tests {
     #[test]
     fn container_args_publish_port_and_image() {
         let args = container_args(9090, PLANTUML_IMAGE);
-        assert_eq!(
-            args,
-            vec!["run", "--rm", "-p", "9090:8080", PLANTUML_IMAGE]
-        );
+        assert_eq!(args, vec!["run", "--rm", "-p", "9090:8080", PLANTUML_IMAGE]);
     }
 
     #[test]

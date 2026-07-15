@@ -318,8 +318,7 @@ fn render_preview_document(
     });
     // PlantUML support so a live-edited `:::plantuml` renders in preview just as
     // it would in the build (cached diagrams need no server contact).
-    let diagrams =
-        docgen_core::discover::discover_diagrams(docs_dir).unwrap_or_default();
+    let diagrams = docgen_core::discover::discover_diagrams(docs_dir).unwrap_or_default();
     let plantuml_renderer = if config.features.plantuml {
         Some(docgen_plantuml::HttpRenderer::new(
             docgen_config::resolve_plantuml_server(&config.plantuml.server),

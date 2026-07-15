@@ -421,7 +421,9 @@ pub(crate) fn build_site_inner(
     let diagrams = docgen_core::discover::discover_diagrams(&docs_dir)
         .with_context(|| format!("loading PlantUML sources in {}", docs_dir.display()))?;
     let plantuml_server = if config.features.plantuml {
-        Some(docgen_config::resolve_plantuml_server(&config.plantuml.server))
+        Some(docgen_config::resolve_plantuml_server(
+            &config.plantuml.server,
+        ))
     } else {
         None
     };

@@ -217,7 +217,10 @@ impl DevState {
         // (patching the cache) don't collide with them.
         let rerendered: Vec<(usize, docgen_core::pipeline::RenderedDoc)> = {
             let plantuml_renderer = self.cap.plantuml_server.as_ref().map(|server| {
-                docgen_plantuml::HttpRenderer::new(server.clone(), self.project_root.join(".docgen"))
+                docgen_plantuml::HttpRenderer::new(
+                    server.clone(),
+                    self.project_root.join(".docgen"),
+                )
             });
             let plantuml_support =
                 plantuml_renderer

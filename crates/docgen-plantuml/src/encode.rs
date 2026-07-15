@@ -90,7 +90,8 @@ mod tests {
         assert_eq!(a, b, "encoding must be deterministic");
         assert!(!a.is_empty());
         assert!(
-            a.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'),
+            a.chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'),
             "encoded output must stay within the PlantUML URL alphabet: {a}"
         );
     }

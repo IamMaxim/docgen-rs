@@ -164,7 +164,10 @@ mod tests {
         let a = HttpRenderer::new("http://a", tmp.path().join(".docgen"));
         let b = HttpRenderer::new("http://b", tmp.path().join(".docgen"));
         // Same source, different server → different cache keys.
-        assert_ne!(a.cache_path("@startuml\n@enduml"), b.cache_path("@startuml\n@enduml"));
+        assert_ne!(
+            a.cache_path("@startuml\n@enduml"),
+            b.cache_path("@startuml\n@enduml")
+        );
         // Same server, different source → different keys.
         assert_ne!(a.cache_path("one"), a.cache_path("two"));
         // Stable for identical inputs.

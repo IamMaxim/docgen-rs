@@ -248,7 +248,7 @@ mod tests {
     fn inline_source_renders_svg_container() {
         let inst = one_directive(":::plantuml\n@startuml\nA->B\n@enduml\n:::\n");
         let mock = Mock::ok("<?xml version=\"1.0\"?>\n<svg>DIAGRAM</svg>\n");
-        let html = run(&inst,"", &diagrams(&[]), Some(&mock), "d-0");
+        let html = run(&inst, "", &diagrams(&[]), Some(&mock), "d-0");
         assert_eq!(mock.calls.get(), 1);
         assert!(html.contains("docgen-plantuml\""));
         assert!(html.contains("<svg>DIAGRAM</svg>")); // prolog stripped
@@ -261,7 +261,7 @@ mod tests {
         let inst = one_directive(":::plantuml{src=\"../uml/a.puml\"}\n:::\n");
         let mock = Mock::ok("<svg>FROMFILE</svg>");
         let map = diagrams(&[("uml/a.puml", "@startuml\nA->B\n@enduml")]);
-        let html = run(&inst,"guide", &map, Some(&mock), "d-1");
+        let html = run(&inst, "guide", &map, Some(&mock), "d-1");
         assert_eq!(mock.calls.get(), 1);
         assert!(html.contains("<svg>FROMFILE</svg>"));
         assert!(html.contains("data-plantuml=\"../uml/a.puml\""));
@@ -281,8 +281,12 @@ mod tests {
     fn missing_src_file_is_a_detailed_error_not_a_render() {
         let inst = one_directive(":::plantuml{src=\"nope.puml\"}\n:::\n");
         let mock = Mock::ok("<svg/>");
-        let html = run(&inst,"", &diagrams(&[]), Some(&mock), "d-3");
-        assert_eq!(mock.calls.get(), 0, "must not call the server for a missing file");
+        let html = run(&inst, "", &diagrams(&[]), Some(&mock), "d-3");
+        assert_eq!(
+            mock.calls.get(),
+            0,
+            "must not call the server for a missing file"
+        );
         assert!(html.contains("docgen-plantuml-error"));
         assert!(html.contains("not found"));
         assert!(html.contains("nope.puml"));
@@ -292,7 +296,7 @@ mod tests {
     fn src_escaping_docs_root_is_rejected() {
         let inst = one_directive(":::plantuml{src=\"../../etc/passwd.puml\"}\n:::\n");
         let mock = Mock::ok("<svg/>");
-        let html = run(&inst,"guide", &diagrams(&[]), Some(&mock), "d-4");
+        let html = run(&inst, "guide", &diagrams(&[]), Some(&mock), "d-4");
         assert_eq!(mock.calls.get(), 0);
         assert!(html.contains("docgen-plantuml-error"));
         assert!(html.contains("escapes the docs root"));
@@ -302,7 +306,7 @@ mod tests {
     fn empty_directive_reports_missing_source() {
         let inst = one_directive(":::plantuml\n:::\n");
         let mock = Mock::ok("<svg/>");
-        let html = run(&inst,"", &diagrams(&[]), Some(&mock), "d-5");
+        let html = run(&inst, "", &diagrams(&[]), Some(&mock), "d-5");
         assert_eq!(mock.calls.get(), 0);
         assert!(html.contains("docgen-plantuml-error"));
         assert!(html.contains("needs a"));
@@ -311,7 +315,7 @@ mod tests {
     #[test]
     fn disabled_when_no_renderer() {
         let inst = one_directive(":::plantuml\n@startuml\nA->B\n@enduml\n:::\n");
-        let html = run(&inst,"", &diagrams(&[]), None, "d-6");
+        let html = run(&inst, "", &diagrams(&[]), None, "d-6");
         assert!(html.contains("docgen-plantuml-error"));
         assert!(html.contains("disabled"));
     }
@@ -323,7 +327,7 @@ mod tests {
             server: "http://localhost:8080".into(),
             detail: "connection refused".into(),
         });
-        let html = run(&inst,"", &diagrams(&[]), Some(&mock), "d-7");
+        let html = run(&inst, "", &diagrams(&[]), Some(&mock), "d-7");
         assert!(html.contains("docgen-plantuml-error"));
         assert!(html.contains("http://localhost:8080"));
         assert!(html.contains("connection refused"));
@@ -337,7 +341,7 @@ mod tests {
             message: "Syntax Error?".into(),
             line: Some(2),
         });
-        let html = run(&inst,"", &diagrams(&[]), Some(&mock), "d-8");
+        let html = run(&inst, "", &diagrams(&[]), Some(&mock), "d-8");
         assert!(html.contains("docgen-plantuml-error"));
         assert!(html.contains("HTTP 400"));
         assert!(html.contains("line 2"));
@@ -352,7 +356,7 @@ mod tests {
             message: "<script>alert(1)</script>".into(),
             line: None,
         });
-        let html = run(&inst,"", &diagrams(&[]), Some(&mock), "d-9");
+        let html = run(&inst, "", &diagrams(&[]), Some(&mock), "d-9");
         assert!(html.contains("&lt;script&gt;"));
         assert!(!html.contains("<script>"));
     }
