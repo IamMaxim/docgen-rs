@@ -8,6 +8,9 @@
 A Cargo-only static documentation-site generator. **No npm, no Node** — just
 `cargo install` and a directory of Markdown.
 
+📖 **[Documentation site](https://iammaxim.github.io/docgen-rs/)** — a full
+feature guide, built by docgen itself.
+
 docgen-rs turns a `docs/` tree of `.md` files into a fast, fully static site:
 server-side syntax highlighting, `[[wikilinks]]` with backlinks, a zero-JS-build
 search index, a per-document git history timeline, and a knowledge graph — all
