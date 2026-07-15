@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-config-v0.5.0...docgen-config-v0.6.0) - 2026-07-15
+
+### Added
+
+- Obsidian Bases support (docgen-bases crate) ([#18](https://github.com/IamMaxim/docgen-rs/pull/18))
+
 ## [0.5.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-config-v0.4.1...docgen-config-v0.5.0) - 2026-07-15
 
 ### Added
