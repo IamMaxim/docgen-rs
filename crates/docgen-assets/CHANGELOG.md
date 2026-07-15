@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-assets-v0.4.1...docgen-assets-v0.5.0) - 2026-07-15
+
+### Added
+
+- PlantUML build-time diagram rendering ([#16](https://github.com/IamMaxim/docgen-rs/pull/16))
+
 ## [0.4.1](https://github.com/IamMaxim/docgen-rs/compare/docgen-assets-v0.4.0...docgen-assets-v0.4.1) - 2026-07-15
 
 ### Added
