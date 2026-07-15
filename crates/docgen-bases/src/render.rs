@@ -137,7 +137,7 @@ fn render_view(
         .unwrap_or_else(|| opts.default_view_name.clone());
 
     let body = match view.view_type.as_str() {
-        "cards" => render_cards(&rows, view, &columns, opts, formulas, corpus),
+        "cards" => render_cards(&rows, view, base, &columns, opts, corpus),
         "list" => render_list(&rows, &columns, opts, corpus, formulas),
         // "table" and any unknown type fall back to a table.
         _ => render_table(
@@ -191,7 +191,12 @@ fn resolve_columns(view: &View, matching: &[&Note], _base: &BaseFile) -> Vec<Str
     cols
 }
 
-fn apply_sort(rows: &mut [Row], view: &View, corpus: &Corpus, formulas: &BTreeMap<String, Expr>) {
+fn apply_sort(
+    rows: &mut Vec<Row>,
+    view: &View,
+    corpus: &Corpus,
+    formulas: &BTreeMap<String, Expr>,
+) {
     if view.sort.is_empty() {
         return;
     }
@@ -200,11 +205,20 @@ fn apply_sort(rows: &mut [Row], view: &View, corpus: &Corpus, formulas: &BTreeMa
         .iter()
         .map(|k| (parse(k.property()).unwrap_or(Expr::Null), k.descending()))
         .collect();
-    rows.sort_by(|a, b| {
-        for (expr, desc) in &keys {
-            let av = EvalCtx::new(a.note, corpus, formulas).eval(expr);
-            let bv = EvalCtx::new(b.note, corpus, formulas).eval(expr);
-            let ord = av.loose_cmp(&bv);
+    // Evaluate each row's sort keys ONCE (a decorate-sort), rather than
+    // re-evaluating inside every pairwise comparison — comparisons are O(n log n),
+    // and a `formula.*` sort key can be expensive.
+    let mut decorated: Vec<(Vec<Value>, Row)> = rows
+        .drain(..)
+        .map(|row| {
+            let ctx = EvalCtx::new(row.note, corpus, formulas);
+            let vals = keys.iter().map(|(e, _)| ctx.eval(e)).collect();
+            (vals, row)
+        })
+        .collect();
+    decorated.sort_by(|a, b| {
+        for (i, (_, desc)) in keys.iter().enumerate() {
+            let ord = a.0[i].loose_cmp(&b.0[i]);
             let ord = if *desc { ord.reverse() } else { ord };
             if ord != std::cmp::Ordering::Equal {
                 return ord;
@@ -212,6 +226,7 @@ fn apply_sort(rows: &mut [Row], view: &View, corpus: &Corpus, formulas: &BTreeMa
         }
         std::cmp::Ordering::Equal
     });
+    *rows = decorated.into_iter().map(|(_, row)| row).collect();
 }
 
 /// Human-readable header for a column ref: `properties.<ref>.displayName` if set,
@@ -269,10 +284,18 @@ fn render_table(
     }
     html.push_str("</tr></thead><tbody>");
 
-    // Body, optionally grouped. A limit caps the total number of rows shown.
+    // Body, optionally grouped. A limit caps the total number of rows shown; once
+    // it's reached we stop entirely, so a later group never emits an orphaned
+    // header with no rows beneath it.
     let mut shown = 0usize;
     let grouped = group_rows(rows, group_by, corpus, formulas);
-    for (group_label, group_rows) in &grouped {
+    'groups: for (group_label, group_rows) in &grouped {
+        // Skip the whole group (header included) if the limit is already spent.
+        if let Some(lim) = limit {
+            if shown >= lim {
+                break;
+            }
+        }
         if let Some(label) = group_label {
             html.push_str(&format!(
                 "<tr class=\"docgen-base-group\"><td colspan=\"{}\">{}</td></tr>",
@@ -283,7 +306,7 @@ fn render_table(
         for row in group_rows {
             if let Some(lim) = limit {
                 if shown >= lim {
-                    break;
+                    break 'groups;
                 }
             }
             html.push_str("<tr>");
@@ -348,30 +371,36 @@ fn group_rows<'a, 'b>(
         return vec![(None, rows.iter().collect())];
     };
     let expr = parse(gb.property()).unwrap_or(Expr::Null);
-    let mut groups: BTreeMap<String, Vec<&Row>> = BTreeMap::new();
+    // Group by rendered label (for the header text + dedup) but keep a
+    // representative typed value per group so ordering is by the value's natural
+    // order (numeric priorities 1 < 2 < 10), not lexicographic string order.
+    let mut groups: Vec<(Value, String, Vec<&Row>)> = Vec::new();
     for row in rows {
-        let label = EvalCtx::new(row.note, corpus, formulas)
-            .eval(&expr)
-            .display();
-        groups.entry(label).or_default().push(row);
+        let val = EvalCtx::new(row.note, corpus, formulas).eval(&expr);
+        let label = val.display();
+        match groups.iter_mut().find(|(_, l, _)| *l == label) {
+            Some((_, _, bucket)) => bucket.push(row),
+            None => groups.push((val, label, vec![row])),
+        }
     }
-    let mut ordered: Vec<(Option<String>, Vec<&Row>)> =
-        groups.into_iter().map(|(k, v)| (Some(k), v)).collect();
+    groups.sort_by(|a, b| a.0.loose_cmp(&b.0));
     if gb.descending() {
-        ordered.reverse();
+        groups.reverse();
     }
-    ordered
+    groups
+        .into_iter()
+        .map(|(_, label, rows)| (Some(label), rows))
+        .collect()
 }
 
 fn render_cards(
     rows: &[Row],
     view: &View,
+    base: &BaseFile,
     columns: &[String],
     opts: &RenderOptions,
-    formulas: &BTreeMap<String, Expr>,
     corpus: &Corpus,
 ) -> String {
-    let _ = formulas;
     let limit = view.limit.unwrap_or(usize::MAX);
     let mut html = String::from("<div class=\"docgen-base-cards\">");
     for row in rows.iter().take(limit) {
@@ -398,7 +427,7 @@ fn render_cards(
             }
             html.push_str(&format!(
                 "<dt>{}</dt><dd>{}</dd>",
-                escape(&column_header(col, &BaseFile::default())),
+                escape(&column_header(col, base)),
                 render_cell(&val, col, row.note, opts, corpus)
             ));
         }
@@ -669,6 +698,63 @@ mod tests {
         let html = render_base(&base, &corpus, &opts());
         assert!(html.contains("docgen-base-cards"));
         assert!(html.contains("docgen-base-card__title"));
+    }
+
+    #[test]
+    fn grouped_limit_emits_no_orphan_group_header() {
+        // limit 2, groups done(A,B) and todo(C,D): the 'todo' header must NOT appear
+        // because the limit is consumed by the 'done' group.
+        let base = parse_base(
+            "views:\n  - type: table\n    order: [file.name]\n    groupBy: note.status\n    limit: 2\n",
+        )
+        .unwrap();
+        let corpus = Corpus::new(vec![
+            note("a", "A", &[("status", Value::Str("done".into()))]),
+            note("b", "B", &[("status", Value::Str("done".into()))]),
+            note("c", "C", &[("status", Value::Str("todo".into()))]),
+            note("d", "D", &[("status", Value::Str("todo".into()))]),
+        ]);
+        let html = render_base(&base, &corpus, &opts());
+        assert!(html.contains(">done<"));
+        assert!(
+            !html.contains(">todo<"),
+            "orphan group header must not appear"
+        );
+    }
+
+    #[test]
+    fn group_by_orders_numerically_not_lexically() {
+        let base = parse_base(
+            "views:\n  - type: table\n    order: [file.name]\n    groupBy: note.priority\n",
+        )
+        .unwrap();
+        let corpus = Corpus::new(vec![
+            note("a", "A", &[("priority", Value::Number(2.0))]),
+            note("b", "B", &[("priority", Value::Number(10.0))]),
+            note("c", "C", &[("priority", Value::Number(1.0))]),
+        ]);
+        let html = render_base(&base, &corpus, &opts());
+        // Groups appear in numeric order 1, 2, 10 — not lexical "1","10","2".
+        let p1 = html.find(">1<").unwrap();
+        let p2 = html.find(">2<").unwrap();
+        let p10 = html.find(">10<").unwrap();
+        assert!(p1 < p2 && p2 < p10, "expected 1 < 2 < 10 group order");
+    }
+
+    #[test]
+    fn cards_view_honors_display_name() {
+        let base = parse_base(
+            "properties:\n  note.status:\n    displayName: Current Status\nviews:\n  - type: cards\n    order: [file.name, note.status]\n",
+        )
+        .unwrap();
+        let corpus = Corpus::new(vec![note(
+            "a",
+            "A",
+            &[("status", Value::Str("open".into()))],
+        )]);
+        let html = render_base(&base, &corpus, &opts());
+        assert!(html.contains("Current Status"));
+        assert!(!html.contains("<dt>Status</dt>"));
     }
 
     #[test]

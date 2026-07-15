@@ -241,9 +241,11 @@ fn string_method(s: &str, method: &str, args: &[Value]) -> Value {
             } else {
                 s.split(&arg0).map(|p| Value::Str(p.to_string())).collect()
             };
+            // A negative limit means "no limit" (JS/Obsidian semantics); a
+            // non-negative limit caps the number of substrings.
             let limited = match args.get(1).and_then(Value::as_number) {
-                Some(n) => parts.into_iter().take(n as usize).collect(),
-                None => parts,
+                Some(n) if n >= 0.0 => parts.into_iter().take(n as usize).collect(),
+                _ => parts,
             };
             Value::List(limited)
         }
@@ -602,6 +604,15 @@ mod tests {
     #[test]
     fn string_split() {
         match eval_str(r#""a,b,c,d".split(",", 3)"#) {
+            Value::List(items) => assert_eq!(items.len(), 3),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn string_split_negative_limit_means_no_limit() {
+        // JS/Obsidian: a negative limit returns all substrings, not an empty list.
+        match eval_str(r#""a,b,c".split(",", -1)"#) {
             Value::List(items) => assert_eq!(items.len(), 3),
             other => panic!("{other:?}"),
         }

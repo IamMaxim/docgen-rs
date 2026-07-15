@@ -3,7 +3,7 @@
 //! panics: unknown identifiers, type mismatches, and out-of-range indices all
 //! resolve to [`Value::Null`], matching Obsidian's forgiving evaluation.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 
 use crate::ast::{BinaryOp, Expr, UnaryOp};
@@ -25,7 +25,15 @@ pub struct EvalCtx<'a> {
     active: RefCell<Vec<String>>,
     /// Memoized formula results for this note.
     cache: RefCell<BTreeMap<String, Value>>,
+    /// Current evaluation recursion depth (guards against a stack overflow from a
+    /// deeply nested AST — e.g. a long member chain the parser built iteratively).
+    depth: Cell<usize>,
 }
+
+/// Maximum evaluation recursion depth. A deeper AST resolves to `Null` rather than
+/// overflowing the stack. Matches the parser's nesting guard in spirit; the
+/// parser's node budget keeps ASTs well under this in practice.
+pub const MAX_EVAL_DEPTH: usize = 512;
 
 impl<'a> EvalCtx<'a> {
     pub fn new(note: &'a Note, corpus: &'a Corpus, formulas: &'a BTreeMap<String, Expr>) -> Self {
@@ -36,6 +44,7 @@ impl<'a> EvalCtx<'a> {
             formulas,
             active: RefCell::new(Vec::new()),
             cache: RefCell::new(BTreeMap::new()),
+            depth: Cell::new(0),
         }
     }
 
@@ -63,8 +72,20 @@ impl<'a> EvalCtx<'a> {
         v
     }
 
-    /// Evaluate an expression to a value.
+    /// Evaluate an expression to a value. Depth-guarded: a pathologically deep AST
+    /// resolves to `Null` past [`MAX_EVAL_DEPTH`] rather than overflowing the stack.
     pub fn eval(&self, expr: &Expr) -> Value {
+        let d = self.depth.get();
+        if d >= MAX_EVAL_DEPTH {
+            return Value::Null;
+        }
+        self.depth.set(d + 1);
+        let v = self.eval_inner(expr);
+        self.depth.set(d);
+        v
+    }
+
+    fn eval_inner(&self, expr: &Expr) -> Value {
         match expr {
             Expr::Null => Value::Null,
             Expr::Bool(b) => Value::Bool(*b),
@@ -125,23 +146,17 @@ impl<'a> EvalCtx<'a> {
         let recv = self.eval(obj);
         let key = self.eval(idx);
         match (&recv, &key) {
-            (Value::List(items), Value::Number(n)) => {
-                let i = *n as i64;
-                let len = items.len() as i64;
-                let i = if i < 0 { len + i } else { i };
-                if i >= 0 && i < len {
-                    items[i as usize].clone()
-                } else {
-                    Value::Null
-                }
-            }
+            (Value::List(items), Value::Number(n)) => match int_index(*n, items.len()) {
+                Some(i) => items[i].clone(),
+                None => Value::Null,
+            },
             (Value::Object(map), Value::Str(k)) => map.get(k).cloned().unwrap_or(Value::Null),
             (Value::Str(s), Value::Number(n)) => {
-                let i = *n as usize;
-                s.chars()
-                    .nth(i)
-                    .map(|c| Value::Str(c.to_string()))
-                    .unwrap_or(Value::Null)
+                let chars: Vec<char> = s.chars().collect();
+                match int_index(*n, chars.len()) {
+                    Some(i) => Value::Str(chars[i].to_string()),
+                    None => Value::Null,
+                }
             }
             _ => Value::Null,
         }
@@ -238,6 +253,23 @@ fn file_object(note: &Note) -> BTreeMap<String, Value> {
         m.insert(f.to_string(), note.file_property(f));
     }
     m
+}
+
+/// Resolve a numeric index into a collection of length `len`, applying Obsidian's
+/// rules: the index must be a finite integer (a fractional or NaN index is
+/// invalid → `None`); a negative index counts from the end; out-of-range → `None`.
+fn int_index(n: f64, len: usize) -> Option<usize> {
+    if !n.is_finite() || n.fract() != 0.0 {
+        return None;
+    }
+    let i = n as i64;
+    let len_i = len as i64;
+    let i = if i < 0 { len_i + i } else { i };
+    if i >= 0 && i < len_i {
+        Some(i as usize)
+    } else {
+        None
+    }
 }
 
 /// Member access on a *value* (not a namespace): list/string `.length`, date
@@ -450,6 +482,39 @@ mod tests {
         assert!(matches!(eval_str("cats[0]", &n), Value::Str(s) if s == "a"));
         assert!(matches!(eval_str("cats[-1]", &n), Value::Str(s) if s == "b"));
         assert!(matches!(eval_str("cats.length", &n), Value::Number(x) if x == 2.0));
+    }
+
+    #[test]
+    fn string_negative_index_counts_from_end() {
+        let n = note_with(&[("title", Value::Str("abc".into()))]);
+        assert!(matches!(eval_str("title[-1]", &n), Value::Str(s) if s == "c"));
+        assert!(matches!(eval_str("title[0]", &n), Value::Str(s) if s == "a"));
+        assert!(matches!(eval_str("title[5]", &n), Value::Null));
+    }
+
+    #[test]
+    fn fractional_and_nan_index_are_null() {
+        let n = note_with(&[(
+            "cats",
+            Value::List(vec![Value::Str("a".into()), Value::Str("b".into())]),
+        )]);
+        assert!(matches!(eval_str("cats[1.9]", &n), Value::Null));
+        // 0/0 → NaN index → Null (not element 0).
+        assert!(matches!(eval_str("cats[0 / 0]", &n), Value::Null));
+    }
+
+    #[test]
+    fn deep_member_chain_eval_does_not_overflow() {
+        // A member chain under the parser's node budget still parses, but evaluating
+        // it recurses deeper than MAX_EVAL_DEPTH — the eval guard must return Null
+        // rather than overflow the stack.
+        let n = Note::default();
+        let corpus = Corpus::new(vec![n.clone()]);
+        let formulas = BTreeMap::new();
+        let ctx = EvalCtx::new(&n, &corpus, &formulas);
+        let expr = format!("a{}", ".a".repeat(2000)); // 2001 nodes < 4096 budget
+        let parsed = crate::parser::parse(&expr).expect("under node budget → parses");
+        assert!(matches!(ctx.eval(&parsed), Value::Null));
     }
 
     #[test]

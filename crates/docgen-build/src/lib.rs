@@ -148,6 +148,7 @@ fn render_base_pages(
     base_inputs: &[BaseFileInput],
     corpus: &docgen_bases::Corpus,
     base_path: &str,
+    taken_slugs: &std::collections::BTreeSet<String>,
 ) -> (Vec<Doc>, Vec<SearchEntry>) {
     let opts = docgen_bases::RenderOptions {
         base: base_path.to_string(),
@@ -155,7 +156,18 @@ fn render_base_pages(
     };
     let mut docs = Vec::with_capacity(base_inputs.len());
     let mut search = Vec::with_capacity(base_inputs.len());
+    let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for b in base_inputs {
+        // A `.base` whose slug collides with a markdown page (or a previously seen
+        // base, or the site home) would overwrite that page's output. Skip it with
+        // a warning rather than corrupt the site.
+        if taken_slugs.contains(&b.slug) || !seen.insert(b.slug.clone()) {
+            eprintln!(
+                "bases: skipping {} — its slug `{}` collides with another page",
+                b.rel_path, b.slug
+            );
+            continue;
+        }
         let title = b.slug.rsplit('/').next().unwrap_or(&b.slug).to_string();
         let body_html = docgen_bases::render_base_source(&b.source, corpus, &opts);
         docs.push(Doc {
@@ -538,11 +550,26 @@ pub(crate) fn build_site_inner(
     // so the link graph (and the dev server's incremental equivalence check) stays
     // computed from markdown docs alone; base pages carry no links.
     let (base_pages, base_search): (Vec<Doc>, Vec<SearchEntry>) = match &bases_corpus {
-        Some(corpus) => render_base_pages(&base_inputs, corpus, &config.base),
+        Some(corpus) => {
+            // Slugs already claimed by markdown pages — a `.base` must not overwrite one.
+            let taken: std::collections::BTreeSet<String> =
+                site.docs.iter().map(|d| d.slug.clone()).collect();
+            render_base_pages(&base_inputs, corpus, &config.base, &taken)
+        }
         None => (Vec::new(), Vec::new()),
     };
     // Fold base search entries into the site index.
     site.search.extend(base_search);
+    // Whether any base consumer exists (a `.base` page or an embedded ```base
+    // block). Used by the dev server: because a base queries the whole corpus
+    // (frontmatter + body tags/links), any content edit invalidates it, so a
+    // consumer present forces a full rebuild instead of the incremental fast path.
+    let has_base_consumers = config.features.bases
+        && (!base_inputs.is_empty()
+            || site
+                .docs
+                .iter()
+                .any(|d| d.body_html.contains("docgen-base")));
     t.mark("render_bases");
 
     // Every downstream consumer (sidebar tree, page loop, home rows, page count)
@@ -895,6 +922,7 @@ pub(crate) fn build_site_inner(
             bases_corpus,
             base_inputs,
             base_pages,
+            has_base_consumers,
             config,
             registry,
             partials,
@@ -1067,6 +1095,23 @@ mod bases_tests {
         // The sidebar tree is embedded in every page; the base page's slug links.
         let home = fs::read_to_string(dist.join("index.html")).unwrap();
         assert!(home.contains("/Bases/Books"));
+    }
+
+    #[test]
+    fn base_slug_colliding_with_a_markdown_page_is_skipped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs).unwrap();
+        fs::write(docs.join("index.md"), "# Home\n").unwrap();
+        // A markdown page and a .base with the SAME slug (`Foo`).
+        fs::write(docs.join("Foo.md"), "# Foo Markdown\n").unwrap();
+        fs::write(docs.join("Foo.base"), "views:\n  - type: table\n").unwrap();
+        let out = build(root).unwrap();
+        // The markdown page's content wins; the base did not overwrite it.
+        let html = fs::read_to_string(out.out_dir.join("Foo/index.html")).unwrap();
+        assert!(html.contains("Foo Markdown"));
+        assert!(!html.contains("docgen-base-table"));
     }
 
     #[test]

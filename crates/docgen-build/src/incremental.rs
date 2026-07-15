@@ -57,6 +57,11 @@ pub(crate) struct CapturedBuild {
     /// Rendered `.base` pages, kept so the incremental page count stays accurate
     /// (they persist on disk across incremental rebuilds, which never touch them).
     pub base_pages: Vec<Doc>,
+    /// Whether the site has any base consumer (a `.base` page or an embedded
+    /// ```base block). When true, a base queries the whole corpus (frontmatter +
+    /// body tags/links), so any content edit invalidates it — the incremental fast
+    /// path is disabled and a full rebuild is taken instead.
+    pub has_base_consumers: bool,
     pub prepared: Vec<PreparedDoc>,
     pub docs: Vec<Doc>,
     pub outbound: BTreeMap<String, Vec<String>>,
@@ -224,6 +229,15 @@ impl DevState {
             if new.body_md != old.body_md {
                 changed.push(i);
             }
+        }
+
+        // A base queries the whole corpus, and each note's tags/links come from its
+        // BODY (inline `#tags` / `[[wikilinks]]`), not just frontmatter. So any
+        // content edit can change what a base renders — the cached corpus (and the
+        // on-disk base pages, which the fast path never rewrites) would go stale.
+        // When a base consumer exists, defer any real edit to a full rebuild.
+        if self.cap.has_base_consumers && self.cap.config.features.bases && !changed.is_empty() {
+            return Ok(None);
         }
 
         // Nothing actually changed (e.g. a touch / metadata-only fs event): no
@@ -562,6 +576,31 @@ mod tests {
         let (mut state, _) = DevState::initial(root, &out).unwrap();
 
         fs::write(root.join("docs/guide/c.md"), "# Gamma\n\nNew page.\n").unwrap();
+        assert_eq!(state.rebuild().unwrap().kind, RebuildKind::Full);
+    }
+
+    #[test]
+    fn body_edit_forces_full_rebuild_when_a_base_consumer_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let docs = root.join("docs");
+        fs::create_dir_all(docs.join("guide")).unwrap();
+        fs::write(docs.join("index.md"), "# Home\n").unwrap();
+        fs::write(docs.join("guide/a.md"), "# Alpha\n\nBody with #tag.\n").unwrap();
+        // A standalone base makes the whole site corpus-dependent.
+        fs::write(docs.join("all.base"), "views:\n  - type: table\n").unwrap();
+        let out = root.join("out");
+        let (mut state, first) = DevState::initial(root, &out).unwrap();
+        assert_eq!(first.kind, RebuildKind::Full);
+        assert!(state.cap.has_base_consumers);
+
+        // A body-only edit (same title/desc) that changes an inline #tag would
+        // change the corpus — so with a base present it must be a FULL rebuild.
+        fs::write(
+            root.join("docs/guide/a.md"),
+            "# Alpha\n\nBody with #different.\n",
+        )
+        .unwrap();
         assert_eq!(state.rebuild().unwrap().kind, RebuildKind::Full);
     }
 

@@ -193,22 +193,45 @@ pub fn parse_date(s: &str) -> Option<BaseDate> {
     let year: i64 = dp.next()?.parse().ok()?;
     let month: u32 = dp.next()?.parse().ok()?;
     let day: u32 = dp.next()?.parse().ok()?;
-    if dp.next().is_some() || !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+    if dp.next().is_some() || !(1..=12).contains(&month) {
+        return None;
+    }
+    // Reject impossible calendar dates (e.g. Feb 30, Apr 31): validate the day
+    // against the month's actual length so `epoch_millis` never aliases an
+    // out-of-range day onto a different real date.
+    if day < 1 || day > days_in_month(year, month) {
         return None;
     }
     // A plausible year band guards against matching things like `12-34-56` ids.
     if !(1000..=9999).contains(&year) {
         return None;
     }
-    let (mut hour, mut minute, mut second, has_time) = (0u32, 0u32, 0u32, time_part.is_some());
+    let (mut hour, mut minute, mut second, mut millisecond, has_time) =
+        (0u32, 0u32, 0u32, 0u32, time_part.is_some());
     if let Some(t) = time_part {
-        // Strip a trailing timezone (Z or ±hh:mm) — treated as naive.
-        let t = t.trim_end_matches('Z');
-        let t = t.split(['+']).next().unwrap_or(t);
+        // Strip a trailing timezone (`Z` or `±hh:mm`) — dates are treated as naive.
+        // A time never contains `+`/`-` itself, so splitting on them isolates the
+        // clock portion for both positive and negative offsets.
+        let t = t.trim().trim_end_matches('Z');
+        let t = t.split(['+', '-']).next().unwrap_or(t);
         let mut tp = t.split(':');
         hour = tp.next()?.trim().parse().ok()?;
         minute = tp.next().unwrap_or("0").parse().ok()?;
-        second = tp.next().unwrap_or("0").parse().ok()?;
+        // Seconds may carry a fractional part (`ss.SSS`); split it into millis.
+        let sec_field = tp.next().unwrap_or("0");
+        let (sec_str, ms) = match sec_field.split_once('.') {
+            Some((s, frac)) => {
+                // Take up to 3 fractional digits, right-padded, as milliseconds.
+                let mut f = frac.chars().take(3).collect::<String>();
+                while f.len() < 3 {
+                    f.push('0');
+                }
+                (s, f.parse::<u32>().ok()?)
+            }
+            None => (sec_field, 0),
+        };
+        second = sec_str.parse().ok()?;
+        millisecond = ms;
         if hour > 23 || minute > 59 || second > 59 {
             return None;
         }
@@ -220,9 +243,27 @@ pub fn parse_date(s: &str) -> Option<BaseDate> {
         hour,
         minute,
         second,
-        millisecond: 0,
+        millisecond,
         has_time,
     })
+}
+
+/// Days in `month` (1-12) of `year`, accounting for leap years (proleptic
+/// Gregorian).
+fn days_in_month(year: i64, month: u32) -> u32 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+            if leap {
+                29
+            } else {
+                28
+            }
+        }
+        _ => 0,
+    }
 }
 
 #[cfg(test)]
@@ -256,6 +297,29 @@ mod tests {
         assert!(parse_date("hello").is_none());
         assert!(parse_date("12-34-56").is_none());
         assert!(parse_date("2024-13-01").is_none());
+    }
+
+    #[test]
+    fn parse_date_handles_timezones_and_fractions() {
+        // Negative offset (Western timezone) must parse, not degrade to a string.
+        let d = parse_date("2024-01-02T15:04:05-05:00").unwrap();
+        assert_eq!((d.hour, d.minute, d.second), (15, 4, 5));
+        // Positive offset and Z too.
+        assert!(parse_date("2024-01-02T15:04:05+05:30").is_some());
+        assert!(parse_date("2024-01-02T15:04:05Z").is_some());
+        // Fractional seconds → milliseconds.
+        let f = parse_date("2024-01-02T15:04:05.123").unwrap();
+        assert_eq!(f.millisecond, 123);
+        assert_eq!(f.second, 5);
+    }
+
+    #[test]
+    fn parse_date_rejects_impossible_calendar_dates() {
+        assert!(parse_date("2024-02-30").is_none()); // Feb never has 30
+        assert!(parse_date("2023-02-29").is_none()); // 2023 not a leap year
+        assert!(parse_date("2024-02-29").is_some()); // 2024 is a leap year
+        assert!(parse_date("2024-04-31").is_none()); // April has 30 days
+        assert!(parse_date("2024-04-30").is_some());
     }
 
     #[test]

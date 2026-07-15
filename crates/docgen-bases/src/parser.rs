@@ -5,11 +5,28 @@
 use crate::ast::{BinaryOp, Expr, UnaryOp};
 use crate::lexer::{tokenize, Token};
 
+/// Maximum expression nesting depth. Guards against a stack overflow from
+/// adversarial input (e.g. a `.base` filter of thousands of nested `(`/`!`/`-`):
+/// past this depth `parse` returns an error rather than recursing to a crash. The
+/// evaluator enforces a matching cap (see `eval::MAX_EVAL_DEPTH`).
+pub const MAX_PARSE_DEPTH: usize = 256;
+
+/// Maximum total AST nodes in one expression. Bounds a long *postfix* chain
+/// (`a.a.a…` / `f()()()…`), which is built iteratively and so escapes the depth
+/// guard — an unbounded chain would overflow both the evaluator and the recursive
+/// `Box<Expr>` drop. Real base expressions are tiny; this is a generous ceiling.
+pub const MAX_PARSE_NODES: usize = 4096;
+
 /// Parse a whole expression string. Trailing tokens after a complete expression
 /// are an error.
 pub fn parse(src: &str) -> Result<Expr, String> {
     let tokens = tokenize(src);
-    let mut p = Parser { tokens, pos: 0 };
+    let mut p = Parser {
+        tokens,
+        pos: 0,
+        depth: 0,
+        nodes: 0,
+    };
     let expr = p.expr(0)?;
     if !matches!(p.peek(), Token::Eof) {
         return Err(format!("unexpected trailing token: {:?}", p.peek()));
@@ -20,6 +37,10 @@ pub fn parse(src: &str) -> Result<Expr, String> {
 struct Parser {
     tokens: Vec<Token>,
     pos: usize,
+    /// Current recursion depth, bounded by [`MAX_PARSE_DEPTH`].
+    depth: usize,
+    /// Total AST nodes produced, bounded by [`MAX_PARSE_NODES`].
+    nodes: usize,
 }
 
 /// Binding powers for binary operators (higher binds tighter). `||` < `&&` <
@@ -63,13 +84,36 @@ impl Parser {
         }
     }
 
-    /// Parse an expression with binding power >= `min_bp`.
+    /// Parse an expression with binding power >= `min_bp`. Depth-guarded: past
+    /// [`MAX_PARSE_DEPTH`] nested calls it errors instead of overflowing the stack.
     fn expr(&mut self, min_bp: u8) -> Result<Expr, String> {
+        self.depth += 1;
+        if self.depth > MAX_PARSE_DEPTH {
+            self.depth -= 1;
+            return Err("expression nesting too deep".to_string());
+        }
+        let result = self.expr_inner(min_bp);
+        self.depth -= 1;
+        result
+    }
+
+    /// Charge one AST node against the budget, erroring past [`MAX_PARSE_NODES`].
+    /// Bounds the iterative postfix chain (which the depth guard doesn't cover).
+    fn bump(&mut self) -> Result<(), String> {
+        self.nodes += 1;
+        if self.nodes > MAX_PARSE_NODES {
+            return Err("expression too large".to_string());
+        }
+        Ok(())
+    }
+
+    fn expr_inner(&mut self, min_bp: u8) -> Result<Expr, String> {
         let mut lhs = self.prefix()?;
         loop {
             // Postfix: member `.name`, index `[...]`, call `(...)`.
             match self.peek() {
                 Token::Dot => {
+                    self.bump()?;
                     self.pos += 1;
                     let name = match self.next() {
                         Token::Ident(n) => n,
@@ -83,6 +127,7 @@ impl Parser {
                     continue;
                 }
                 Token::LBracket => {
+                    self.bump()?;
                     self.pos += 1;
                     let idx = self.expr(0)?;
                     self.eat(&Token::RBracket)?;
@@ -90,6 +135,7 @@ impl Parser {
                     continue;
                 }
                 Token::LParen => {
+                    self.bump()?;
                     self.pos += 1;
                     let args = self.args()?;
                     self.eat(&Token::RParen)?;
@@ -105,6 +151,7 @@ impl Parser {
             if lbp < min_bp {
                 break;
             }
+            self.bump()?;
             self.pos += 1;
             let rhs = self.expr(rbp)?;
             lhs = Expr::Binary(op, Box::new(lhs), Box::new(rhs));
@@ -267,5 +314,33 @@ mod tests {
         // !file.inFolder("Misc")
         let e = parse("!file.inFolder(\"Misc\")").unwrap();
         assert!(matches!(e, Expr::Unary(UnaryOp::Not, _)));
+    }
+
+    #[test]
+    fn deeply_nested_input_errors_instead_of_overflowing() {
+        // Adversarial nesting must return an error, not crash the process.
+        let parens = "(".repeat(100_000);
+        assert!(parse(&parens).is_err());
+        let bangs = format!("{}x", "!".repeat(100_000));
+        assert!(parse(&bangs).is_err());
+        let negs = format!("{}x", "-".repeat(100_000));
+        assert!(parse(&negs).is_err());
+    }
+
+    #[test]
+    fn long_postfix_chain_errors_on_node_budget() {
+        // A long member chain is built iteratively; the node budget must bound it
+        // so neither eval nor the recursive Box<Expr> drop overflows.
+        let chain = format!("a{}", ".a".repeat(100_000));
+        assert!(parse(&chain).is_err());
+    }
+
+    #[test]
+    fn normal_expressions_stay_under_the_budget() {
+        // A realistic base expression parses fine.
+        assert!(parse(
+            r#"categories.contains(link("Categories/Books", "Books")) && !file.inFolder("Misc")"#
+        )
+        .is_ok());
     }
 }
