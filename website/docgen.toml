@@ -13,6 +13,9 @@ search = true
 # The docs describe PlantUML via fenced examples (no live `:::plantuml`
 # directives), so the CI build needs no PlantUML server.
 plantuml = true
+# Obsidian Bases: `.base` files + ```base blocks, rendered to static HTML at
+# build time. The bases feature page embeds a live view over this site.
+bases = true
 
 [components]
 dir = "components"

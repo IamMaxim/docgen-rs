@@ -20,6 +20,10 @@ example rendered by docgen itself.
   modal and an interactive graph of how your docs link together.
 - **[[math-and-mermaid|Math & diagrams]]** — LaTeX math and mermaid diagrams,
   both rendered at build time.
+- **[[plantuml|PlantUML diagrams]]** — sequence, class, and activity diagrams
+  rendered to inline SVG at build time against a PlantUML server.
+- **[[bases|Obsidian Bases]]** — `.base` files and `base` code blocks become
+  filtered, sorted database views over your notes, rendered to static HTML.
 - **[[includes|Includes & partials]]** — transclude shared Markdown with
   `:include`, and keep helper files out of the sidebar with a `_` prefix.
 - **[[components]]** — built-in callouts and your own HTML/CSS components.
