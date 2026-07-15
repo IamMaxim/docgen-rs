@@ -431,9 +431,12 @@ mod tests {
         assert!(html.contains(r##"class="docgen-skip-link" href="#docgen-main""##));
         assert!(html.contains(r#"id="docgen-main""#));
         assert!(html.contains(r#"tabindex="-1""#));
-        // Hamburger links to the drawer it controls; Escape closes it.
+        // Hamburger links to the left drawer, the page-contents button to the
+        // right rail drawer; Escape closes both drawers and the overflow menu.
         assert!(html.contains(r#"aria-controls="docgen-sidebar""#));
-        assert!(html.contains("@keydown.escape.window=\"navOpen=false\""));
+        assert!(html.contains(r#"aria-controls="docgen-rail""#));
+        assert!(html
+            .contains("@keydown.escape.window=\"navOpen=false; railOpen=false; menuOpen=false\""));
         // Theme toggle exposes pressed state to AT.
         assert!(html.contains(":aria-pressed=\"theme==='light'\""));
         assert!(html.contains(":aria-pressed=\"theme==='dark'\""));
