@@ -1669,10 +1669,14 @@ kbd,
 		z-index: 45;
 		display: none;
 		flex-direction: column;
-		align-items: stretch;
+		/* Left-align at intrinsic width: the button strip and theme toggle are
+		   fixed-width pills, so stretching them full-panel-width leaves their
+		   inner buttons stranded in dead space. Sizing the panel to its content
+		   (width: max-content) and letting each control keep its natural width
+		   reads as a tidy stack of pills instead. */
+		align-items: flex-start;
 		gap: 10px;
 		width: max-content;
-		min-width: 176px;
 		padding: 10px;
 		border: 1px solid var(--border-strong);
 		border-radius: var(--r-md);
@@ -1681,9 +1685,6 @@ kbd,
 	}
 	.docgen-topbar__actions.is-menu-open {
 		display: flex;
-	}
-	.docgen-btn-strip {
-		align-self: stretch;
 	}
 	/* the desktop rail-collapse toggle is meaningless in compact (the rail is a
 	   drawer), so drop it from the menu. */
