@@ -96,6 +96,11 @@ pub fn discover_assets(root: &Path) -> std::io::Result<Vec<AssetFile>> {
         if path.extension().and_then(|e| e.to_str()) == Some("md") {
             continue;
         }
+        // PlantUML sources are build inputs (rendered to inline SVG via
+        // `:::plantuml{src=...}`), not published assets — never copy them.
+        if path.extension().and_then(|e| e.to_str()) == Some("puml") {
+            continue;
+        }
         // Skip hidden files (e.g. `.DS_Store`) even though they aren't dirs.
         if path
             .file_name()
@@ -116,6 +121,35 @@ pub fn discover_assets(root: &Path) -> std::io::Result<Vec<AssetFile>> {
         });
     }
     Ok(assets)
+}
+
+/// Walk `root` and load every `.puml` file into a docs-relative path → source
+/// map, for `:::plantuml{src=...}` references. Shares the prune rules of
+/// [`discover_docs`]. These files are build inputs, not published assets (they
+/// are excluded from [`discover_assets`]).
+pub fn discover_diagrams(root: &Path) -> std::io::Result<crate::pipeline::Diagrams> {
+    let mut out = crate::pipeline::Diagrams::new();
+    let walker = WalkDir::new(root)
+        .sort_by_file_name()
+        .into_iter()
+        .filter_entry(is_kept);
+    for entry in walker {
+        let entry = entry.map_err(io::Error::from)?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("puml") {
+            continue;
+        }
+        let rel = path
+            .strip_prefix(root)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        out.insert(rel, std::fs::read_to_string(path)?);
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -176,6 +210,31 @@ mod tests {
         let assets = discover_assets(&dir).unwrap();
         let rels: Vec<&str> = assets.iter().map(|a| a.rel_path.as_str()).collect();
         assert_eq!(rels, vec!["logo.svg", "system/attachments/image.png"]);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn discover_diagrams_loads_puml_and_assets_excludes_them() {
+        let dir = std::env::temp_dir().join(format!("docgen_puml_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("uml")).unwrap();
+        std::fs::write(dir.join("index.md"), "# Home\n").unwrap();
+        std::fs::write(dir.join("logo.svg"), "<svg/>").unwrap();
+        std::fs::write(dir.join("uml/a.puml"), "@startuml\nA->B\n@enduml\n").unwrap();
+
+        // Diagrams: only the .puml, keyed by slash-separated rel path.
+        let diagrams = discover_diagrams(&dir).unwrap();
+        assert_eq!(diagrams.len(), 1);
+        assert_eq!(
+            diagrams.get("uml/a.puml").map(String::as_str),
+            Some("@startuml\nA->B\n@enduml\n")
+        );
+
+        // Assets: the .puml is NOT copied (build input), only the real asset is.
+        let assets = discover_assets(&dir).unwrap();
+        let rels: Vec<&str> = assets.iter().map(|a| a.rel_path.as_str()).collect();
+        assert_eq!(rels, vec!["logo.svg"]);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

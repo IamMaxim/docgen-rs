@@ -427,11 +427,19 @@ pub fn substitute(
     registry: &docgen_components::Registry,
     render_inner: &dyn Fn(&str) -> String,
     resolve_include: &dyn Fn(&str) -> String,
+    render_plantuml: &dyn Fn(usize, &DirectiveInstance) -> String,
 ) -> (String, std::collections::BTreeSet<String>) {
     use docgen_components::DirectiveContext;
     let mut used = std::collections::BTreeSet::new();
     let mut out = html.to_string();
     for (idx, inst) in instances.iter().enumerate() {
+        // `:::plantuml` is a built-in that renders a diagram (SVG) at build time
+        // via the injected renderer — not a registry component.
+        if inst.name == "plantuml" {
+            let rendered = render_plantuml(idx, inst);
+            out = out.replace(&sentinel(idx), &rendered);
+            continue;
+        }
         // `:include{src=...}` is a built-in, file-transcluding directive — not a
         // registry component. It renders the resolved partial's markdown here.
         if inst.name == "include" {
@@ -485,6 +493,11 @@ pub(crate) fn error_span(name: &str, reason: &str) -> String {
 mod substitute_tests {
     use super::*;
 
+    /// A no-op `render_plantuml` closure for tests that exercise other directives.
+    fn no_plantuml(_idx: usize, _inst: &DirectiveInstance) -> String {
+        String::new()
+    }
+
     fn reg_with(name: &str, tpl: &str) -> docgen_components::Registry {
         let mut r = docgen_components::Registry::empty();
         r.insert(docgen_components::Component::from_parts(
@@ -501,7 +514,14 @@ mod substitute_tests {
             "<aside class=\"c--{{ attrs.type }}\">{{ content | safe }}</aside>",
         );
         let render_inner = |md: &str| format!("<p>{}</p>", md.trim().replace("**", ""));
-        let (out, used) = substitute(&html, &inst, &reg, &render_inner, &|_s| String::new());
+        let (out, used) = substitute(
+            &html,
+            &inst,
+            &reg,
+            &render_inner,
+            &|_s| String::new(),
+            &no_plantuml,
+        );
         assert!(out.contains("c--note"));
         assert!(out.contains("<p>hi</p>"));
         assert!(used.contains("callout"));
@@ -512,7 +532,14 @@ mod substitute_tests {
     fn unknown_directive_becomes_marked_error_span_not_panic() {
         let (html, inst) = extract(":bogus[x]{}\n");
         let reg = docgen_components::Registry::empty();
-        let (out, used) = substitute(&html, &inst, &reg, &|s| s.to_string(), &|_s| String::new());
+        let (out, used) = substitute(
+            &html,
+            &inst,
+            &reg,
+            &|s| s.to_string(),
+            &|_s| String::new(),
+            &no_plantuml,
+        );
         assert!(out.contains("docgen-directive-error"));
         assert!(out.contains("unknown directive"));
         assert!(out.contains("bogus"));
@@ -541,6 +568,7 @@ mod substitute_tests {
             &docgen_components::Registry::empty(),
             &|s| s.to_string(),
             &|_s| String::new(),
+            &no_plantuml,
         );
         assert!(out.contains("&lt;img&gt;"));
         assert!(!out.contains("<img>"));
@@ -551,7 +579,14 @@ mod substitute_tests {
         // A template referencing an undefined filter fails to render.
         let reg = reg_with("boom", "{{ content | nonexistent_filter }}");
         let (html, inst) = extract(":::boom{}\nx\n:::\n");
-        let (out, used) = substitute(&html, &inst, &reg, &|s| s.to_string(), &|_s| String::new());
+        let (out, used) = substitute(
+            &html,
+            &inst,
+            &reg,
+            &|s| s.to_string(),
+            &|_s| String::new(),
+            &no_plantuml,
+        );
         assert!(out.contains("docgen-directive-error"));
         assert!(out.contains("template error"));
         assert!(used.is_empty());

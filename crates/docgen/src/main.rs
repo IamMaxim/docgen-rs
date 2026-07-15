@@ -43,6 +43,13 @@ enum Command {
         #[arg(long, default_value_t = false)]
         open: bool,
     },
+    /// Run an ephemeral PlantUML server in a container for build-time diagram
+    /// rendering. Runs in the foreground; press Ctrl-C to stop (auto-removed).
+    Plantuml {
+        /// Host port to publish the server on (the default docgen connects to).
+        #[arg(long, default_value_t = 8080)]
+        port: u16,
+    },
 }
 
 fn main() -> Result<()> {
@@ -71,5 +78,6 @@ fn main() -> Result<()> {
             port,
             open,
         }),
+        Command::Plantuml { port } => docgen_plantuml::run_container(port),
     }
 }

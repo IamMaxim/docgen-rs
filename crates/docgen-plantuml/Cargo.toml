@@ -1,0 +1,17 @@
+[package]
+name = "docgen-plantuml"
+description = "Build-time PlantUML rendering (encoding, HTTP client, cache, container) for docgen"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+repository.workspace = true
+
+[dependencies]
+docgen-core = { workspace = true }
+anyhow = "1"
+flate2 = "1.0"
+sha2 = "0.10"
+ureq = "2.10"
+
+[dev-dependencies]
+tempfile = "3"

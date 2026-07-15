@@ -316,7 +316,34 @@ fn render_preview_document(
         rel_path: doc_rel_path.to_string(),
         raw: source.to_string(),
     });
-    let rendered = render_doc(&prepared, &config, &registry, &slugs, &partials, None);
+    // PlantUML support so a live-edited `:::plantuml` renders in preview just as
+    // it would in the build (cached diagrams need no server contact).
+    let diagrams =
+        docgen_core::discover::discover_diagrams(docs_dir).unwrap_or_default();
+    let plantuml_renderer = if config.features.plantuml {
+        Some(docgen_plantuml::HttpRenderer::new(
+            docgen_config::resolve_plantuml_server(&config.plantuml.server),
+            project_root.join(".docgen"),
+        ))
+    } else {
+        None
+    };
+    let plantuml_support =
+        plantuml_renderer
+            .as_ref()
+            .map(|r| docgen_core::plantuml::PlantumlSupport {
+                diagrams: &diagrams,
+                renderer: Some(r as &dyn docgen_core::PlantumlRenderer),
+            });
+    let rendered = render_doc(
+        &prepared,
+        &config,
+        &registry,
+        &slugs,
+        &partials,
+        None,
+        plantuml_support.as_ref(),
+    );
 
     // Per-page asset gating, mirroring the build's page render.
     let has_components_css = !registry.styles().is_empty();

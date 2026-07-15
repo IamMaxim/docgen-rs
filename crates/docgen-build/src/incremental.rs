@@ -40,6 +40,12 @@ pub(crate) struct CapturedBuild {
     pub config: docgen_config::SiteConfig,
     pub registry: docgen_components::Registry,
     pub partials: Partials,
+    /// Loaded `.puml` sources (docs-relative → source), for `:::plantuml{src=...}`.
+    /// A change here forces a full rebuild (diagrams re-render).
+    pub diagrams: docgen_core::pipeline::Diagrams,
+    /// Resolved PlantUML server URL, `Some` iff the feature is on. Reconstructs the
+    /// renderer for incremental re-renders without persisting the ureq agent.
+    pub plantuml_server: Option<String>,
     pub prepared: Vec<PreparedDoc>,
     pub docs: Vec<Doc>,
     pub outbound: BTreeMap<String, Vec<String>>,
@@ -162,6 +168,16 @@ impl DevState {
         if partials_new != self.cap.partials {
             return Ok(None);
         }
+        // A `.puml` source change is not visible in any doc's `body_md`, so the
+        // per-doc diff below wouldn't catch it. Reload the diagram map and defer to
+        // a full rebuild if it changed, so edited diagrams re-render.
+        let diagrams_new = match docgen_core::discover::discover_diagrams(&docs_dir) {
+            Ok(d) => d,
+            Err(_) => return Ok(None),
+        };
+        if diagrams_new != self.cap.diagrams {
+            return Ok(None);
+        }
         // The doc set + order must match exactly: an add/remove/rename/reorder
         // changes the tree, sections, recent list, and graph node order.
         if prepared_new.len() != self.cap.prepared.len() {
@@ -193,20 +209,38 @@ impl DevState {
         }
 
         // Re-render only the changed docs against the (unchanged) site slug set.
+        // Reconstruct the PlantUML renderer (cheap — just a ureq agent) so an
+        // edited inline diagram re-renders exactly as a full build would; cached
+        // diagrams are served from disk without contacting the server.
         let slugs: SlugSet = self.cap.prepared.iter().map(|p| p.slug.clone()).collect();
-        let mut rerendered: Vec<(usize, docgen_core::pipeline::RenderedDoc)> =
-            Vec::with_capacity(changed.len());
-        for &i in &changed {
-            let rd = render_doc(
-                &prepared_new[i],
-                &self.cap.config,
-                &self.cap.registry,
-                &slugs,
-                &partials_new,
-                None,
-            );
-            rerendered.push((i, rd));
-        }
+        // Scope the renderer/support borrows of `self.cap` so the mutations below
+        // (patching the cache) don't collide with them.
+        let rerendered: Vec<(usize, docgen_core::pipeline::RenderedDoc)> = {
+            let plantuml_renderer = self.cap.plantuml_server.as_ref().map(|server| {
+                docgen_plantuml::HttpRenderer::new(server.clone(), self.project_root.join(".docgen"))
+            });
+            let plantuml_support =
+                plantuml_renderer
+                    .as_ref()
+                    .map(|r| docgen_core::plantuml::PlantumlSupport {
+                        diagrams: &self.cap.diagrams,
+                        renderer: Some(r as &dyn docgen_core::PlantumlRenderer),
+                    });
+            let mut acc = Vec::with_capacity(changed.len());
+            for &i in &changed {
+                let rd = render_doc(
+                    &prepared_new[i],
+                    &self.cap.config,
+                    &self.cap.registry,
+                    &slugs,
+                    &partials_new,
+                    None,
+                    plantuml_support.as_ref(),
+                );
+                acc.push((i, rd));
+            }
+            acc
+        };
 
         // Rebuild the link graph from the cached outbound map with the changed
         // docs' entries swapped in. If the topology (edges) or backlinks differ,

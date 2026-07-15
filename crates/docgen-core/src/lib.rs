@@ -13,6 +13,7 @@ pub mod mathpass;
 pub mod mermaidpass;
 pub mod model;
 pub mod pipeline;
+pub mod plantuml;
 pub mod search;
 pub mod tablepass;
 pub mod tree;
@@ -25,4 +26,5 @@ pub use graphlayout::{
 };
 pub use headings::Heading;
 pub use model::{Backlink, Doc, LinkEdge, RawDoc, SearchEntry, TreeNode};
-pub use pipeline::{prepare, render_docs, PreparedDoc, SiteBuild};
+pub use pipeline::{prepare, render_docs, Diagrams, PreparedDoc, SiteBuild};
+pub use plantuml::{PlantumlError, PlantumlRenderer};
