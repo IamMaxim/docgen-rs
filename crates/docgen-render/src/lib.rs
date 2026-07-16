@@ -1345,6 +1345,7 @@ mod tests {
                 search_enabled: true,
                 has_components_css: false,
                 has_component_island: false,
+                has_base_island: false,
                 is_home: true,
                 has_diff: false,
                 graph_json: json,
