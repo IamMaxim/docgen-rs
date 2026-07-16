@@ -1,0 +1,28 @@
+filters:
+  - file.hasTag("release")
+properties:
+  note.date:
+    displayName: Date
+  note.service:
+    displayName: Service
+  note.releaser:
+    displayName: Released by
+  note.version:
+    displayName: Version
+  note.status:
+    displayName: Status
+  note.kind:
+    displayName: Kind
+views:
+  - type: table
+    name: All releases
+    order: [file.name, note.date, note.service, note.releaser, note.version, note.kind, note.status, note.tags]
+    sort:
+      - property: note.date
+        direction: DESC
+  - type: cards
+    name: Cards
+    order: [file.name, note.date, note.service, note.status]
+    sort:
+      - property: note.date
+        direction: DESC

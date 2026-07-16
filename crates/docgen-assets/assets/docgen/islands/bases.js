@@ -462,8 +462,25 @@
       grouped: !!(data.view && data.view.groupBy),
       controls: {}, // {facetPanels, updaters:[]}
       updaters: [], // fns that push state -> widget values
-      state: makeState(data)
+      state: makeState(data),
+      allIds: (data.rows || []).map(function (r) {
+        return r.id;
+      }),
+      // The SSR DOM is already emitted in the default (payload) sort order, so the
+      // first render only reorders if the URL restores a different sort.
+      domOrderSig: null,
+      prevVisible: null
     };
+    V.domOrderSig = sortSig(
+      (data.controls && data.controls.sort ? data.controls.sort : []).map(function (k) {
+        return { col: k.col, desc: !!k.desc };
+      })
+    );
+    // Seed the visibility baseline to the ACTUAL initial DOM state: the SSR emits
+    // every row visible (no `hidden`). Starting from {} would make the first
+    // render's delta skip rows that must become hidden (want=false, had=false).
+    V.prevVisible = {};
+    for (var ai = 0; ai < V.allIds.length; ai++) V.prevVisible[V.allIds[ai]] = true;
 
     buildControlBar(V);
     if (!V.grouped) wireSort(V);
@@ -585,16 +602,23 @@
 
   function buildFacet(V, bar, col, facets) {
     var wrap = h('div', 'docgen-base-facet');
-    var panelId = 'docgen-facet-' + V.idx + '-' + i2id(col.key);
+    // Unique per-view id: i2id(key) can collide for keys differing only in
+    // special chars, so append a per-view sequence to guarantee distinct ids.
+    V.facetSeq = (V.facetSeq || 0) + 1;
+    var panelId = 'docgen-facet-' + V.idx + '-' + i2id(col.key) + '-' + V.facetSeq;
     var btn = h('button', 'docgen-base-facet__button', {
       type: 'button',
       'aria-expanded': 'false',
       'aria-controls': panelId
     });
     btn.textContent = col.header + ' ';
-    var badge = h('span', 'docgen-base-facet__badge');
+    // The count badge is decorative; keep it out of the button's accessible name
+    // (otherwise it reads as e.g. "Status 2"). The selection count is conveyed via
+    // the button's aria-label in refreshBadge instead.
+    var badge = h('span', 'docgen-base-facet__badge', { 'aria-hidden': 'true' });
     badge.hidden = true;
     btn.appendChild(badge);
+    btn.setAttribute('aria-label', col.header);
     var panel = h('div', 'docgen-base-facet__panel', { id: panelId });
     panel.hidden = true;
 
@@ -626,9 +650,11 @@
       if (sel.length) {
         badge.hidden = false;
         badge.textContent = String(sel.length);
+        btn.setAttribute('aria-label', col.header + ', ' + sel.length + ' selected');
       } else {
         badge.hidden = true;
         badge.textContent = '';
+        btn.setAttribute('aria-label', col.header);
       }
     }
 
@@ -714,7 +740,10 @@
       type: 'date',
       'aria-label': col.header + ' to'
     });
+    var sep = h('span', 'docgen-base-range__sep', { 'aria-hidden': 'true' });
+    sep.textContent = '–';
     wrap.appendChild(from);
+    wrap.appendChild(sep);
     wrap.appendChild(to);
     bar.appendChild(wrap);
     function onChange() {
@@ -745,14 +774,19 @@
     var from = h('input', 'docgen-base-range__from', {
       type: 'number',
       step: 'any',
+      placeholder: 'min',
       'aria-label': col.header + ' min'
     });
     var to = h('input', 'docgen-base-range__to', {
       type: 'number',
       step: 'any',
+      placeholder: 'max',
       'aria-label': col.header + ' max'
     });
+    var sep = h('span', 'docgen-base-range__sep', { 'aria-hidden': 'true' });
+    sep.textContent = '–';
     wrap.appendChild(from);
+    wrap.appendChild(sep);
     wrap.appendChild(to);
     bar.appendChild(wrap);
     function onChange() {
@@ -827,6 +861,10 @@
         th.textContent = '';
         var btn = h('button', 'docgen-base-sort-th', { type: 'button' });
         btn.textContent = text;
+        // Direction caret as a real aria-hidden element (not CSS ::after, which
+        // some screen readers speak on top of the authoritative aria-sort state).
+        var caret = h('span', 'docgen-base-sort-caret', { 'aria-hidden': 'true' });
+        btn.appendChild(caret);
         th.appendChild(btn);
         btn.addEventListener('click', function () {
           var cur =
@@ -838,7 +876,7 @@
           else V.state.sort = [];
           applyAndRender(V);
         });
-        V.sortHeaders.push({ th: th, key: key });
+        V.sortHeaders.push({ th: th, key: key, caret: caret });
       })(ths[i]);
     }
     updateAriaSort(V);
@@ -849,15 +887,27 @@
     var active =
       V.state.sort && V.state.sort.length ? V.state.sort[0] : null;
     V.sortHeaders.forEach(function (sh) {
-      if (active && active.col === sh.key)
+      var isActive = active && active.col === sh.key;
+      if (isActive)
         sh.th.setAttribute('aria-sort', active.desc ? 'descending' : 'ascending');
       else sh.th.setAttribute('aria-sort', 'none');
+      if (sh.caret) sh.caret.textContent = isActive ? (active.desc ? '↓' : '↑') : '↕';
     });
   }
 
   function syncControlsFromState(V) {
     for (var i = 0; i < V.updaters.length; i++) V.updaters[i]();
     updateAriaSort(V);
+  }
+
+  // A stable signature of a sort-key array, to detect when the DOM's row order
+  // needs to actually change.
+  function sortSig(keys) {
+    return (keys || [])
+      .map(function (k) {
+        return k.col + (k.desc ? ':d' : ':a');
+      })
+      .join(',');
   }
 
   function applyAndRender(V) {
@@ -888,20 +938,34 @@
     var visibleSet = {};
     for (i = 0; i < windowIds.length; i++) visibleSet[windowIds[i]] = true;
 
-    // 4a. Reorder (ungrouped only): move matched nodes into sorted order.
+    // 4a. Reorder (ungrouped only) ONLY when the sort actually changed. Filtering
+    // and paging never change relative order, so re-appending every node on each
+    // keystroke is pure waste (and forces reflow). Reorder the FULL row set (not
+    // just matched) so hidden rows stay correctly positioned for later reveal.
     if (!V.grouped) {
-      for (i = 0; i < ordered.length; i++) {
-        var node = V.nodeById[ordered[i]];
-        if (node) V.container.appendChild(node);
+      var sig = sortSig(V.state.sort);
+      if (sig !== V.domOrderSig) {
+        var fullOrder = sortIds(V.allIds, V.rowsById, V.state.sort);
+        for (i = 0; i < fullOrder.length; i++) {
+          var node = V.nodeById[fullOrder[i]];
+          if (node) V.container.appendChild(node);
+        }
+        V.domOrderSig = sig;
       }
     }
-    // 4b. Visibility: hide any data row not in the current page window.
+    // 4b. Visibility: only toggle nodes whose visibility actually changed since the
+    // last render (delta), so per-keystroke DOM writes are proportional to the
+    // change, not to the total row count.
+    var prevVisible = V.prevVisible || {};
     for (id in V.nodeById) {
       if (!Object.prototype.hasOwnProperty.call(V.nodeById, id)) continue;
+      var want = !!visibleSet[id];
+      if (want === !!prevVisible[id]) continue;
       var n = V.nodeById[id];
-      if (visibleSet[id]) n.removeAttribute('hidden');
+      if (want) n.removeAttribute('hidden');
       else n.setAttribute('hidden', '');
     }
+    V.prevVisible = visibleSet;
     // 4c. Table groups: hide a group header with no visible data row in its group.
     if (V.view.type === 'table' && V.grouped) hideEmptyGroups(V);
 
@@ -909,7 +973,8 @@
     toggleEmpty(V, total === 0);
 
     // 5. status + pager + url
-    if (V.statusEl) V.statusEl.textContent = matched.length + ' of ' + V.rows.length;
+    if (V.statusEl)
+      V.statusEl.textContent = matched.length + ' of ' + V.rows.length + ' results';
     updatePager(V, total, pageSize);
     updateAriaSort(V);
     syncUrl(V);
@@ -983,8 +1048,27 @@
     var start = total === 0 ? 0 : V.state.page * pageSize + 1;
     var end = Math.min(total, (V.state.page + 1) * pageSize);
     V.pager.label.textContent = start + '–' + end + ' of ' + total;
-    V.pager.prev.disabled = V.state.page <= 0;
-    V.pager.next.disabled = V.state.page >= pageCount - 1;
+    // Disabling the button that currently holds focus would drop focus to <body>
+    // (lost place, no visible indicator). Move focus to the still-enabled sibling
+    // first. Set prev before next so reaching the last page lands focus on prev.
+    setDisabled(V.pager.prev, V.state.page <= 0, V.pager.next);
+    setDisabled(V.pager.next, V.state.page >= pageCount - 1, V.pager.prev);
+  }
+
+  function setDisabled(btn, disabled, sibling) {
+    if (
+      disabled &&
+      document.activeElement === btn &&
+      sibling &&
+      !sibling.disabled
+    ) {
+      try {
+        sibling.focus();
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    btn.disabled = disabled;
   }
 
   // --- URL sync -------------------------------------------------------------
@@ -1017,17 +1101,20 @@
   function restoreFromUrl(V) {
     var prefix = 'b' + V.idx + '.';
     var hash = location.hash.replace(/^#/, '');
-    if (!hash) return; // keep default (initial payload sort)
     var segs = hash
-      .split('&')
-      .filter(function (p) {
-        return p.indexOf(prefix) === 0;
-      })
-      .map(function (p) {
-        return p.slice(prefix.length);
-      });
-    if (!segs.length) return;
-    V.state = decodeState(segs.join('&'));
+      ? hash
+          .split('&')
+          .filter(function (p) {
+            return p.indexOf(prefix) === 0;
+          })
+          .map(function (p) {
+            return p.slice(prefix.length);
+          })
+      : [];
+    // No segments for this view (empty hash, or the hash was cleared/edited to
+    // drop this view) => reset to defaults. Returning early here would leave
+    // stale filter/sort state visible while the URL carries none.
+    V.state = segs.length ? decodeState(segs.join('&')) : makeState(V.data);
   }
 
   function onHashChange() {

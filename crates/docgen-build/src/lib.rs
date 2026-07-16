@@ -314,10 +314,13 @@ pub(crate) fn render_one_page(
         built: shared.built,
         has_history: false,
         has_mermaid: doc.has_mermaid,
-        // Interactive base marker: the emitter wraps each interactive view's
-        // payload in `<script class="docgen-base-data">`. Covers both `.base`
-        // pages and regular docs that embed a ```base block.
-        has_base_island: doc.body_html.contains("docgen-base-data"),
+        // Interactive base marker: the emitter's payload wrapper. Match the full
+        // opening tag (literal `<`) so prose/code that merely mentions the class
+        // name — where `<` is HTML-escaped to `&lt;` — never false-positives.
+        // Covers both `.base` pages and regular docs embedding a ```base block.
+        has_base_island: doc
+            .body_html
+            .contains("<script type=\"application/json\" class=\"docgen-base-data\">"),
         has_math: doc.has_math,
         base: shared.base,
         site_title: shared.site_title,
@@ -587,10 +590,12 @@ pub(crate) fn build_site_inner(
         .collect();
     // Whether any rendered doc carries an interactive base payload (a `.base`
     // page or an embedded ```base block). Gates shipping the bases island asset.
-    // Marker-based (matches the emitter's payload wrapper) for precision.
-    let any_base = all_docs
-        .iter()
-        .any(|d| d.body_html.contains("docgen-base-data"));
+    // Match the full payload wrapper tag (literal `<`) so a doc that only mentions
+    // the class name in prose/code (where `<` is escaped to `&lt;`) can't trip it.
+    let any_base = all_docs.iter().any(|d| {
+        d.body_html
+            .contains("<script type=\"application/json\" class=\"docgen-base-data\">")
+    });
     let tree = build_tree(&all_docs);
     t.mark("build_tree");
 

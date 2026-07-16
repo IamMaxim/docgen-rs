@@ -1109,20 +1109,84 @@ mod tests {
     }
 
     #[test]
-    fn payload_escapes_script_close() {
+    fn list_column_facet_cardinality_capped() {
+        fn list(items: &[&str]) -> Value {
+            Value::List(items.iter().map(|s| Value::Str((*s).into())).collect())
+        }
+        // A low-cardinality list column → enum.
+        let base =
+            parse_base("views:\n  - type: table\n    order: [file.name, note.tags]\n").unwrap();
+        let corpus = Corpus::new(vec![
+            note("a", "A", &[("tags", list(&["x", "y"]))]),
+            note("b", "B", &[("tags", list(&["y"]))]),
+        ]);
+        let v: serde_json::Value = serde_json::from_str(&extract_payload(&render_base(
+            &base,
+            &corpus,
+            &interactive_opts(),
+        )))
+        .unwrap();
+        let col = v["columns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["key"] == "note.tags")
+            .unwrap();
+        assert_eq!(col["type"], "list");
+        assert_eq!(col["filter"], "enum");
+
+        // A high-cardinality list column (distinct tokens > maxEnum) → text.
+        let base2 = parse_base(
+            "views:\n  - type: table\n    order: [file.name, note.tags]\n    docgenInteractive:\n      maxEnum: 2\n",
+        )
+        .unwrap();
+        let corpus2 = Corpus::new(vec![
+            note("a", "A", &[("tags", list(&["a", "b"]))]),
+            note("b", "B", &[("tags", list(&["c", "d"]))]),
+        ]);
+        let v2: serde_json::Value = serde_json::from_str(&extract_payload(&render_base(
+            &base2,
+            &corpus2,
+            &interactive_opts(),
+        )))
+        .unwrap();
+        let col2 = v2["columns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["key"] == "note.tags")
+            .unwrap();
+        assert_eq!(col2["type"], "list");
+        assert_eq!(
+            col2["filter"], "text",
+            "4 distinct tokens > maxEnum 2 → text"
+        );
+    }
+
+    #[test]
+    fn payload_escapes_all_angle_brackets() {
+        // Every `<` must be escaped — not just `</` — so no `</script`, `<!--`, or
+        // `<script` sequence can steer the HTML tokenizer out of the data script
+        // (a `<!--<script>` value contains no `</` yet still breaks naive escaping).
         let base = parse_base("views:\n  - type: table\n    order: [file.name, note.x]\n").unwrap();
         let corpus = Corpus::new(vec![note(
             "a",
             "A",
-            &[("x", Value::Str("</script><b>hi".into()))],
+            &[("x", Value::Str("</script><!--<script><b>hi".into()))],
         )]);
         let html = render_base(&base, &corpus, &interactive_opts());
         let region = extract_payload(&html);
-        // The escaped form is present; no raw closer leaked inside the payload.
-        assert!(region.contains("<\\/script"));
-        assert!(!region.contains("</script"));
-        // And the payload still parses back to the original string.
+        // No literal `<` at all leaks into the embedded JSON.
+        assert!(
+            !region.contains('<'),
+            "payload must contain no raw '<': {region}"
+        );
+        assert!(region.contains("\\u003c"), "escaped form present");
+        // And the payload still parses back to the exact original string.
         let v: serde_json::Value = serde_json::from_str(&region).unwrap();
-        assert_eq!(v["rows"][0]["cells"]["note.x"]["d"], "</script><b>hi");
+        assert_eq!(
+            v["rows"][0]["cells"]["note.x"]["d"],
+            "</script><!--<script><b>hi"
+        );
     }
 }

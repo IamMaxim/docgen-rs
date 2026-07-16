@@ -159,7 +159,28 @@ fn infer_from_cells(non_empty: &[&Value], max_enum: usize) -> (&'static str, boo
         "date" => ("date", true, "date"),
         "num" | "dur" => (type_, true, "number"),
         "bool" => ("bool", true, "boolean"),
-        "list" => ("list", true, "enum"),
+        "list" => {
+            // Multi-value column: enum over the distinct item tokens, but cap
+            // cardinality like scalars so a high-cardinality list (e.g. free-form
+            // tags across thousands of notes) falls back to text-search coverage
+            // rather than emitting thousands of facet checkboxes.
+            let mut tokens: BTreeSet<String> = BTreeSet::new();
+            for v in non_empty {
+                if let Value::List(items) = v {
+                    for item in items {
+                        tokens.insert(item.display());
+                    }
+                } else {
+                    tokens.insert(v.display());
+                }
+            }
+            let filter = if tokens.len() <= max_enum {
+                "enum"
+            } else {
+                "text"
+            };
+            ("list", true, filter)
+        }
         "obj" => ("obj", true, "none"),
         // "str" | "link" (and any fallback): enum if low-cardinality else text.
         _ => {
@@ -187,8 +208,13 @@ fn normalize_widget(w: &str) -> Option<&'static str> {
     }
 }
 
-/// Build the interactive payload JSON string, with `</` escaped to `<\/` so it is
-/// safe to embed inside a `<script type="application/json">` element.
+/// Build the interactive payload JSON string, safe to embed inside a
+/// `<script type="application/json">` element. Every `<` is escaped to its JSON
+/// `<` form: this neutralizes `</script`, `<!--`, and `<script` sequences —
+/// all of which can otherwise steer the HTML tokenizer's script-data states and
+/// prevent the element from closing (escaping only `</` is NOT sufficient because
+/// `<!--<script>` contains no `</`). `<` is valid JSON and `JSON.parse`
+/// restores it to `<`, so the island sees the original strings.
 pub(crate) fn build_payload(
     view: &View,
     base: &BaseFile,
@@ -271,8 +297,10 @@ pub(crate) fn build_payload(
         },
     });
 
-    // serde_json never fails to serialize a Value; escape `</` for safe embedding.
+    // serde_json never fails to serialize a Value. Escape EVERY `<` (not just
+    // `</`) so no `</script`/`<!--`/`<script` sequence can escape the enclosing
+    // <script> element; `<` is valid JSON and parses back to `<`.
     serde_json::to_string(&payload)
         .unwrap_or_else(|_| "{}".into())
-        .replace("</", "<\\/")
+        .replace('<', "\\u003c")
 }

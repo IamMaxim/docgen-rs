@@ -1611,12 +1611,18 @@ kbd,
 	cursor: pointer;
 	color: var(--text-dim);
 }
-/* Result count — pushed to the trailing edge of the control bar. */
+/* Result count — pushed to the trailing edge of the control bar. Uses
+   --text-dim (not --text-mute) to clear the WCAG 4.5:1 contrast minimum in
+   both themes, since this is the primary "your filter took effect" feedback. */
 .docgen-base-status {
 	margin-left: auto;
-	color: var(--text-mute);
+	color: var(--text-dim);
 	font-size: 0.9em;
 	font-variant-numeric: tabular-nums;
+}
+/* Separator between the two inputs of a date/number range (decorative). */
+.docgen-base-range__sep {
+	color: var(--text-mute);
 }
 /* Sortable table headers become buttons with an aria-sort caret. */
 .docgen-base-sort-th {
@@ -1633,18 +1639,14 @@ kbd,
 	align-items: center;
 	gap: 4px;
 }
-.docgen-base-sort-th::after {
-	content: '↕';
+/* Direction caret — a real aria-hidden <span> (set by the island), not ::after,
+   so screen readers don't speak it over the authoritative aria-sort state. */
+.docgen-base-sort-caret {
 	opacity: 0.35;
 	font-size: 0.85em;
 }
-.docgen-base-table th[aria-sort='ascending'] .docgen-base-sort-th::after {
-	content: '↑';
-	opacity: 1;
-	color: var(--accent);
-}
-.docgen-base-table th[aria-sort='descending'] .docgen-base-sort-th::after {
-	content: '↓';
+.docgen-base-table th[aria-sort='ascending'] .docgen-base-sort-caret,
+.docgen-base-table th[aria-sort='descending'] .docgen-base-sort-caret {
 	opacity: 1;
 	color: var(--accent);
 }
