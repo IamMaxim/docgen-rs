@@ -1,0 +1,895 @@
+{
+  "keys": [
+    {
+      "col": "note.tags",
+      "desc": false
+    }
+  ],
+  "payload": {
+    "columns": [
+      {
+        "filter": "text",
+        "header": "Name",
+        "key": "file.name",
+        "sortable": true,
+        "type": "str"
+      },
+      {
+        "filter": "number",
+        "header": "Num",
+        "key": "note.num",
+        "sortable": true,
+        "type": "num"
+      },
+      {
+        "filter": "enum",
+        "header": "Numstr",
+        "key": "note.numstr",
+        "sortable": true,
+        "type": "str"
+      },
+      {
+        "filter": "enum",
+        "header": "Mixed num",
+        "key": "note.mixed_num",
+        "sortable": true,
+        "type": "str"
+      },
+      {
+        "filter": "date",
+        "header": "Date",
+        "key": "note.date",
+        "sortable": true,
+        "type": "date"
+      },
+      {
+        "filter": "enum",
+        "header": "Mixed date",
+        "key": "note.mixed_date",
+        "sortable": true,
+        "type": "str"
+      },
+      {
+        "filter": "boolean",
+        "header": "Flag",
+        "key": "note.flag",
+        "sortable": true,
+        "type": "bool"
+      },
+      {
+        "filter": "enum",
+        "header": "Label",
+        "key": "note.label",
+        "sortable": true,
+        "type": "str"
+      },
+      {
+        "filter": "enum",
+        "header": "Owner",
+        "key": "note.owner",
+        "sortable": true,
+        "type": "link"
+      },
+      {
+        "filter": "enum",
+        "header": "Tags",
+        "key": "note.tags",
+        "sortable": true,
+        "type": "list"
+      },
+      {
+        "filter": "enum",
+        "header": "Version",
+        "key": "note.version",
+        "sortable": true,
+        "type": "str"
+      },
+      {
+        "filter": "enum",
+        "header": "Vermixed",
+        "key": "note.vermixed",
+        "sortable": true,
+        "type": "str"
+      }
+    ],
+    "controls": {
+      "pageSize": 0,
+      "search": true,
+      "sort": [
+        {
+          "col": "note.tags",
+          "desc": false
+        }
+      ]
+    },
+    "rows": [
+      {
+        "cells": {
+          "file.name": {
+            "d": "note-06.md",
+            "t": "str"
+          },
+          "note.date": {
+            "d": "2020-02-29",
+            "epoch": 1582934400000,
+            "t": "date"
+          },
+          "note.flag": {
+            "d": "false",
+            "num": 0.0,
+            "t": "bool"
+          },
+          "note.label": {
+            "d": "date",
+            "t": "str"
+          },
+          "note.mixed_date": {
+            "d": "2019-07-04",
+            "epoch": 1562198400000,
+            "t": "date"
+          },
+          "note.mixed_num": {
+            "d": "",
+            "empty": true,
+            "t": "null"
+          },
+          "note.num": {
+            "d": "1",
+            "num": 1.0,
+            "t": "num"
+          },
+          "note.numstr": {
+            "d": "3",
+            "num": 3.0,
+            "t": "str"
+          },
+          "note.owner": {
+            "d": "apple",
+            "t": "link"
+          },
+          "note.tags": {
+            "d": "",
+            "empty": true,
+            "t": "list"
+          },
+          "note.vermixed": {
+            "d": "",
+            "empty": true,
+            "t": "null"
+          },
+          "note.version": {
+            "d": "1.0.0-rc.11",
+            "sv": "00000000000000000001.00000000000000000000.00000000000000000000!1rc.000000000000000000011",
+            "t": "str"
+          }
+        },
+        "id": 0
+      },
+      {
+        "cells": {
+          "file.name": {
+            "d": "note-08.md",
+            "t": "str"
+          },
+          "note.date": {
+            "d": "2023-11-30 06:15:00",
+            "epoch": 1701324900000,
+            "t": "date"
+          },
+          "note.flag": {
+            "d": "",
+            "empty": true,
+            "t": "null"
+          },
+          "note.label": {
+            "d": "",
+            "empty": true,
+            "t": "str"
+          },
+          "note.mixed_date": {
+            "d": "",
+            "empty": true,
+            "t": "str"
+          },
+          "note.mixed_num": {
+            "d": "-3",
+            "num": -3.0,
+            "t": "str"
+          },
+          "note.num": {
+            "d": "10",
+            "num": 10.0,
+            "t": "num"
+          },
+          "note.numstr": {
+            "d": "",
+            "empty": true,
+            "t": "null"
+          },
+          "note.owner": {
+            "d": "Alice",
+            "t": "link"
+          },
+          "note.tags": {
+            "d": "api",
+            "f": [
+              "api"
+            ],
+            "t": "list"
+          },
+          "note.vermixed": {
+            "d": "1.0.0-rc.1",
+            "t": "str"
+          },
+          "note.version": {
+            "d": "1.2",
+            "num": 1.2,
+            "sv": "00000000000000000001.00000000000000000002.00000000000000000000~",
+            "t": "str"
+          }
+        },
+        "id": 1
+      },
+      {
+        "cells": {
+          "file.name": {
+            "d": "note-00.md",
+            "t": "str"
+          },
+          "note.date": {
+            "d": "2021-06-01",
+            "epoch": 1622505600000,
+            "t": "date"
+          },
+          "note.flag": {
+            "d": "true",
+            "num": 1.0,
+            "t": "bool"
+          },
+          "note.label": {
+            "d": "apple",
+            "t": "str"
+          },
+          "note.mixed_date": {
+            "d": "2020-01-01",
+            "epoch": 1577836800000,
+            "t": "date"
+          },
+          "note.mixed_num": {
+            "d": "3",
+            "num": 3.0,
+            "t": "num"
+          },
+          "note.num": {
+            "d": "-5",
+            "num": -5.0,
+            "t": "num"
+          },
+          "note.numstr": {
+            "d": "10",
+            "num": 10.0,
+            "t": "str"
+          },
+          "note.owner": {
+            "d": "Alice",
+            "t": "link"
+          },
+          "note.tags": {
+            "d": "api, db",
+            "f": [
+              "api",
+              "db"
+            ],
+            "t": "list"
+          },
+          "note.vermixed": {
+            "d": "1.0.0",
+            "t": "str"
+          },
+          "note.version": {
+            "d": "1.0.23",
+            "sv": "00000000000000000001.00000000000000000000.00000000000000000023~",
+            "t": "str"
+          }
+        },
+        "id": 2
+      },
+      {
+        "cells": {
+          "file.name": {
+            "d": "note-11.md",
+            "t": "str"
+          },
+          "note.date": {
+            "d": "2021-06-01",
+            "epoch": 1622505600000,
+            "t": "date"
+          },
+          "note.flag": {
+            "d": "true",
+            "num": 1.0,
+            "t": "bool"
+          },
+          "note.label": {
+            "d": "Apple",
+            "t": "str"
+          },
+          "note.mixed_date": {
+            "d": "2018-06-06",
+            "epoch": 1528243200000,
+            "t": "date"
+          },
+          "note.mixed_num": {
+            "d": "3",
+            "num": 3.0,
+            "t": "num"
+          },
+          "note.num": {
+            "d": "-5",
+            "num": -5.0,
+            "t": "num"
+          },
+          "note.numstr": {
+            "d": "1",
+            "num": 1.0,
+            "t": "str"
+          },
+          "note.owner": {
+            "d": "zulu",
+            "t": "link"
+          },
+          "note.tags": {
+            "d": "api, db",
+            "f": [
+              "api",
+              "db"
+            ],
+            "t": "list"
+          },
+          "note.vermixed": {
+            "d": "1.2.3.4",
+            "t": "str"
+          },
+          "note.version": {
+            "d": "10.0.0",
+            "sv": "00000000000000000010.00000000000000000000.00000000000000000000~",
+            "t": "str"
+          }
+        },
+        "id": 3
+      },
+      {
+        "cells": {
+          "file.name": {
+            "d": "note-02.md",
+            "t": "str"
+          },
+          "note.date": {
+            "d": "2019-12-31 23:59:59",
+            "epoch": 1577836799000,
+            "t": "date"
+          },
+          "note.flag": {
+            "d": "true",
+            "num": 1.0,
+            "t": "bool"
+          },
+          "note.label": {
+            "d": "apricot",
+            "t": "str"
+          },
+          "note.mixed_date": {
+            "d": "2022-05-05 12:00:00",
+            "epoch": 1651752000000,
+            "t": "date"
+          },
+          "note.mixed_num": {
+            "d": "-1",
+            "num": -1.0,
+            "t": "num"
+          },
+          "note.num": {
+            "d": "3",
+            "num": 3.0,
+            "t": "num"
+          },
+          "note.numstr": {
+            "d": "1",
+            "num": 1.0,
+            "t": "str"
+          },
+          "note.owner": {
+            "d": "carol",
+            "t": "link"
+          },
+          "note.tags": {
+            "d": "api, ui, db",
+            "f": [
+              "api",
+              "ui",
+              "db"
+            ],
+            "t": "list"
+          },
+          "note.vermixed": {
+            "d": "2.0.0",
+            "t": "str"
+          },
+          "note.version": {
+            "d": "1.19.20",
+            "sv": "00000000000000000001.00000000000000000019.00000000000000000020~",
+            "t": "str"
+          }
+        },
+        "id": 4
+      },
+      {
+        "cells": {
+          "file.name": {
+            "d": "note-01.md",
+            "t": "str"
+          },
+          "note.date": {
+            "d": "2021-06-01 00:00:00",
+            "epoch": 1622505600000,
+            "t": "date"
+          },
+          "note.flag": {
+            "d": "false",
+            "num": 0.0,
+            "t": "bool"
+          },
+          "note.label": {
+            "d": "Banana",
+            "t": "str"
+          },
+          "note.mixed_date": {
+            "d": "zebra",
+            "t": "str"
+          },
+          "note.mixed_num": {
+            "d": "10",
+            "num": 10.0,
+            "t": "str"
+          },
+          "note.num": {
+            "d": "0",
+            "num": 0.0,
+            "t": "num"
+          },
+          "note.numstr": {
+            "d": "2",
+            "num": 2.0,
+            "t": "str"
+          },
+          "note.owner": {
+            "d": "Bob",
+            "t": "link"
+          },
+          "note.tags": {
+            "d": "db",
+            "f": [
+              "db"
+            ],
+            "t": "list"
+          },
+          "note.vermixed": {
+            "d": "nightly",
+            "t": "str"
+          },
+          "note.version": {
+            "d": "1.2.12",
+            "sv": "00000000000000000001.00000000000000000002.00000000000000000012~",
+            "t": "str"
+          }
+        },
+        "id": 5
+      },
+      {
+        "cells": {
+          "file.name": {
+            "d": "note-04.md",
+            "t": "str"
+          },
+          "note.date": {
+            "d": "2018-03-15 08:30:00",
+            "epoch": 1521102600000,
+            "t": "date"
+          },
+          "note.flag": {
+            "d": "true",
+            "num": 1.0,
+            "t": "bool"
+          },
+          "note.label": {
+            "d": "cherry",
+            "t": "str"
+          },
+          "note.mixed_date": {
+            "d": "2020-01-01 00:00:00",
+            "epoch": 1577836800000,
+            "t": "date"
+          },
+          "note.mixed_num": {
+            "d": "abc",
+            "t": "str"
+          },
+          "note.num": {
+            "d": "42",
+            "num": 42.0,
+            "t": "num"
+          },
+          "note.numstr": {
+            "d": "-7",
+            "num": -7.0,
+            "t": "str"
+          },
+          "note.owner": {
+            "d": "dave",
+            "t": "link"
+          },
+          "note.tags": {
+            "d": "db, api",
+            "f": [
+              "db",
+              "api"
+            ],
+            "t": "list"
+          },
+          "note.vermixed": {
+            "d": "1.10.0",
+            "t": "str"
+          },
+          "note.version": {
+            "d": "1.0.0-rc.1",
+            "sv": "00000000000000000001.00000000000000000000.00000000000000000000!1rc.000000000000000000001",
+            "t": "str"
+          }
+        },
+        "id": 6
+      },
+      {
+        "cells": {
+          "file.name": {
+            "d": "note-10.md",
+            "t": "str"
+          },
+          "note.date": {
+            "d": "2021-06-01 12:00:00",
+            "epoch": 1622548800000,
+            "t": "date"
+          },
+          "note.flag": {
+            "d": "true",
+            "num": 1.0,
+            "t": "bool"
+          },
+          "note.label": {
+            "d": "banana",
+            "t": "str"
+          },
+          "note.mixed_date": {
+            "d": "",
+            "empty": true,
+            "t": "null"
+          },
+          "note.mixed_num": {
+            "d": "2",
+            "num": 2.0,
+            "t": "str"
+          },
+          "note.num": {
+            "d": "",
+            "empty": true,
+            "t": "null"
+          },
+          "note.numstr": {
+            "d": "10",
+            "num": 10.0,
+            "t": "str"
+          },
+          "note.owner": {
+            "d": "",
+            "empty": true,
+            "t": "null"
+          },
+          "note.tags": {
+            "d": "db, ui, api",
+            "f": [
+              "db",
+              "ui",
+              "api"
+            ],
+            "t": "list"
+          },
+          "note.vermixed": {
+            "d": "0.0.1",
+            "t": "str"
+          },
+          "note.version": {
+            "d": "1.2.0",
+            "sv": "00000000000000000001.00000000000000000002.00000000000000000000~",
+            "t": "str"
+          }
+        },
+        "id": 7
+      },
+      {
+        "cells": {
+          "file.name": {
+            "d": "note-03.md",
+            "t": "str"
+          },
+          "note.date": {
+            "d": "2025-01-01",
+            "epoch": 1735689600000,
+            "t": "date"
+          },
+          "note.flag": {
+            "d": "true",
+            "num": 1.0,
+            "t": "bool"
+          },
+          "note.label": {
+            "d": "BANANA",
+            "t": "str"
+          },
+          "note.mixed_date": {
+            "d": "alpha",
+            "t": "str"
+          },
+          "note.mixed_num": {
+            "d": "2",
+            "num": 2.0,
+            "t": "str"
+          },
+          "note.num": {
+            "d": "42",
+            "num": 42.0,
+            "t": "num"
+          },
+          "note.numstr": {
+            "d": "100",
+            "num": 100.0,
+            "t": "str"
+          },
+          "note.owner": {
+            "d": "alice",
+            "t": "link"
+          },
+          "note.tags": {
+            "d": "ui",
+            "f": [
+              "ui"
+            ],
+            "t": "list"
+          },
+          "note.vermixed": {
+            "d": "",
+            "empty": true,
+            "t": "str"
+          },
+          "note.version": {
+            "d": "v2.0.0",
+            "sv": "00000000000000000002.00000000000000000000.00000000000000000000~",
+            "t": "str"
+          }
+        },
+        "id": 8
+      },
+      {
+        "cells": {
+          "file.name": {
+            "d": "note-05.md",
+            "t": "str"
+          },
+          "note.date": {
+            "d": "2021-06-02",
+            "epoch": 1622592000000,
+            "t": "date"
+          },
+          "note.flag": {
+            "d": "false",
+            "num": 0.0,
+            "t": "bool"
+          },
+          "note.label": {
+            "d": "Cherry",
+            "t": "str"
+          },
+          "note.mixed_date": {
+            "d": "Beta",
+            "t": "str"
+          },
+          "note.mixed_num": {
+            "d": "0",
+            "num": 0.0,
+            "t": "num"
+          },
+          "note.num": {
+            "d": "9000000000000",
+            "num": 9000000000000.0,
+            "t": "num"
+          },
+          "note.numstr": {
+            "d": "30",
+            "num": 30.0,
+            "t": "str"
+          },
+          "note.owner": {
+            "d": "Erin",
+            "t": "link"
+          },
+          "note.tags": {
+            "d": "ui, api",
+            "f": [
+              "ui",
+              "api"
+            ],
+            "t": "list"
+          },
+          "note.vermixed": {
+            "d": "dev-build",
+            "t": "str"
+          },
+          "note.version": {
+            "d": "1.0.0",
+            "sv": "00000000000000000001.00000000000000000000.00000000000000000000~",
+            "t": "str"
+          }
+        },
+        "id": 9
+      },
+      {
+        "cells": {
+          "file.name": {
+            "d": "note-07.md",
+            "t": "str"
+          },
+          "note.date": {
+            "d": "",
+            "empty": true,
+            "t": "null"
+          },
+          "note.flag": {
+            "d": "true",
+            "num": 1.0,
+            "t": "bool"
+          },
+          "note.label": {
+            "d": "apple",
+            "t": "str"
+          },
+          "note.mixed_date": {
+            "d": "2022-05-05",
+            "epoch": 1651752000000,
+            "t": "date"
+          },
+          "note.mixed_num": {
+            "d": "1000",
+            "num": 1000.0,
+            "t": "num"
+          },
+          "note.num": {
+            "d": "2",
+            "num": 2.0,
+            "t": "num"
+          },
+          "note.numstr": {
+            "d": "2",
+            "num": 2.0,
+            "t": "str"
+          },
+          "note.owner": {
+            "d": "alice",
+            "t": "link"
+          },
+          "note.tags": {
+            "d": "zeta",
+            "f": [
+              "zeta"
+            ],
+            "t": "list"
+          },
+          "note.vermixed": {
+            "d": "1.9.0",
+            "t": "str"
+          },
+          "note.version": {
+            "d": "1.0.0-rc.2",
+            "sv": "00000000000000000001.00000000000000000000.00000000000000000000!1rc.000000000000000000002",
+            "t": "str"
+          }
+        },
+        "id": 10
+      },
+      {
+        "cells": {
+          "file.name": {
+            "d": "note-09.md",
+            "t": "str"
+          },
+          "note.date": {
+            "d": "1999-01-01",
+            "epoch": 915148800000,
+            "t": "date"
+          },
+          "note.flag": {
+            "d": "false",
+            "num": 0.0,
+            "t": "bool"
+          },
+          "note.label": {
+            "d": "Éclair",
+            "t": "str"
+          },
+          "note.mixed_date": {
+            "d": "2020-01-01",
+            "epoch": 1577836800000,
+            "t": "date"
+          },
+          "note.mixed_num": {
+            "d": "-1",
+            "num": -1.0,
+            "t": "num"
+          },
+          "note.num": {
+            "d": "0",
+            "num": 0.0,
+            "t": "num"
+          },
+          "note.numstr": {
+            "d": "apple",
+            "t": "str"
+          },
+          "note.owner": {
+            "d": "Zed",
+            "t": "link"
+          },
+          "note.tags": {
+            "d": "",
+            "empty": true,
+            "t": "null"
+          },
+          "note.vermixed": {
+            "d": "abc",
+            "t": "str"
+          },
+          "note.version": {
+            "d": "",
+            "empty": true,
+            "sv": "~2",
+            "t": "null"
+          }
+        },
+        "id": 11
+      }
+    ],
+    "v": 1,
+    "view": {
+      "groupBy": null,
+      "name": null,
+      "sort": [
+        {
+          "col": "note.tags",
+          "desc": false
+        }
+      ],
+      "type": "table"
+    }
+  },
+  "rustOrder": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+  ]
+}

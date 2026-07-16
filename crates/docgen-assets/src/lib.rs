@@ -194,6 +194,18 @@ pub fn graph_assets() -> Vec<Asset> {
     )]
 }
 
+/// Bases island JS. Emitted only on builds where a rendered page carries an
+/// interactive base (gated by [`EmitOptions::include_bases`]). The bases styles
+/// live in the shared `docgen.css`, so this slice is JS-only. The island reads
+/// each view's embedded JSON payload and enhances the SSR DOM in place.
+pub fn bases_assets() -> Vec<Asset> {
+    vec![embed(
+        "docgen/islands/bases.js",
+        "islands/bases.js",
+        AssetKind::Js,
+    )]
+}
+
 /// Diff workspace assets — the interactive `/diff/` page island plus its
 /// dedicated stylesheet. Emitted only on builds that render the `/diff/` page
 /// (gated by [`EmitOptions::include_diff`]); the page consumes the build-time
@@ -248,6 +260,10 @@ pub struct EmitOptions {
     /// Ship the graph island (`islands/graph.js`) — emitted when the `/graph/`
     /// page is rendered. Default false.
     pub include_graph: bool,
+    /// Ship the bases island (`islands/bases.js`) — emitted when a rendered page
+    /// carries an interactive base (embedded ```base block or `.base` page).
+    /// Default false.
+    pub include_bases: bool,
     /// Ship the diff workspace island + stylesheet (`islands/diff.js`,
     /// `diff.css`) — emitted when the `/diff/` page is rendered (the repo has
     /// doc history). Default false.
@@ -274,6 +290,7 @@ impl Default for EmitOptions {
             include_katex_runtime: false,
             include_mermaid: false,
             include_graph: false,
+            include_bases: false,
             include_diff: false,
             include_component_css: false,
             include_component_js: false,
@@ -298,6 +315,9 @@ pub fn assets_for(opts: &EmitOptions) -> Vec<Asset> {
     }
     if opts.include_graph {
         out.extend(graph_assets());
+    }
+    if opts.include_bases {
+        out.extend(bases_assets());
     }
     if opts.include_diff {
         out.extend(diff_assets());
@@ -707,6 +727,26 @@ mod tests {
     }
 
     #[test]
+    fn bases_slice_has_island_and_is_gated() {
+        let b = bases_assets();
+        assert!(b.iter().any(|a| a.path == "islands/bases.js"));
+        for a in &b {
+            assert!(!a.bytes.is_empty(), "{} empty", a.path);
+        }
+
+        // off by default
+        assert!(!assets_for(&EmitOptions::default())
+            .iter()
+            .any(|a| a.path == "islands/bases.js"));
+        // on when flag set
+        let full = assets_for(&EmitOptions {
+            include_bases: true,
+            ..Default::default()
+        });
+        assert!(full.iter().any(|a| a.path == "islands/bases.js"));
+    }
+
+    #[test]
     fn search_js_gated_by_include_search() {
         // On by default (pre-P6 behaviour).
         assert!(assets_for(&EmitOptions::default())
@@ -820,6 +860,7 @@ mod tests {
                         include_katex_runtime: k,
                         include_mermaid: m,
                         include_graph: g,
+                        include_bases: g,
                         include_diff: g,
                         // Component bundles flow through emit_component_bundle, not
                         // assets_for; both flags are inert here but iterated so the

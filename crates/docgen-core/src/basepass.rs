@@ -16,6 +16,9 @@ pub fn transform_bases<'a>(root: &'a AstNode<'a>, corpus: &Corpus, base_path: &s
     let opts = RenderOptions {
         base: base_path.to_string(),
         default_view_name: String::new(),
+        interactive: true,
+        // Overwritten per block below; `count` doubles as the block index.
+        block_index: 0,
     };
     let mut count = 0;
     transform(root, corpus, &opts, &mut count);
@@ -28,7 +31,16 @@ fn transform<'a>(node: &'a AstNode<'a>, corpus: &Corpus, opts: &RenderOptions, c
         if let NodeValue::CodeBlock(cb) = &data.value {
             let lang = cb.info.split_whitespace().next().unwrap_or("");
             if lang.eq_ignore_ascii_case("base") {
-                Some(render_base_source(&cb.literal, corpus, opts))
+                // Each block gets its own index so the views it emits are
+                // namespaced to it. Two blocks on a page would otherwise both
+                // number their views from 0, and the island keys URL-hash
+                // segments and facet DOM ids off that number — each block would
+                // strip the other's state from the URL on every keystroke.
+                let opts = RenderOptions {
+                    block_index: *count,
+                    ..opts.clone()
+                };
+                Some(render_base_source(&cb.literal, corpus, &opts))
             } else {
                 None
             }
@@ -84,6 +96,20 @@ mod tests {
         assert!(html.contains("docgen-base-table"));
         assert!(html.contains(">Dune<"));
         assert!(!html.contains("<code")); // not a normal code block
+    }
+
+    /// The reported failure was page-level, not base-level: two ` ```base ` blocks
+    /// each numbering their views from 0. The island keys URL-hash segments
+    /// (`b{idx}.`) and facet-panel DOM ids off `data-base-view`, so colliding ids
+    /// meant each block stripped the other's state out of the URL on every
+    /// keystroke, and both restored the same state on reload.
+    #[test]
+    fn two_base_blocks_on_a_page_get_distinct_view_ids() {
+        let block = "```base\nviews:\n  - type: table\n    order: [file.name]\n```\n";
+        let (html, n) = render(&format!("{block}\n{block}"), &corpus());
+        assert_eq!(n, 2);
+        assert!(html.contains("data-base-view=\"0-0\""));
+        assert!(html.contains("data-base-view=\"1-0\""));
     }
 
     #[test]

@@ -1,0 +1,41 @@
+filters:
+  - file.hasTag("release")
+properties:
+  note.date:
+    displayName: Date
+  note.version:
+    displayName: Version
+  note.kind:
+    displayName: Kind
+  note.areas:
+    displayName: Areas
+  note.crates:
+    displayName: Crates
+views:
+  - type: table
+    name: All releases
+    order: [file.name, note.date, note.version, note.kind, note.areas, note.crates]
+    sort:
+      - property: note.version
+        direction: DESC
+    # docgen-specific (Obsidian ignores this): page at 8 so the pager is visible
+    # over these 9 releases, and treat the version column as text rather than a
+    # facet — every value is unique, so a facet of them would filter to one row.
+    # It still sorts as a version (see `sortAs` in the Bases docs); nothing here
+    # asks for that, because the column is detected automatically.
+    docgenInteractive:
+      pageSize: 8
+      filters:
+        note.version: text
+  - type: cards
+    name: Cards
+    order: [file.name, note.date, note.version, note.areas]
+    sort:
+      - property: note.date
+        direction: DESC
+  - type: list
+    name: Recent releases
+    order: [file.name, note.date, note.version, note.kind]
+    sort:
+      - property: note.date
+        direction: DESC

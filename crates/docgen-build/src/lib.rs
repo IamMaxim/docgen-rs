@@ -153,6 +153,9 @@ fn render_base_pages(
     let opts = docgen_bases::RenderOptions {
         base: base_path.to_string(),
         default_view_name: String::new(),
+        interactive: true,
+        // A standalone `.base` file is the only base on its own page.
+        block_index: 0,
     };
     let mut docs = Vec::with_capacity(base_inputs.len());
     let mut search = Vec::with_capacity(base_inputs.len());
@@ -313,6 +316,13 @@ pub(crate) fn render_one_page(
         built: shared.built,
         has_history: false,
         has_mermaid: doc.has_mermaid,
+        // Interactive base marker: the emitter's payload wrapper. Match the full
+        // opening tag (literal `<`) so prose/code that merely mentions the class
+        // name — where `<` is HTML-escaped to `&lt;` — never false-positives.
+        // Covers both `.base` pages and regular docs embedding a ```base block.
+        has_base_island: doc
+            .body_html
+            .contains("<script type=\"application/json\" class=\"docgen-base-data\">"),
         has_math: doc.has_math,
         base: shared.base,
         site_title: shared.site_title,
@@ -580,6 +590,14 @@ pub(crate) fn build_site_inner(
         .cloned()
         .chain(base_pages.iter().cloned())
         .collect();
+    // Whether any rendered doc carries an interactive base payload (a `.base`
+    // page or an embedded ```base block). Gates shipping the bases island asset.
+    // Match the full payload wrapper tag (literal `<`) so a doc that only mentions
+    // the class name in prose/code (where `<` is escaped to `&lt;`) can't trip it.
+    let any_base = all_docs.iter().any(|d| {
+        d.body_html
+            .contains("<script type=\"application/json\" class=\"docgen-base-data\">")
+    });
     let tree = build_tree(&all_docs);
     t.mark("build_tree");
 
@@ -826,6 +844,7 @@ pub(crate) fn build_site_inner(
         built: &built_stamp,
         has_history: false,
         has_mermaid: false,
+        has_base_island: false,
         has_math: false,
         base: &config.base,
         site_title: config.title.as_deref().unwrap_or(""),
@@ -881,6 +900,9 @@ pub(crate) fn build_site_inner(
         // static build" invariant (editor/livereload) untouched.
         include_mermaid: site.any_mermaid || opts.mode == BuildMode::Dev,
         include_graph: config.features.graph,
+        // Ship the bases island only when a rendered page carries an interactive
+        // base payload (marker-based, matching the emitter).
+        include_bases: any_base,
         include_diff: has_diff,
         // Component bundles are written separately (B-8) via emit_component_bundle;
         // these flags are inert in assets_for.

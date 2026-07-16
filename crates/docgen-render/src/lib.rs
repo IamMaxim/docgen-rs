@@ -207,6 +207,10 @@ pub struct PageContext<'a> {
     pub has_history: bool,
     /// Whether this page contains a mermaid diagram (gates the mermaid island script).
     pub has_mermaid: bool,
+    /// Whether this page carries an interactive base — an embedded ```base block or
+    /// a `.base` page that emitted an interactive payload (gates the bases island
+    /// script `islands/bases.js`).
+    pub has_base_island: bool,
     /// Whether this page contains math (gates the KaTeX stylesheet `<head>` link).
     pub has_math: bool,
     /// Deployed base path (e.g. `/docs`); `""` → no `<base>` tag (default).
@@ -294,6 +298,7 @@ impl Renderer {
             built => ctx.built,
             has_history => ctx.has_history,
             has_mermaid => ctx.has_mermaid,
+            has_base_island => ctx.has_base_island,
             has_math => ctx.has_math,
             base => ctx.base,
             site_title => ctx.site_title,
@@ -394,6 +399,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: false,
                 base: "",
                 site_title: "",
@@ -427,6 +433,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: false,
                 base: "",
                 site_title: "",
@@ -471,6 +478,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: false,
                 base: "",
                 site_title: "",
@@ -501,6 +509,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: false,
                 base: "",
                 site_title: "",
@@ -546,6 +555,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: false,
             })
             .unwrap();
@@ -578,6 +588,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: false,
             })
             .unwrap();
@@ -611,6 +622,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: false,
             })
             .unwrap();
@@ -640,6 +652,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: false,
             })
             .unwrap();
@@ -680,6 +693,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: false,
             })
             .unwrap();
@@ -718,6 +732,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: false,
                 base: "",
                 site_title: "",
@@ -756,6 +771,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: false,
                 base: "",
                 site_title: "",
@@ -800,6 +816,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: false,
                 base: "",
                 site_title: "",
@@ -838,6 +855,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: false,
                 base: "",
                 site_title: "",
@@ -872,6 +890,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: false,
                 base: "",
                 site_title: "",
@@ -901,6 +920,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: false,
                 base: "",
                 site_title: "",
@@ -933,6 +953,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: false,
                 base: "",
                 site_title: "",
@@ -964,6 +985,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: true,
+                has_base_island: false,
                 has_math: false,
                 base: "",
                 site_title: "",
@@ -983,6 +1005,40 @@ mod tests {
     }
 
     #[test]
+    fn page_gates_bases_island_on_has_base_island() {
+        let ctx = |has_base_island: bool| PageContext {
+            title: "X",
+            slug: "x",
+            body_html: "",
+            tree: &[],
+            backlinks: &[],
+            headings: &[],
+            commit: "",
+            built: "",
+            has_history: false,
+            has_mermaid: false,
+            has_base_island,
+            has_math: false,
+            base: "",
+            site_title: "",
+            search_enabled: true,
+            has_components_css: false,
+            has_component_island: false,
+            is_home: false,
+            has_diff: false,
+            graph_json: "",
+            graph_node_count: 0,
+            graph_edge_count: 0,
+            description: "",
+            home: None,
+        };
+        let off = renderer().render_page(&ctx(false)).unwrap();
+        assert!(!off.contains("islands/bases.js")); // gated off
+        let on = renderer().render_page(&ctx(true)).unwrap();
+        assert!(on.contains(r#"src="/islands/bases.js""#));
+    }
+
+    #[test]
     fn page_links_katex_css_only_when_has_math() {
         let no_math = renderer()
             .render_page(&PageContext {
@@ -996,6 +1052,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: false,
                 base: "",
                 site_title: "",
@@ -1025,6 +1082,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: true,
                 base: "",
                 site_title: "",
@@ -1339,6 +1397,7 @@ mod tests {
             built: "",
             has_history: false,
             has_mermaid: false,
+            has_base_island: false,
             has_math: false,
             base: "",
             site_title: "",
@@ -1448,6 +1507,7 @@ mod tests {
                 built: "",
                 has_history: false,
                 has_mermaid: false,
+                has_base_island: false,
                 has_math: false,
                 base: "",
                 site_title: "Docs",

@@ -1,0 +1,10 @@
+# The sort-parity fixtures are written by the Rust generator
+# (`BLESS=1 cargo test -p docgen-bases --test sort_parity`), not by hand. They are
+# committed on purpose — they are the oracle that catches Rust-side comparator
+# drift — but they are machine output, so review the generator, not the JSON.
+#
+# `-diff` keeps 12k lines of generated JSON out of diffs, which is what makes the
+# change reviewable at all. The catch: re-blessing then reports "binary files
+# differ" instead of showing what moved. To actually read a fixture change, use
+# `git diff --text -- <path>`.
+crates/docgen-assets/js-tests/fixtures/sort-*.json linguist-generated=true -diff
