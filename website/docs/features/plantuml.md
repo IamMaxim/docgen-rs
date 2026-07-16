@@ -39,6 +39,14 @@ Bob --> Alice : Authentication response
 If both are given, `src` wins. Diagram `.puml` files are treated as build
 inputs, not published assets — they are never copied into the output.
 
+## Wide diagrams
+
+Diagrams render at their natural size. One that is wider than the reading column
+**scrolls horizontally inside its own box** rather than being scaled down to fit
+— PlantUML draws at a fixed size and asks that its output not be re-scaled, so
+squeezing a wide diagram into the column distorts it instead of shrinking it. The
+page itself never scrolls sideways; only the diagram does.
+
 ## Running a server
 
 Diagrams render against a PlantUML server. The quickest way to get one is the

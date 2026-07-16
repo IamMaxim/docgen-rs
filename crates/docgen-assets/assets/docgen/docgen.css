@@ -1347,9 +1347,16 @@ kbd,
 	color: var(--text-mute);
 	pointer-events: none;
 }
+/* Leave the diagram at its intrinsic size and let the container scroll it.
+   PlantUML sizes the root <svg> with an inline `style="width:..px;height:..px"`,
+   which beats any stylesheet rule, and sets `preserveAspectRatio="none"`, which
+   tells the SVG to stretch its content to fill whatever viewport it ends up with
+   instead of scaling proportionally. So a `max-width: 100%` here capped the width
+   of a wide diagram while the inline height stayed put, and the drawing came out
+   distorted rather than merely smaller (a 1590x422 diagram rendered 726x422).
+   Constraining either axis is unsafe while `preserveAspectRatio` is "none". */
 .docgen-plantuml svg {
-	max-width: 100%;
-	height: auto;
+	max-width: none;
 }
 /* Detailed, visible failure block (server unreachable, syntax error, missing
    file, feature off). A full block — not the inline directive-error pill — so the
