@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-build-v0.6.0...docgen-build-v0.7.0) - 2026-07-16
+
+### Added
+
+- *(bases)* M3 — ship + gate the interactive island
+- *(bases)* M1 — emit interactive payload + config (build-time)
+
+### Fixed
+
+- *(bases)* address the three ultrareview findings
+- *(bases)* M9 — address all 13 adversarial-review findings
+
 ## [0.6.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-build-v0.5.0...docgen-build-v0.6.0) - 2026-07-15
 
 ### Added

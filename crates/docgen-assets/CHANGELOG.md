@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-assets-v0.6.0...docgen-assets-v0.7.0) - 2026-07-16
+
+### Added
+
+- *(bases)* sort version columns as versions, not as text
+- *(bases)* M6 — style the interactive control bar
+- *(bases)* M4 — full interactive island (filter/sort/search/paginate)
+- *(bases)* M3 — ship + gate the interactive island
+
+### Fixed
+
+- *(bases)* [**breaking**] `limit` caps rows again; warn on typo'd docgenInteractive keys
+- *(bases)* address the three ultrareview findings
+- *(plantuml)* scroll wide diagrams instead of distorting them
+- *(bases)* hide interactive controls that set the `hidden` attribute
+- *(bases)* M9 — address all 13 adversarial-review findings
+
+### Other
+
+- *(assets)* pass explicit files to node --test, not the directory
+- *(bases)* M7 — cross-language sort-parity fixtures (Rust↔JS)
+
 ## [0.6.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-assets-v0.5.0...docgen-assets-v0.6.0) - 2026-07-15
 
 ### Added
