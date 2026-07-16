@@ -669,6 +669,7 @@ name = "docgen-bases"
 version = "0.6.0"
 dependencies = [
  "serde",
+ "serde_json",
  "serde_yml",
  "thiserror 2.0.18",
 ]

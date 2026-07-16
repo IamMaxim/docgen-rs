@@ -153,6 +153,7 @@ fn render_base_pages(
     let opts = docgen_bases::RenderOptions {
         base: base_path.to_string(),
         default_view_name: String::new(),
+        ..Default::default()
     };
     let mut docs = Vec::with_capacity(base_inputs.len());
     let mut search = Vec::with_capacity(base_inputs.len());

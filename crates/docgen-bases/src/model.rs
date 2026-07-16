@@ -20,6 +20,45 @@ pub struct BaseFile {
     pub summaries: BTreeMap<String, String>,
     /// The views to render, in order.
     pub views: Vec<View>,
+    /// docgen-specific (Obsidian-ignored): a bare bool that enables/disables the
+    /// interactive island for the whole base. `false` = force pure static.
+    #[serde(rename = "docgenInteractive")]
+    pub docgen_interactive: Option<InteractiveToggle>,
+}
+
+/// A bare boolean toggle (`docgenInteractive: false`) at the base level.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(transparent)]
+pub struct InteractiveToggle(pub bool);
+
+impl InteractiveToggle {
+    pub fn enabled(&self) -> bool {
+        self.0
+    }
+}
+
+/// docgen-specific per-view interactive overrides (`docgenInteractive: { ... }`).
+/// Everything is optional and Obsidian-tolerant (unknown keys ignored).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct ViewInteractive {
+    /// Explicitly enable/disable the island for this view (M3 host gating).
+    pub enabled: Option<bool>,
+    /// Show the free-text search box (default: true).
+    pub search: Option<bool>,
+    /// Rows per page (`pageSize`). 0 = no pagination.
+    #[serde(rename = "pageSize")]
+    pub page_size: Option<usize>,
+    /// Enum-vs-text cardinality threshold (`maxEnum`, default 40).
+    #[serde(rename = "maxEnum")]
+    pub max_enum: Option<usize>,
+    /// Per-column filter widget override: col → `none|text|enum|date|number|boolean`.
+    pub filters: BTreeMap<String, String>,
+    /// Per-column sortable override: col → bool.
+    pub sortable: BTreeMap<String, bool>,
+    /// Initial sort override (`defaultSort`).
+    #[serde(rename = "defaultSort")]
+    pub default_sort: Vec<SortKey>,
 }
 
 /// Per-property display config (`properties.<key>.displayName`).
@@ -90,6 +129,9 @@ pub struct View {
     pub summaries: BTreeMap<String, String>,
     /// Cards view: property whose value (image/url) is the card cover.
     pub image: Option<String>,
+    /// docgen-specific (Obsidian-ignored) interactive overrides for this view.
+    #[serde(rename = "docgenInteractive")]
+    pub interactive: Option<ViewInteractive>,
 }
 
 /// A sort key: which property, ascending or descending.
@@ -245,6 +287,52 @@ views:
         let yaml = "unknownTop: 1\nviews:\n  - type: table\n    bogusField: x\n";
         let base = parse_base(yaml).unwrap();
         assert_eq!(base.views.len(), 1);
+    }
+
+    #[test]
+    fn parses_docgen_interactive_overrides() {
+        let yaml = r#"
+docgenInteractive: false
+views:
+  - type: table
+    order: [file.name, note.status]
+    docgenInteractive:
+      enabled: true
+      search: false
+      pageSize: 25
+      maxEnum: 10
+      filters:
+        note.status: text
+      sortable:
+        note.status: false
+      defaultSort:
+        - property: note.status
+          direction: DESC
+"#;
+        let base = parse_base(yaml).unwrap();
+        assert_eq!(base.docgen_interactive.map(|t| t.enabled()), Some(false));
+        let v = &base.views[0];
+        let iv = v.interactive.as_ref().unwrap();
+        assert_eq!(iv.enabled, Some(true));
+        assert_eq!(iv.search, Some(false));
+        assert_eq!(iv.page_size, Some(25));
+        assert_eq!(iv.max_enum, Some(10));
+        assert_eq!(
+            iv.filters.get("note.status").map(String::as_str),
+            Some("text")
+        );
+        assert_eq!(iv.sortable.get("note.status"), Some(&false));
+        assert_eq!(iv.default_sort.len(), 1);
+        assert_eq!(iv.default_sort[0].property(), "note.status");
+        assert!(iv.default_sort[0].descending());
+    }
+
+    #[test]
+    fn base_without_interactive_keys_still_parses() {
+        // Mirrors `tolerates_unknown_keys`: the new optional fields default to None.
+        let base = parse_base("views:\n  - type: table\n    order: [file.name]\n").unwrap();
+        assert!(base.docgen_interactive.is_none());
+        assert!(base.views[0].interactive.is_none());
     }
 
     #[test]

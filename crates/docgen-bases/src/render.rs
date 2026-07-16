@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::ast::Expr;
 use crate::eval::EvalCtx;
 use crate::filter;
+use crate::interactive::{self, RowView};
 use crate::model::{BaseFile, GroupBy, View};
 use crate::note::{Corpus, Note};
 use crate::parser::parse;
@@ -20,6 +21,10 @@ pub struct RenderOptions {
     pub base: String,
     /// Fallback title used for a view with no `name`.
     pub default_view_name: String,
+    /// When true, emit the interactive DOM hooks + JSON payload the client-side
+    /// island hydrates against. When false, output is byte-for-byte the pure
+    /// static HTML (no `data-*` hooks, no payload script).
+    pub interactive: bool,
 }
 
 impl RenderOptions {
@@ -45,6 +50,7 @@ pub fn render_base(base: &BaseFile, corpus: &Corpus, opts: &RenderOptions) -> St
         };
         out.push_str(&render_view(
             &default,
+            0,
             base,
             corpus,
             opts,
@@ -52,9 +58,10 @@ pub fn render_base(base: &BaseFile, corpus: &Corpus, opts: &RenderOptions) -> St
             &custom_summaries,
         ));
     }
-    for view in &base.views {
+    for (idx, view) in base.views.iter().enumerate() {
         out.push_str(&render_view(
             view,
+            idx,
             base,
             corpus,
             opts,
@@ -82,13 +89,18 @@ fn parse_formulas(src: &BTreeMap<String, String>) -> BTreeMap<String, Expr> {
 }
 
 /// A row: the note plus its pre-evaluated column values (keyed by column ref).
+/// `id` is the stable index into the post-sort row slice (assigned before
+/// grouping), joining SSR DOM nodes to their payload entry in interactive mode.
 struct Row<'a> {
+    id: usize,
     note: &'a Note,
     cells: BTreeMap<String, Value>,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_view(
     view: &View,
+    view_index: usize,
     base: &BaseFile,
     corpus: &Corpus,
     opts: &RenderOptions,
@@ -123,12 +135,22 @@ fn render_view(
                 .iter()
                 .map(|(key, expr)| (key.clone(), ctx.eval(expr)))
                 .collect();
-            Row { note: n, cells }
+            Row {
+                id: 0,
+                note: n,
+                cells,
+            }
         })
         .collect();
 
     // Sort by the view's sort keys (evaluated on the fly), stable, in order.
     apply_sort(&mut rows, view, corpus, formulas);
+
+    // Assign each row a stable id = its index in the post-sort slice, BEFORE
+    // grouping, so the payload and the DOM `data-row` attributes agree.
+    for (i, row) in rows.iter_mut().enumerate() {
+        row.id = i;
+    }
 
     // Group (optional), then limit within the whole view.
     let name = view
@@ -153,7 +175,13 @@ fn render_view(
     };
 
     let mut section = String::new();
-    section.push_str("<section class=\"docgen-base-view\">");
+    if opts.interactive {
+        section.push_str(&format!(
+            "<section class=\"docgen-base-view\" data-base-view=\"{view_index}\">"
+        ));
+    } else {
+        section.push_str("<section class=\"docgen-base-view\">");
+    }
     if !name.is_empty() {
         section.push_str(&format!(
             "<div class=\"docgen-base-view__title\">{}</div>",
@@ -167,6 +195,20 @@ fn render_view(
         section.push_str(&format!(
             "<div class=\"docgen-base-warning\">Filter parse error: {}</div>",
             escape(&errs.join("; "))
+        ));
+    }
+    // Interactive payload: after the optional title/warning, before the body.
+    if opts.interactive {
+        let row_views: Vec<RowView> = rows
+            .iter()
+            .map(|r| RowView {
+                id: r.id,
+                cells: &r.cells,
+            })
+            .collect();
+        let json = interactive::build_payload(view, base, &columns, &row_views, opts);
+        section.push_str(&format!(
+            "<script type=\"application/json\" class=\"docgen-base-data\">{json}</script>"
         ));
     }
     section.push_str(&body);
@@ -232,7 +274,7 @@ fn apply_sort(
 /// Human-readable header for a column ref: `properties.<ref>.displayName` if set,
 /// else the last segment humanized (`file.name` → `Name`, `note.due_date` →
 /// `Due date`).
-fn column_header(col: &str, base: &BaseFile) -> String {
+pub(crate) fn column_header(col: &str, base: &BaseFile) -> String {
     if let Some(cfg) = base.properties.get(col) {
         if let Some(dn) = &cfg.display_name {
             return dn.clone();
@@ -263,7 +305,9 @@ fn render_table(
     custom_summaries: &BTreeMap<String, Expr>,
 ) -> String {
     let group_by = view.group_by.as_ref();
-    let limit = view.limit;
+    // Interactive mode paginates client-side, so emit ALL matched rows (the
+    // limit is carried in the payload); static mode keeps the hard truncation.
+    let limit = if opts.interactive { None } else { view.limit };
 
     let mut html = String::new();
     // Reuse the same horizontal-scroll wrapper docgen uses for wide markdown tables.
@@ -277,8 +321,13 @@ fn render_table(
             .get(col)
             .map(|w| format!(" style=\"width:{w}px\""))
             .unwrap_or_default();
+        let data_col = if opts.interactive {
+            format!(" data-col=\"{}\"", escape(col))
+        } else {
+            String::new()
+        };
         html.push_str(&format!(
-            "<th{width}>{}</th>",
+            "<th{width}{data_col}>{}</th>",
             escape(&column_header(col, base))
         ));
     }
@@ -297,8 +346,13 @@ fn render_table(
             }
         }
         if let Some(label) = group_label {
+            let data_group = if opts.interactive {
+                format!(" data-group=\"{}\"", escape(label))
+            } else {
+                String::new()
+            };
             html.push_str(&format!(
-                "<tr class=\"docgen-base-group\"><td colspan=\"{}\">{}</td></tr>",
+                "<tr class=\"docgen-base-group\"{data_group}><td colspan=\"{}\">{}</td></tr>",
                 columns.len().max(1),
                 escape(label)
             ));
@@ -309,7 +363,11 @@ fn render_table(
                     break 'groups;
                 }
             }
-            html.push_str("<tr>");
+            if opts.interactive {
+                html.push_str(&format!("<tr data-row=\"{}\">", row.id));
+            } else {
+                html.push_str("<tr>");
+            }
             for col in columns {
                 let val = row.cells.get(col).cloned().unwrap_or(Value::Null);
                 html.push_str(&format!(
@@ -401,10 +459,22 @@ fn render_cards(
     opts: &RenderOptions,
     corpus: &Corpus,
 ) -> String {
-    let limit = view.limit.unwrap_or(usize::MAX);
+    // Interactive mode emits ALL rows (island paginates); static mode truncates.
+    let limit = if opts.interactive {
+        usize::MAX
+    } else {
+        view.limit.unwrap_or(usize::MAX)
+    };
     let mut html = String::from("<div class=\"docgen-base-cards\">");
     for row in rows.iter().take(limit) {
-        html.push_str("<div class=\"docgen-base-card\">");
+        if opts.interactive {
+            html.push_str(&format!(
+                "<div class=\"docgen-base-card\" data-row=\"{}\">",
+                row.id
+            ));
+        } else {
+            html.push_str("<div class=\"docgen-base-card\">");
+        }
         // Card title: the note's file name, linked to its page.
         html.push_str(&format!(
             "<div class=\"docgen-base-card__title\">{}</div>",
@@ -450,8 +520,13 @@ fn render_list(
     let _ = (columns, formulas);
     let mut html = String::from("<ul class=\"docgen-base-list\">");
     for row in rows {
+        let li_open = if opts.interactive {
+            format!("<li data-row=\"{}\">", row.id)
+        } else {
+            "<li>".to_string()
+        };
         html.push_str(&format!(
-            "<li>{}</li>",
+            "{li_open}{}</li>",
             render_cell(
                 &Value::Str(row.note.basename.clone()),
                 "file.name",
@@ -571,7 +646,29 @@ fn escape(s: &str) -> String {
 mod tests {
     use super::*;
     use crate::model::parse_base;
-    use crate::value::{BaseLink, Value};
+    use crate::value::{BaseDate, BaseLink, Value};
+
+    fn date(y: i64, mo: u32, d: u32) -> Value {
+        Value::Date(BaseDate {
+            year: y,
+            month: mo,
+            day: d,
+            hour: 0,
+            minute: 0,
+            second: 0,
+            millisecond: 0,
+            has_time: false,
+        })
+    }
+
+    /// Extract the JSON text inside the `docgen-base-data` script element.
+    fn extract_payload(html: &str) -> String {
+        let marker = "class=\"docgen-base-data\">";
+        let start = html.find(marker).expect("payload script present") + marker.len();
+        let rest = &html[start..];
+        let end = rest.find("</script>").expect("payload script closes");
+        rest[..end].to_string()
+    }
 
     fn note(slug: &str, name: &str, props: &[(&str, Value)]) -> Note {
         let mut n = Note::default();
@@ -590,6 +687,15 @@ mod tests {
         RenderOptions {
             base: String::new(),
             default_view_name: "Base".into(),
+            interactive: false,
+        }
+    }
+
+    fn interactive_opts() -> RenderOptions {
+        RenderOptions {
+            base: String::new(),
+            default_view_name: "Base".into(),
+            interactive: true,
         }
     }
 
@@ -771,8 +877,210 @@ mod tests {
         let o = RenderOptions {
             base: "/docs".into(),
             default_view_name: "Base".into(),
+            interactive: false,
         };
         let html = render_base(&base, &corpus, &o);
         assert!(html.contains("href=\"/docs/guide/a\""));
+    }
+
+    // ---- Interactive mode (M1) ----
+
+    #[test]
+    fn interactive_false_is_pure_static() {
+        let base =
+            parse_base("views:\n  - type: table\n    order: [file.name, note.rating]\n").unwrap();
+        let corpus = Corpus::new(vec![note("a", "A", &[("rating", Value::Number(5.0))])]);
+        let html = render_base(&base, &corpus, &opts());
+        assert!(!html.contains("data-"));
+        assert!(!html.contains("docgen-base-data"));
+    }
+
+    #[test]
+    fn interactive_true_adds_hooks() {
+        let base =
+            parse_base("views:\n  - type: table\n    order: [file.name, note.rating]\n").unwrap();
+        let corpus = Corpus::new(vec![note("a", "A", &[("rating", Value::Number(5.0))])]);
+        let html = render_base(&base, &corpus, &interactive_opts());
+        assert!(html.contains("data-base-view=\"0\""));
+        assert!(html.contains("<script type=\"application/json\" class=\"docgen-base-data\">"));
+        assert!(html.contains("<tr data-row=\"0\""));
+        assert!(html.contains("<th data-col=\"file.name\""));
+    }
+
+    #[test]
+    fn payload_parses_and_limit_not_applied() {
+        let base =
+            parse_base("views:\n  - type: table\n    order: [file.name]\n    limit: 1\n").unwrap();
+        let corpus = Corpus::new(vec![
+            note("a", "A", &[]),
+            note("b", "B", &[]),
+            note("c", "C", &[]),
+        ]);
+        let html = render_base(&base, &corpus, &interactive_opts());
+        // Full matched set present in the DOM despite limit:1.
+        assert_eq!(html.matches("data-row=").count(), 3);
+        let payload = extract_payload(&html);
+        let v: serde_json::Value = serde_json::from_str(&payload).expect("valid JSON");
+        assert_eq!(v["v"], 1);
+        assert_eq!(v["columns"].as_array().unwrap().len(), 1);
+        assert_eq!(v["rows"].as_array().unwrap().len(), 3);
+        // limit is carried, not applied.
+        assert_eq!(v["view"]["limit"], 1);
+    }
+
+    #[test]
+    fn cell_projection_shapes() {
+        let base = parse_base(
+            "views:\n  - type: table\n    order: [file.name, note.due, note.tags, note.n, note.e]\n",
+        )
+        .unwrap();
+        let corpus = Corpus::new(vec![note(
+            "a",
+            "A",
+            &[
+                ("due", date(2026, 7, 15)),
+                (
+                    "tags",
+                    Value::List(vec![Value::Str("api".into()), Value::Str("db".into())]),
+                ),
+                ("n", Value::Number(42.0)),
+                ("e", Value::Null),
+            ],
+        )]);
+        let html = render_base(&base, &corpus, &interactive_opts());
+        let payload = extract_payload(&html);
+        let v: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        let cells = &v["rows"][0]["cells"];
+        // Date cell → epoch present.
+        assert_eq!(cells["note.due"]["t"], "date");
+        assert!(cells["note.due"]["epoch"].is_number());
+        // List cell → f tokens.
+        assert_eq!(cells["note.tags"]["t"], "list");
+        assert_eq!(cells["note.tags"]["f"], serde_json::json!(["api", "db"]));
+        assert_eq!(cells["note.tags"]["d"], "api, db");
+        // Numeric cell → num present.
+        assert_eq!(cells["note.n"]["t"], "num");
+        assert_eq!(cells["note.n"]["num"], 42.0);
+        // Null/empty cell → t null + empty true.
+        assert_eq!(cells["note.e"]["t"], "null");
+        assert_eq!(cells["note.e"]["empty"], true);
+    }
+
+    #[test]
+    fn type_inference_dates_enum_text() {
+        // All-dates column → type date, filter date.
+        let base =
+            parse_base("views:\n  - type: table\n    order: [file.name, note.due]\n").unwrap();
+        let corpus = Corpus::new(vec![
+            note("a", "A", &[("due", date(2026, 1, 1))]),
+            note("b", "B", &[("due", date(2026, 2, 2))]),
+        ]);
+        let html = render_base(&base, &corpus, &interactive_opts());
+        let v: serde_json::Value = serde_json::from_str(&extract_payload(&html)).unwrap();
+        let due = v["columns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["key"] == "note.due")
+            .unwrap();
+        assert_eq!(due["type"], "date");
+        assert_eq!(due["filter"], "date");
+
+        // Low-cardinality string → enum.
+        let corpus2 = Corpus::new(vec![
+            note("a", "A", &[("status", Value::Str("open".into()))]),
+            note("b", "B", &[("status", Value::Str("open".into()))]),
+            note("c", "C", &[("status", Value::Str("done".into()))]),
+        ]);
+        let base2 =
+            parse_base("views:\n  - type: table\n    order: [file.name, note.status]\n").unwrap();
+        let html2 = render_base(&base2, &corpus2, &interactive_opts());
+        let v2: serde_json::Value = serde_json::from_str(&extract_payload(&html2)).unwrap();
+        let st = v2["columns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["key"] == "note.status")
+            .unwrap();
+        assert_eq!(st["type"], "str");
+        assert_eq!(st["filter"], "enum");
+
+        // High-cardinality (> maxEnum) string → text (maxEnum lowered to 2).
+        let base3 = parse_base(
+            "views:\n  - type: table\n    order: [file.name, note.status]\n    docgenInteractive:\n      maxEnum: 2\n",
+        )
+        .unwrap();
+        let corpus3 = Corpus::new(vec![
+            note("a", "A", &[("status", Value::Str("one".into()))]),
+            note("b", "B", &[("status", Value::Str("two".into()))]),
+            note("c", "C", &[("status", Value::Str("three".into()))]),
+        ]);
+        let html3 = render_base(&base3, &corpus3, &interactive_opts());
+        let v3: serde_json::Value = serde_json::from_str(&extract_payload(&html3)).unwrap();
+        let st3 = v3["columns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["key"] == "note.status")
+            .unwrap();
+        assert_eq!(st3["filter"], "text");
+    }
+
+    #[test]
+    fn override_precedence_and_enabled_helper() {
+        // filters override forces text even though auto would pick enum.
+        let base = parse_base(
+            "views:\n  - type: table\n    order: [file.name, note.status]\n    docgenInteractive:\n      filters:\n        note.status: text\n",
+        )
+        .unwrap();
+        let corpus = Corpus::new(vec![
+            note("a", "A", &[("status", Value::Str("open".into()))]),
+            note("b", "B", &[("status", Value::Str("open".into()))]),
+        ]);
+        let html = render_base(&base, &corpus, &interactive_opts());
+        let v: serde_json::Value = serde_json::from_str(&extract_payload(&html)).unwrap();
+        let st = v["columns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["key"] == "note.status")
+            .unwrap();
+        assert_eq!(st["filter"], "text");
+
+        // enabled:false → view_interactive_enabled reports false.
+        let disabled =
+            parse_base("views:\n  - type: table\n    docgenInteractive:\n      enabled: false\n")
+                .unwrap();
+        assert!(!crate::view_interactive_enabled(
+            &disabled,
+            &disabled.views[0]
+        ));
+        // A plain view is enabled.
+        let plain = parse_base("views:\n  - type: table\n").unwrap();
+        assert!(crate::view_interactive_enabled(&plain, &plain.views[0]));
+        // Base-level docgenInteractive:false disables all views.
+        let base_off = parse_base("docgenInteractive: false\nviews:\n  - type: table\n").unwrap();
+        assert!(!crate::view_interactive_enabled(
+            &base_off,
+            &base_off.views[0]
+        ));
+    }
+
+    #[test]
+    fn payload_escapes_script_close() {
+        let base = parse_base("views:\n  - type: table\n    order: [file.name, note.x]\n").unwrap();
+        let corpus = Corpus::new(vec![note(
+            "a",
+            "A",
+            &[("x", Value::Str("</script><b>hi".into()))],
+        )]);
+        let html = render_base(&base, &corpus, &interactive_opts());
+        let region = extract_payload(&html);
+        // The escaped form is present; no raw closer leaked inside the payload.
+        assert!(region.contains("<\\/script"));
+        assert!(!region.contains("</script"));
+        // And the payload still parses back to the original string.
+        let v: serde_json::Value = serde_json::from_str(&region).unwrap();
+        assert_eq!(v["rows"][0]["cells"]["note.x"]["d"], "</script><b>hi");
     }
 }

@@ -36,6 +36,7 @@ pub mod eval;
 pub mod filter;
 pub mod format;
 pub mod functions;
+mod interactive;
 pub mod lexer;
 pub mod model;
 pub mod note;
@@ -44,6 +45,7 @@ pub mod render;
 pub mod summary;
 pub mod value;
 
+pub use interactive::view_interactive_enabled;
 pub use model::{parse_base, BaseFile};
 pub use note::{parse_date, parse_wikilink, properties_from_yaml, value_from_yaml, Corpus, Note};
 pub use render::{error_block, render_base, render_base_source, RenderOptions};
