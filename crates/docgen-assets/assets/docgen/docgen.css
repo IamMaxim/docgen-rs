@@ -1485,6 +1485,14 @@ kbd,
    All structure/classes come from the island's DOM contract (see bases.js).
    Everything is token-driven so light/dark themes are automatic. When JS is off
    none of these elements exist and the static view renders unchanged. */
+/* The island toggles elements via the `hidden` attribute; the `display` rules
+   below would otherwise beat the UA's `[hidden] { display: none }`. Keep this
+   first so it covers every control, including ones added later. */
+.docgen-base-controls[hidden],
+.docgen-base-controls [hidden],
+.docgen-base-pager[hidden] {
+	display: none;
+}
 .docgen-base-controls {
 	display: flex;
 	flex-wrap: wrap;
