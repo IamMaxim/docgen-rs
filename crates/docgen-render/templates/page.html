@@ -226,6 +226,7 @@
   {% if search_enabled %}<script src="{{ base | safe }}/search.js" defer></script>{% endif %}
   {% if is_home and graph_json %}<script src="{{ base | safe }}/islands/graph.js"></script>{% endif %}
   {% if has_mermaid %}<script src="{{ base | safe }}/islands/mermaid.js"></script>{% endif %}
+  {% if has_base_island %}<script src="{{ base | safe }}/islands/bases.js"></script>{% endif %}
   {% if has_component_island %}<script src="{{ base | safe }}/components.js"></script>{% endif %}
   <script src="{{ base | safe }}/vendor/alpine/alpine.min.js" defer></script>
 </body>

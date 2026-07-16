@@ -153,7 +153,7 @@ fn render_base_pages(
     let opts = docgen_bases::RenderOptions {
         base: base_path.to_string(),
         default_view_name: String::new(),
-        ..Default::default()
+        interactive: true,
     };
     let mut docs = Vec::with_capacity(base_inputs.len());
     let mut search = Vec::with_capacity(base_inputs.len());
@@ -314,6 +314,10 @@ pub(crate) fn render_one_page(
         built: shared.built,
         has_history: false,
         has_mermaid: doc.has_mermaid,
+        // Interactive base marker: the emitter wraps each interactive view's
+        // payload in `<script class="docgen-base-data">`. Covers both `.base`
+        // pages and regular docs that embed a ```base block.
+        has_base_island: doc.body_html.contains("docgen-base-data"),
         has_math: doc.has_math,
         base: shared.base,
         site_title: shared.site_title,
@@ -581,6 +585,12 @@ pub(crate) fn build_site_inner(
         .cloned()
         .chain(base_pages.iter().cloned())
         .collect();
+    // Whether any rendered doc carries an interactive base payload (a `.base`
+    // page or an embedded ```base block). Gates shipping the bases island asset.
+    // Marker-based (matches the emitter's payload wrapper) for precision.
+    let any_base = all_docs
+        .iter()
+        .any(|d| d.body_html.contains("docgen-base-data"));
     let tree = build_tree(&all_docs);
     t.mark("build_tree");
 
@@ -827,6 +837,7 @@ pub(crate) fn build_site_inner(
         built: &built_stamp,
         has_history: false,
         has_mermaid: false,
+        has_base_island: false,
         has_math: false,
         base: &config.base,
         site_title: config.title.as_deref().unwrap_or(""),
@@ -882,6 +893,9 @@ pub(crate) fn build_site_inner(
         // static build" invariant (editor/livereload) untouched.
         include_mermaid: site.any_mermaid || opts.mode == BuildMode::Dev,
         include_graph: config.features.graph,
+        // Ship the bases island only when a rendered page carries an interactive
+        // base payload (marker-based, matching the emitter).
+        include_bases: any_base,
         include_diff: has_diff,
         // Component bundles are written separately (B-8) via emit_component_bundle;
         // these flags are inert in assets_for.

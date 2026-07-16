@@ -16,7 +16,7 @@ pub fn transform_bases<'a>(root: &'a AstNode<'a>, corpus: &Corpus, base_path: &s
     let opts = RenderOptions {
         base: base_path.to_string(),
         default_view_name: String::new(),
-        ..Default::default()
+        interactive: true,
     };
     let mut count = 0;
     transform(root, corpus, &opts, &mut count);

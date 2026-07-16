@@ -107,6 +107,22 @@ fn render_view(
     formulas: &BTreeMap<String, Expr>,
     custom_summaries: &BTreeMap<String, Expr>,
 ) -> String {
+    // Honor the per-base/per-view `docgenInteractive:false` opt-out end to end:
+    // a view the author disabled renders as pure static HTML even when the build
+    // requested interactive output. Shadow `opts` so every downstream renderer
+    // (section hooks, body `data-*`, payload) sees the effective flag.
+    let interactive = opts.interactive && interactive::view_interactive_enabled(base, view);
+    let eff_opts_owned;
+    let opts: &RenderOptions = if interactive == opts.interactive {
+        opts
+    } else {
+        eff_opts_owned = RenderOptions {
+            interactive: false,
+            ..opts.clone()
+        };
+        &eff_opts_owned
+    };
+
     let predicate = filter::combine(&base.filters, &view.filters);
 
     // Collect matching notes.
@@ -1064,6 +1080,32 @@ mod tests {
             &base_off,
             &base_off.views[0]
         ));
+    }
+
+    #[test]
+    fn docgen_interactive_false_opts_out_end_to_end() {
+        // Same base + corpus, rendered with interactive:true opts. The disabled
+        // base must emit NO interactive hooks/payload (pure static); the plain
+        // base must emit them — proving the renderer honors the opt-out.
+        let corpus = Corpus::new(vec![
+            note("a", "A", &[("status", Value::Str("open".into()))]),
+            note("b", "B", &[("status", Value::Str("done".into()))]),
+        ]);
+
+        let disabled =
+            parse_base("docgenInteractive: false\nviews:\n  - type: table\n    order: [file.name, note.status]\n")
+                .unwrap();
+        let off = render_base(&disabled, &corpus, &interactive_opts());
+        assert!(!off.contains("data-base-view"));
+        assert!(!off.contains("docgen-base-data"));
+        // Still rendered the static table content.
+        assert!(off.contains("docgen-base-table"));
+
+        let plain =
+            parse_base("views:\n  - type: table\n    order: [file.name, note.status]\n").unwrap();
+        let on = render_base(&plain, &corpus, &interactive_opts());
+        assert!(on.contains("data-base-view"));
+        assert!(on.contains("docgen-base-data"));
     }
 
     #[test]
