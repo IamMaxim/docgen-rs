@@ -8,7 +8,12 @@ title: Obsidian Bases
 — the `.base` file format that turns your notes into filtered, sorted, grouped
 **database views**. A `.base` file becomes its own page, and a ` ```base ` fenced
 block embeds a view inline in any markdown page. Everything is computed **at build
-time** into static HTML — no JavaScript, no runtime, no database.
+time** into static HTML — no database, no server.
+
+The static view is the baseline (it renders fully with JavaScript off, so it stays
+fast and indexable). On top of it, a small script **progressively enhances** each
+view into an [interactive one](#interactive-views): filter, search, sort, and page
+through the data live in the browser, with shareable URLs.
 
 **Why you'd want it.** Point a view at your notes' frontmatter (`status`,
 `rating`, `tags`, `due`, …) and file metadata (`file.folder`, `file.mtime`, …) and
@@ -68,6 +73,55 @@ views:
       - property: file.name
         direction: ASC
 ```
+
+## Interactive views
+
+Every rendered view is enhanced in the browser with a control bar, so a reader can
+explore the data without a rebuild:
+
+- **Search** — a free-text box that filters across the visible columns.
+- **Faceted filters** — auto-generated per column: a multi-select for
+  low-cardinality text/tag columns (service, releaser, status, …), a **date range**
+  for date columns, a **number range** for numeric ones.
+- **Sort / reorder** — click a table header to sort ascending → descending → off;
+  cards and list views get a sort dropdown.
+- **Pagination** — large views page in the browser (see `pageSize` below).
+- **Shareable URLs** — the active filters, sort, and page are encoded in the URL, so
+  a filtered view (e.g. *releases for one service in a date window*) is a copyable,
+  reloadable link.
+
+The controls are **derived automatically** from the columns — no configuration
+needed. The static HTML remains the no-JavaScript baseline, so every row is still
+present and readable with scripting disabled.
+
+**A worked example** lives at [Releases](/releases): a `.base` over a folder of
+release notes, filterable by service / releaser / status / date range.
+
+### Tuning the controls (`docgenInteractive`)
+
+Controls are auto-derived, but you can override them per view (or disable the whole
+feature) with a **docgen-specific** `docgenInteractive` key. It is namespaced so
+Obsidian ignores it — your `.base` stays portable:
+
+```yaml
+views:
+  - type: table
+    order: [file.name, note.service, note.version]
+    docgenInteractive:
+      pageSize: 25            # rows per page (0 = no pagination)
+      search: true           # show the search box (default true)
+      maxEnum: 40            # ≤ this many distinct values ⇒ a facet, else text
+      filters:
+        note.version: text   # force a widget: none|text|enum|date|number|boolean
+      sortable:
+        note.notes: false    # disable sorting on a column
+      defaultSort:
+        - property: note.service
+          direction: ASC
+```
+
+To turn interactivity off for a single base, add `docgenInteractive: false` at the
+top level; the view still renders as static HTML.
 
 ## What's supported
 
