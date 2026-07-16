@@ -14,7 +14,8 @@ use std::collections::BTreeSet;
 use serde_json::{json, Map, Value as J};
 
 use crate::model::{BaseFile, View, ViewInteractive};
-use crate::render::{column_header, RenderOptions};
+use crate::render::{self, column_header, RenderOptions};
+use crate::semver;
 use crate::value::Value;
 
 /// Default enum-vs-text cardinality threshold.
@@ -62,7 +63,11 @@ fn type_tag(v: &Value) -> &'static str {
 }
 
 /// Project one cell to its compact JSON object (omitting inapplicable fields).
-fn project_cell(v: &Value) -> J {
+///
+/// `semver` marks a version column: every cell in one carries an `sv` sort key
+/// so the island orders it by string comparison instead of parsing versions
+/// itself (see `semver::column_sort_key`).
+fn project_cell(v: &Value, semver_col: bool) -> J {
     let mut m = Map::new();
     m.insert("t".into(), json!(type_tag(v)));
     m.insert("d".into(), json!(v.display()));
@@ -71,6 +76,9 @@ fn project_cell(v: &Value) -> J {
     }
     if let Value::Date(d) = v {
         m.insert("epoch".into(), json!(d.epoch_millis()));
+    }
+    if semver_col {
+        m.insert("sv".into(), json!(semver::column_sort_key(v)));
     }
     // Facet tokens only for lists (scalars default to `[d]` island-side). An empty
     // list omits `f` (island → "(empty)").
@@ -242,6 +250,21 @@ pub(crate) fn build_payload(
         })
         .collect();
 
+    // Which columns order as versions. Decided per column (not per sort key)
+    // because the island can sort by any sortable column, and once per column
+    // rather than per cell because detection reads every value.
+    let semver_cols: BTreeSet<&String> = columns
+        .iter()
+        .filter(|key| {
+            render::sorts_as_semver(
+                view,
+                key,
+                rows.iter()
+                    .map(|r| r.cells.get(*key).unwrap_or(&Value::Null)),
+            )
+        })
+        .collect();
+
     // rows[]
     let rows_json: Vec<J> = rows
         .iter()
@@ -249,7 +272,7 @@ pub(crate) fn build_payload(
             let mut cells = Map::new();
             for key in columns {
                 let v = r.cells.get(key).cloned().unwrap_or(Value::Null);
-                cells.insert(key.clone(), project_cell(&v));
+                cells.insert(key.clone(), project_cell(&v, semver_cols.contains(key)));
             }
             json!({ "id": r.id, "cells": J::Object(cells) })
         })

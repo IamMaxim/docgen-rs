@@ -33,3 +33,9 @@ views:
     sort:
       - property: note.date
         direction: DESC
+  - type: list
+    name: Recent releases
+    order: [file.name, note.date, note.service, note.releaser]
+    sort:
+      - property: note.date
+        direction: DESC

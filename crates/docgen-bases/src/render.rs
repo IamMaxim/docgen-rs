@@ -18,6 +18,7 @@ use crate::interactive::{self, RowView};
 use crate::model::{BaseFile, GroupBy, View};
 use crate::note::{Corpus, Note};
 use crate::parser::parse;
+use crate::semver;
 use crate::value::Value;
 
 /// Rendering configuration supplied by the host (docgen).
@@ -280,9 +281,21 @@ fn apply_sort(
             (vals, row)
         })
         .collect();
+    // Decide once per key whether it orders as versions — detection reads the
+    // whole column, so it cannot be done inside a pairwise comparison.
+    let as_semver: Vec<bool> = view
+        .sort
+        .iter()
+        .enumerate()
+        .map(|(i, k)| sorts_as_semver(view, k.property(), decorated.iter().map(|d| &d.0[i])))
+        .collect();
     decorated.sort_by(|a, b| {
         for (i, (_, desc)) in keys.iter().enumerate() {
-            let ord = a.0[i].loose_cmp(&b.0[i]);
+            let ord = if as_semver[i] {
+                semver_cmp(&a.0[i], &b.0[i])
+            } else {
+                a.0[i].loose_cmp(&b.0[i])
+            };
             let ord = if *desc { ord.reverse() } else { ord };
             if ord != std::cmp::Ordering::Equal {
                 return ord;
@@ -291,6 +304,34 @@ fn apply_sort(
         std::cmp::Ordering::Equal
     });
     *rows = decorated.into_iter().map(|(_, row)| row).collect();
+}
+
+/// Whether `prop` orders as versions: `sortAs` decides if it names the column,
+/// otherwise the column auto-detects.
+pub(crate) fn sorts_as_semver<'a>(
+    view: &View,
+    prop: &str,
+    values: impl Iterator<Item = &'a Value>,
+) -> bool {
+    match view
+        .interactive
+        .as_ref()
+        .and_then(|i| i.sort_as.get(prop))
+        .map(|s| s.as_str())
+    {
+        Some("semver") => true,
+        Some("text") => false,
+        // Unknown value: fall back to detection rather than failing the build,
+        // matching how the rest of the `.base` surface tolerates bad input.
+        _ => semver::column_is_semver(values),
+    }
+}
+
+/// Version ordering over raw values. Compares the same per-cell key the island
+/// receives in the payload, so the static order and the client order are the
+/// same order by construction (see `semver::column_sort_key`).
+pub(crate) fn semver_cmp(a: &Value, b: &Value) -> std::cmp::Ordering {
+    semver::column_sort_key(a).cmp(&semver::column_sort_key(b))
 }
 
 /// Human-readable header for a column ref: `properties.<ref>.displayName` if set,
@@ -816,6 +857,84 @@ mod tests {
         let corpus = Corpus::new(vec![note("a", "A", &[])]);
         let html = render_base(&base, &corpus, &opts());
         assert!(html.contains("No results"));
+    }
+
+    /// Row order for a `sort:` on `note.version`, top to bottom.
+    fn version_order(extra_view_yaml: &str, versions: &[&str]) -> Vec<String> {
+        let base = parse_base(&format!(
+            "views:\n  - type: table\n    order: [file.name, note.version]\n    sort:\n      - property: note.version\n        direction: ASC\n{extra_view_yaml}"
+        ))
+        .unwrap();
+        let corpus = Corpus::new(
+            versions
+                .iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    let name = format!("n{i}");
+                    note(
+                        Box::leak(name.clone().into_boxed_str()),
+                        Box::leak(name.into_boxed_str()),
+                        &[("version", Value::Str((*v).into()))],
+                    )
+                })
+                .collect(),
+        );
+        let html = render_base(&base, &corpus, &opts());
+        // Recover order from the rendered cells rather than re-sorting here, so
+        // the test observes what a reader actually sees.
+        versions
+            .iter()
+            .map(|v| (html.find(&format!(">{v}<")).unwrap_or(usize::MAX), *v))
+            .fold(Vec::new(), |mut acc, (pos, v)| {
+                acc.push((pos, v.to_string()));
+                acc
+            })
+            .into_iter()
+            .filter(|(p, _)| *p != usize::MAX)
+            .collect::<std::collections::BTreeMap<_, _>>()
+            .into_values()
+            .collect()
+    }
+
+    #[test]
+    fn version_column_sorts_as_semver_not_text() {
+        // Lexically this would be 1.0.23, 1.19.20, 1.2.12.
+        assert_eq!(
+            version_order("", &["1.2.12", "1.19.20", "1.0.23"]),
+            ["1.0.23", "1.2.12", "1.19.20"]
+        );
+    }
+
+    #[test]
+    fn sort_as_text_opts_out_of_semver() {
+        assert_eq!(
+            version_order(
+                "    docgenInteractive:\n      sortAs:\n        note.version: text\n",
+                &["1.2.12", "1.19.20", "1.0.23"]
+            ),
+            ["1.0.23", "1.19.20", "1.2.12"]
+        );
+    }
+
+    #[test]
+    fn mixed_column_falls_back_to_text() {
+        // One non-version disqualifies the column, so ordering stays lexical
+        // ("1.19.20" before "1.2.12") rather than half-numeric.
+        assert_eq!(
+            version_order("", &["1.2.12", "nightly", "1.19.20"]),
+            ["1.19.20", "1.2.12", "nightly"]
+        );
+    }
+
+    #[test]
+    fn sort_as_semver_forces_detection_and_sorts_junk_last() {
+        assert_eq!(
+            version_order(
+                "    docgenInteractive:\n      sortAs:\n        note.version: semver\n",
+                &["1.2.12", "nightly", "1.19.20"]
+            ),
+            ["1.2.12", "1.19.20", "nightly"]
+        );
     }
 
     #[test]

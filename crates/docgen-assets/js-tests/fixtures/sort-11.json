@@ -1,8 +1,8 @@
 {
   "keys": [
     {
-      "col": "note.num",
-      "desc": true
+      "col": "note.vermixed",
+      "desc": false
     }
   ],
   "payload": {
@@ -97,12 +97,75 @@
       "search": true,
       "sort": [
         {
-          "col": "note.num",
-          "desc": true
+          "col": "note.vermixed",
+          "desc": false
         }
       ]
     },
     "rows": [
+      {
+        "cells": {
+          "file.name": {
+            "d": "note-03.md",
+            "t": "str"
+          },
+          "note.date": {
+            "d": "2025-01-01",
+            "epoch": 1735689600000,
+            "t": "date"
+          },
+          "note.flag": {
+            "d": "true",
+            "num": 1.0,
+            "t": "bool"
+          },
+          "note.label": {
+            "d": "BANANA",
+            "t": "str"
+          },
+          "note.mixed_date": {
+            "d": "alpha",
+            "t": "str"
+          },
+          "note.mixed_num": {
+            "d": "2",
+            "num": 2.0,
+            "t": "str"
+          },
+          "note.num": {
+            "d": "42",
+            "num": 42.0,
+            "t": "num"
+          },
+          "note.numstr": {
+            "d": "100",
+            "num": 100.0,
+            "t": "str"
+          },
+          "note.owner": {
+            "d": "alice",
+            "t": "link"
+          },
+          "note.tags": {
+            "d": "ui",
+            "f": [
+              "ui"
+            ],
+            "t": "list"
+          },
+          "note.vermixed": {
+            "d": "",
+            "empty": true,
+            "t": "str"
+          },
+          "note.version": {
+            "d": "v2.0.0",
+            "sv": "00000000000000000002.00000000000000000000.00000000000000000000~",
+            "t": "str"
+          }
+        },
+        "id": 0
+      },
       {
         "cells": {
           "file.name": {
@@ -167,80 +230,17 @@
             "t": "str"
           }
         },
-        "id": 0
-      },
-      {
-        "cells": {
-          "file.name": {
-            "d": "note-05.md",
-            "t": "str"
-          },
-          "note.date": {
-            "d": "2021-06-02",
-            "epoch": 1622592000000,
-            "t": "date"
-          },
-          "note.flag": {
-            "d": "false",
-            "num": 0.0,
-            "t": "bool"
-          },
-          "note.label": {
-            "d": "Cherry",
-            "t": "str"
-          },
-          "note.mixed_date": {
-            "d": "Beta",
-            "t": "str"
-          },
-          "note.mixed_num": {
-            "d": "0",
-            "num": 0.0,
-            "t": "num"
-          },
-          "note.num": {
-            "d": "9000000000000",
-            "num": 9000000000000.0,
-            "t": "num"
-          },
-          "note.numstr": {
-            "d": "30",
-            "num": 30.0,
-            "t": "str"
-          },
-          "note.owner": {
-            "d": "Erin",
-            "t": "link"
-          },
-          "note.tags": {
-            "d": "ui, api",
-            "f": [
-              "ui",
-              "api"
-            ],
-            "t": "list"
-          },
-          "note.vermixed": {
-            "d": "dev-build",
-            "t": "str"
-          },
-          "note.version": {
-            "d": "1.0.0",
-            "sv": "00000000000000000001.00000000000000000000.00000000000000000000~",
-            "t": "str"
-          }
-        },
         "id": 1
       },
       {
         "cells": {
           "file.name": {
-            "d": "note-03.md",
+            "d": "note-00.md",
             "t": "str"
           },
           "note.date": {
-            "d": "2025-01-01",
-            "epoch": 1735689600000,
+            "d": "2021-06-01",
+            "epoch": 1622505600000,
             "t": "date"
           },
           "note.flag": {
@@ -249,114 +249,52 @@
             "t": "bool"
           },
           "note.label": {
-            "d": "BANANA",
+            "d": "apple",
             "t": "str"
           },
           "note.mixed_date": {
-            "d": "alpha",
-            "t": "str"
-          },
-          "note.mixed_num": {
-            "d": "2",
-            "num": 2.0,
-            "t": "str"
-          },
-          "note.num": {
-            "d": "42",
-            "num": 42.0,
-            "t": "num"
-          },
-          "note.numstr": {
-            "d": "100",
-            "num": 100.0,
-            "t": "str"
-          },
-          "note.owner": {
-            "d": "alice",
-            "t": "link"
-          },
-          "note.tags": {
-            "d": "ui",
-            "f": [
-              "ui"
-            ],
-            "t": "list"
-          },
-          "note.vermixed": {
-            "d": "",
-            "empty": true,
-            "t": "str"
-          },
-          "note.version": {
-            "d": "v2.0.0",
-            "sv": "00000000000000000002.00000000000000000000.00000000000000000000~",
-            "t": "str"
-          }
-        },
-        "id": 2
-      },
-      {
-        "cells": {
-          "file.name": {
-            "d": "note-04.md",
-            "t": "str"
-          },
-          "note.date": {
-            "d": "2018-03-15 08:30:00",
-            "epoch": 1521102600000,
-            "t": "date"
-          },
-          "note.flag": {
-            "d": "true",
-            "num": 1.0,
-            "t": "bool"
-          },
-          "note.label": {
-            "d": "cherry",
-            "t": "str"
-          },
-          "note.mixed_date": {
-            "d": "2020-01-01 00:00:00",
+            "d": "2020-01-01",
             "epoch": 1577836800000,
             "t": "date"
           },
           "note.mixed_num": {
-            "d": "abc",
-            "t": "str"
+            "d": "3",
+            "num": 3.0,
+            "t": "num"
           },
           "note.num": {
-            "d": "42",
-            "num": 42.0,
+            "d": "-5",
+            "num": -5.0,
             "t": "num"
           },
           "note.numstr": {
-            "d": "-7",
-            "num": -7.0,
+            "d": "10",
+            "num": 10.0,
             "t": "str"
           },
           "note.owner": {
-            "d": "dave",
+            "d": "Alice",
             "t": "link"
           },
           "note.tags": {
-            "d": "db, api",
+            "d": "api, db",
             "f": [
-              "db",
-              "api"
+              "api",
+              "db"
             ],
             "t": "list"
           },
           "note.vermixed": {
-            "d": "1.10.0",
+            "d": "1.0.0",
             "t": "str"
           },
           "note.version": {
-            "d": "1.0.0-rc.1",
-            "sv": "00000000000000000001.00000000000000000000.00000000000000000000!1rc.000000000000000000001",
+            "d": "1.0.23",
+            "sv": "00000000000000000001.00000000000000000000.00000000000000000023~",
             "t": "str"
           }
         },
-        "id": 3
+        "id": 2
       },
       {
         "cells": {
@@ -421,17 +359,17 @@
             "t": "str"
           }
         },
-        "id": 4
+        "id": 3
       },
       {
         "cells": {
           "file.name": {
-            "d": "note-02.md",
+            "d": "note-04.md",
             "t": "str"
           },
           "note.date": {
-            "d": "2019-12-31 23:59:59",
-            "epoch": 1577836799000,
+            "d": "2018-03-15 08:30:00",
+            "epoch": 1521102600000,
             "t": "date"
           },
           "note.flag": {
@@ -440,22 +378,85 @@
             "t": "bool"
           },
           "note.label": {
-            "d": "apricot",
+            "d": "cherry",
             "t": "str"
           },
           "note.mixed_date": {
-            "d": "2022-05-05 12:00:00",
-            "epoch": 1651752000000,
+            "d": "2020-01-01 00:00:00",
+            "epoch": 1577836800000,
             "t": "date"
           },
           "note.mixed_num": {
-            "d": "-1",
-            "num": -1.0,
+            "d": "abc",
+            "t": "str"
+          },
+          "note.num": {
+            "d": "42",
+            "num": 42.0,
+            "t": "num"
+          },
+          "note.numstr": {
+            "d": "-7",
+            "num": -7.0,
+            "t": "str"
+          },
+          "note.owner": {
+            "d": "dave",
+            "t": "link"
+          },
+          "note.tags": {
+            "d": "db, api",
+            "f": [
+              "db",
+              "api"
+            ],
+            "t": "list"
+          },
+          "note.vermixed": {
+            "d": "1.10.0",
+            "t": "str"
+          },
+          "note.version": {
+            "d": "1.0.0-rc.1",
+            "sv": "00000000000000000001.00000000000000000000.00000000000000000000!1rc.000000000000000000001",
+            "t": "str"
+          }
+        },
+        "id": 4
+      },
+      {
+        "cells": {
+          "file.name": {
+            "d": "note-11.md",
+            "t": "str"
+          },
+          "note.date": {
+            "d": "2021-06-01",
+            "epoch": 1622505600000,
+            "t": "date"
+          },
+          "note.flag": {
+            "d": "true",
+            "num": 1.0,
+            "t": "bool"
+          },
+          "note.label": {
+            "d": "Apple",
+            "t": "str"
+          },
+          "note.mixed_date": {
+            "d": "2018-06-06",
+            "epoch": 1528243200000,
+            "t": "date"
+          },
+          "note.mixed_num": {
+            "d": "3",
+            "num": 3.0,
             "t": "num"
           },
           "note.num": {
-            "d": "3",
-            "num": 3.0,
+            "d": "-5",
+            "num": -5.0,
             "t": "num"
           },
           "note.numstr": {
@@ -464,25 +465,24 @@
             "t": "str"
           },
           "note.owner": {
-            "d": "carol",
+            "d": "zulu",
             "t": "link"
           },
           "note.tags": {
-            "d": "api, ui, db",
+            "d": "api, db",
             "f": [
               "api",
-              "ui",
               "db"
             ],
             "t": "list"
           },
           "note.vermixed": {
-            "d": "2.0.0",
+            "d": "1.2.3.4",
             "t": "str"
           },
           "note.version": {
-            "d": "1.19.20",
-            "sv": "00000000000000000001.00000000000000000019.00000000000000000020~",
+            "d": "10.0.0",
+            "sv": "00000000000000000010.00000000000000000000.00000000000000000000~",
             "t": "str"
           }
         },
@@ -554,12 +554,77 @@
       {
         "cells": {
           "file.name": {
-            "d": "note-06.md",
+            "d": "note-02.md",
             "t": "str"
           },
           "note.date": {
-            "d": "2020-02-29",
-            "epoch": 1582934400000,
+            "d": "2019-12-31 23:59:59",
+            "epoch": 1577836799000,
+            "t": "date"
+          },
+          "note.flag": {
+            "d": "true",
+            "num": 1.0,
+            "t": "bool"
+          },
+          "note.label": {
+            "d": "apricot",
+            "t": "str"
+          },
+          "note.mixed_date": {
+            "d": "2022-05-05 12:00:00",
+            "epoch": 1651752000000,
+            "t": "date"
+          },
+          "note.mixed_num": {
+            "d": "-1",
+            "num": -1.0,
+            "t": "num"
+          },
+          "note.num": {
+            "d": "3",
+            "num": 3.0,
+            "t": "num"
+          },
+          "note.numstr": {
+            "d": "1",
+            "num": 1.0,
+            "t": "str"
+          },
+          "note.owner": {
+            "d": "carol",
+            "t": "link"
+          },
+          "note.tags": {
+            "d": "api, ui, db",
+            "f": [
+              "api",
+              "ui",
+              "db"
+            ],
+            "t": "list"
+          },
+          "note.vermixed": {
+            "d": "2.0.0",
+            "t": "str"
+          },
+          "note.version": {
+            "d": "1.19.20",
+            "sv": "00000000000000000001.00000000000000000019.00000000000000000020~",
+            "t": "str"
+          }
+        },
+        "id": 7
+      },
+      {
+        "cells": {
+          "file.name": {
+            "d": "note-09.md",
+            "t": "str"
+          },
+          "note.date": {
+            "d": "1999-01-01",
+            "epoch": 915148800000,
             "t": "date"
           },
           "note.flag": {
@@ -568,50 +633,112 @@
             "t": "bool"
           },
           "note.label": {
-            "d": "date",
+            "d": "Éclair",
             "t": "str"
           },
           "note.mixed_date": {
-            "d": "2019-07-04",
-            "epoch": 1562198400000,
+            "d": "2020-01-01",
+            "epoch": 1577836800000,
             "t": "date"
           },
           "note.mixed_num": {
-            "d": "",
-            "empty": true,
-            "t": "null"
+            "d": "-1",
+            "num": -1.0,
+            "t": "num"
           },
           "note.num": {
-            "d": "1",
-            "num": 1.0,
+            "d": "0",
+            "num": 0.0,
             "t": "num"
           },
           "note.numstr": {
-            "d": "3",
-            "num": 3.0,
+            "d": "apple",
             "t": "str"
           },
           "note.owner": {
-            "d": "apple",
+            "d": "Zed",
             "t": "link"
           },
           "note.tags": {
             "d": "",
             "empty": true,
+            "t": "null"
+          },
+          "note.vermixed": {
+            "d": "abc",
+            "t": "str"
+          },
+          "note.version": {
+            "d": "",
+            "empty": true,
+            "sv": "~2",
+            "t": "null"
+          }
+        },
+        "id": 8
+      },
+      {
+        "cells": {
+          "file.name": {
+            "d": "note-05.md",
+            "t": "str"
+          },
+          "note.date": {
+            "d": "2021-06-02",
+            "epoch": 1622592000000,
+            "t": "date"
+          },
+          "note.flag": {
+            "d": "false",
+            "num": 0.0,
+            "t": "bool"
+          },
+          "note.label": {
+            "d": "Cherry",
+            "t": "str"
+          },
+          "note.mixed_date": {
+            "d": "Beta",
+            "t": "str"
+          },
+          "note.mixed_num": {
+            "d": "0",
+            "num": 0.0,
+            "t": "num"
+          },
+          "note.num": {
+            "d": "9000000000000",
+            "num": 9000000000000.0,
+            "t": "num"
+          },
+          "note.numstr": {
+            "d": "30",
+            "num": 30.0,
+            "t": "str"
+          },
+          "note.owner": {
+            "d": "Erin",
+            "t": "link"
+          },
+          "note.tags": {
+            "d": "ui, api",
+            "f": [
+              "ui",
+              "api"
+            ],
             "t": "list"
           },
           "note.vermixed": {
-            "d": "",
-            "empty": true,
-            "t": "null"
+            "d": "dev-build",
+            "t": "str"
           },
           "note.version": {
-            "d": "1.0.0-rc.11",
-            "sv": "00000000000000000001.00000000000000000000.00000000000000000000!1rc.000000000000000000011",
+            "d": "1.0.0",
+            "sv": "00000000000000000001.00000000000000000000.00000000000000000000~",
             "t": "str"
           }
         },
-        "id": 7
+        "id": 9
       },
       {
         "cells": {
@@ -673,17 +800,17 @@
             "t": "str"
           }
         },
-        "id": 8
+        "id": 10
       },
       {
         "cells": {
           "file.name": {
-            "d": "note-09.md",
+            "d": "note-06.md",
             "t": "str"
           },
           "note.date": {
-            "d": "1999-01-01",
-            "epoch": 915148800000,
+            "d": "2020-02-29",
+            "epoch": 1582934400000,
             "t": "date"
           },
           "note.flag": {
@@ -692,173 +819,46 @@
             "t": "bool"
           },
           "note.label": {
-            "d": "Éclair",
+            "d": "date",
             "t": "str"
           },
           "note.mixed_date": {
-            "d": "2020-01-01",
-            "epoch": 1577836800000,
+            "d": "2019-07-04",
+            "epoch": 1562198400000,
             "t": "date"
           },
           "note.mixed_num": {
-            "d": "-1",
-            "num": -1.0,
-            "t": "num"
-          },
-          "note.num": {
-            "d": "0",
-            "num": 0.0,
-            "t": "num"
-          },
-          "note.numstr": {
-            "d": "apple",
-            "t": "str"
-          },
-          "note.owner": {
-            "d": "Zed",
-            "t": "link"
-          },
-          "note.tags": {
             "d": "",
             "empty": true,
             "t": "null"
           },
-          "note.vermixed": {
-            "d": "abc",
-            "t": "str"
-          },
-          "note.version": {
-            "d": "",
-            "empty": true,
-            "sv": "~2",
-            "t": "null"
-          }
-        },
-        "id": 9
-      },
-      {
-        "cells": {
-          "file.name": {
-            "d": "note-00.md",
-            "t": "str"
-          },
-          "note.date": {
-            "d": "2021-06-01",
-            "epoch": 1622505600000,
-            "t": "date"
-          },
-          "note.flag": {
-            "d": "true",
-            "num": 1.0,
-            "t": "bool"
-          },
-          "note.label": {
-            "d": "apple",
-            "t": "str"
-          },
-          "note.mixed_date": {
-            "d": "2020-01-01",
-            "epoch": 1577836800000,
-            "t": "date"
-          },
-          "note.mixed_num": {
-            "d": "3",
-            "num": 3.0,
-            "t": "num"
-          },
           "note.num": {
-            "d": "-5",
-            "num": -5.0,
-            "t": "num"
-          },
-          "note.numstr": {
-            "d": "10",
-            "num": 10.0,
-            "t": "str"
-          },
-          "note.owner": {
-            "d": "Alice",
-            "t": "link"
-          },
-          "note.tags": {
-            "d": "api, db",
-            "f": [
-              "api",
-              "db"
-            ],
-            "t": "list"
-          },
-          "note.vermixed": {
-            "d": "1.0.0",
-            "t": "str"
-          },
-          "note.version": {
-            "d": "1.0.23",
-            "sv": "00000000000000000001.00000000000000000000.00000000000000000023~",
-            "t": "str"
-          }
-        },
-        "id": 10
-      },
-      {
-        "cells": {
-          "file.name": {
-            "d": "note-11.md",
-            "t": "str"
-          },
-          "note.date": {
-            "d": "2021-06-01",
-            "epoch": 1622505600000,
-            "t": "date"
-          },
-          "note.flag": {
-            "d": "true",
-            "num": 1.0,
-            "t": "bool"
-          },
-          "note.label": {
-            "d": "Apple",
-            "t": "str"
-          },
-          "note.mixed_date": {
-            "d": "2018-06-06",
-            "epoch": 1528243200000,
-            "t": "date"
-          },
-          "note.mixed_num": {
-            "d": "3",
-            "num": 3.0,
-            "t": "num"
-          },
-          "note.num": {
-            "d": "-5",
-            "num": -5.0,
-            "t": "num"
-          },
-          "note.numstr": {
             "d": "1",
             "num": 1.0,
+            "t": "num"
+          },
+          "note.numstr": {
+            "d": "3",
+            "num": 3.0,
             "t": "str"
           },
           "note.owner": {
-            "d": "zulu",
+            "d": "apple",
             "t": "link"
           },
           "note.tags": {
-            "d": "api, db",
-            "f": [
-              "api",
-              "db"
-            ],
+            "d": "",
+            "empty": true,
             "t": "list"
           },
           "note.vermixed": {
-            "d": "1.2.3.4",
-            "t": "str"
+            "d": "",
+            "empty": true,
+            "t": "null"
           },
           "note.version": {
-            "d": "10.0.0",
-            "sv": "00000000000000000010.00000000000000000000.00000000000000000000~",
+            "d": "1.0.0-rc.11",
+            "sv": "00000000000000000001.00000000000000000000.00000000000000000000!1rc.000000000000000000011",
             "t": "str"
           }
         },

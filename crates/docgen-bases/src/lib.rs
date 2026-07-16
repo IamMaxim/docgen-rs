@@ -42,6 +42,7 @@ pub mod model;
 pub mod note;
 pub mod parser;
 pub mod render;
+pub mod semver;
 pub mod summary;
 pub mod value;
 

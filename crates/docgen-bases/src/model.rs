@@ -56,6 +56,15 @@ pub struct ViewInteractive {
     pub filters: BTreeMap<String, String>,
     /// Per-column sortable override: col → bool.
     pub sortable: BTreeMap<String, bool>,
+    /// Per-column sort-order override: col → `text|semver`.
+    ///
+    /// A column whose values all parse as versions sorts as versions
+    /// automatically; `text` opts back out to plain string order, and `semver`
+    /// forces version order on a column that would not be detected (values that
+    /// then fail to parse sort last). Unlike the rest of this struct, this also
+    /// applies to the static build — a view's `sort:` is a build-time ordering.
+    #[serde(rename = "sortAs")]
+    pub sort_as: BTreeMap<String, String>,
     /// Initial sort override (`defaultSort`).
     #[serde(rename = "defaultSort")]
     pub default_sort: Vec<SortKey>,

@@ -68,6 +68,16 @@
 
   // Mirrors Value::loose_cmp EXACTLY. Null sorts LAST (ascending).
   function compareCells(a, b) {
+    // Version columns: the renderer stamps EVERY cell in one with `sv`, an
+    // ASCII key whose plain string order is the version order (semver.rs).
+    // Compare it as-is — parsing versions here would be a second
+    // implementation to keep in step with Rust, which is exactly the drift the
+    // payload exists to prevent. Runs before the null branch because `sv`
+    // already encodes where empty and unparseable values rank. Case-sensitive
+    // and not `cmpStr`, because Rust compares these keys case-sensitively.
+    if (a && b && a.sv !== undefined && b.sv !== undefined) {
+      return a.sv < b.sv ? -1 : a.sv > b.sv ? 1 : 0;
+    }
     var an = isNull(a),
       bn = isNull(b);
     if (an && bn) return 0;

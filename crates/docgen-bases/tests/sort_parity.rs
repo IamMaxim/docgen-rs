@@ -31,7 +31,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use docgen_bases::model::{SortKey, View};
+use docgen_bases::model::{SortKey, View, ViewInteractive};
 use docgen_bases::{render_base, BaseDate, BaseFile, BaseLink, Corpus, Note, RenderOptions, Value};
 use serde_json::{json, Value as J};
 
@@ -90,6 +90,11 @@ const COLUMNS: &[&str] = &[
     "note.label",
     "note.owner",
     "note.tags",
+    // Every non-empty value parses → auto-detected as a version column (`sv`).
+    "note.version",
+    // Versions mixed with junk → auto-detection declines; one config forces it
+    // with `sortAs: semver` to exercise the unparseable-value ordering.
+    "note.vermixed",
 ];
 
 /// Build a note with a unique `file.name` plus a set of typed properties. Any
@@ -130,6 +135,8 @@ fn corpus() -> Corpus {
                 ("label", s("apple")),
                 ("owner", link("People/Alice")),
                 ("tags", list(&["api", "db"])),
+                ("version", s("1.0.23")),
+                ("vermixed", s("1.0.0")),
             ],
         ),
         note(
@@ -145,6 +152,8 @@ fn corpus() -> Corpus {
                 ("label", s("Banana")),
                 ("owner", link_disp("People/bob", "Bob")),
                 ("tags", list(&["db"])),
+                ("version", s("1.2.12")),
+                ("vermixed", s("nightly")),
             ],
         ),
         note(
@@ -159,6 +168,8 @@ fn corpus() -> Corpus {
                 ("label", s("apricot")),
                 ("owner", link("carol")),
                 ("tags", list(&["api", "ui", "db"])),
+                ("version", s("1.19.20")),
+                ("vermixed", s("2.0.0")),
             ],
         ),
         note(
@@ -175,6 +186,8 @@ fn corpus() -> Corpus {
                 ("label", s("BANANA")),
                 ("owner", link_disp("x/y", "alice")),
                 ("tags", list(&["ui"])),
+                ("version", s("v2.0.0")),
+                ("vermixed", s("")),
             ],
         ),
         note(
@@ -189,6 +202,8 @@ fn corpus() -> Corpus {
                 ("label", s("cherry")),
                 ("owner", link("People/dave")),
                 ("tags", list(&["db", "api"])),
+                ("version", s("1.0.0-rc.1")),
+                ("vermixed", s("1.10.0")),
             ],
         ),
         note(
@@ -203,6 +218,8 @@ fn corpus() -> Corpus {
                 ("label", s("Cherry")),
                 ("owner", link_disp("People/erin", "Erin")),
                 ("tags", list(&["ui", "api"])),
+                ("version", s("1.0.0")),
+                ("vermixed", s("dev-build")),
             ],
         ),
         note(
@@ -217,6 +234,8 @@ fn corpus() -> Corpus {
                 ("label", s("date")),
                 ("owner", link("apple")),
                 ("tags", Value::List(vec![])), // empty list → "(empty)" facet, empty display
+                // version pre-release: rc.11 must outrank rc.2 (numeric id).
+                ("version", s("1.0.0-rc.11")),
             ],
         ),
         note(
@@ -231,6 +250,8 @@ fn corpus() -> Corpus {
                 ("label", s("apple")), // exact dup of note-00 label
                 ("owner", link_disp("People/alice", "alice")),
                 ("tags", list(&["zeta"])),
+                ("version", s("1.0.0-rc.2")),
+                ("vermixed", s("1.9.0")),
             ],
         ),
         note(
@@ -245,6 +266,9 @@ fn corpus() -> Corpus {
                 ("label", s("")),                // empty string
                 ("owner", link("People/Alice")), // same target as note-00
                 ("tags", list(&["api"])),
+                // "1.2" normalises to 1.2.0 — a duplicate key with note-10.
+                ("version", s("1.2")),
+                ("vermixed", s("1.0.0-rc.1")),
             ],
         ),
         note(
@@ -259,6 +283,8 @@ fn corpus() -> Corpus {
                 ("label", s("Éclair")), // non-ASCII to stress lowercase
                 ("owner", link_disp("People/zed", "Zed")),
                 // tags NULL
+                // version NULL — empties sort last (first under desc).
+                ("vermixed", s("abc")),
             ],
         ),
         note(
@@ -273,6 +299,8 @@ fn corpus() -> Corpus {
                 ("label", s("banana")), // case variant of Banana/BANANA
                 // owner NULL
                 ("tags", list(&["db", "ui", "api"])),
+                ("version", s("1.2.0")),
+                ("vermixed", s("0.0.1")),
             ],
         ),
         note(
@@ -287,6 +315,9 @@ fn corpus() -> Corpus {
                 ("label", s("Apple")), // case variant of apple
                 ("owner", link("zulu")),
                 ("tags", list(&["api", "db"])), // dup of note-00 tags
+                // vermixed "1.2.3.4": four parts, rejected as a version.
+                ("version", s("10.0.0")),
+                ("vermixed", s("1.2.3.4")),
             ],
         ),
     ];
@@ -297,30 +328,68 @@ fn corpus() -> Corpus {
 // Sort configs to exercise
 // ---------------------------------------------------------------------------
 
-/// Each config is a list of `(column-key, descending)` sort keys.
-fn configs() -> Vec<Vec<(&'static str, bool)>> {
+/// One sort config: the `(column-key, descending)` sort keys, plus any
+/// `docgenInteractive.sortAs` overrides the view carries.
+struct Cfg {
+    keys: Vec<(&'static str, bool)>,
+    sort_as: Vec<(&'static str, &'static str)>,
+}
+
+fn cfg(keys: Vec<(&'static str, bool)>) -> Cfg {
+    Cfg {
+        keys,
+        sort_as: vec![],
+    }
+}
+
+fn cfg_as(keys: Vec<(&'static str, bool)>, sort_as: Vec<(&'static str, &'static str)>) -> Cfg {
+    Cfg { keys, sort_as }
+}
+
+fn configs() -> Vec<Cfg> {
     vec![
         // 0: single ascending on a pure-number column.
-        vec![("note.num", false)],
+        cfg(vec![("note.num", false)]),
         // 1: single DESCENDING on the same column — verifies null-FIRST under desc
         //    (apply_sort does `ord.reverse()` over the WHOLE cmp incl. the null branch).
-        vec![("note.num", true)],
+        cfg(vec![("note.num", true)]),
         // 2: a MIXED-type column (numbers + numeric-strings + a non-numeric string
         //    + nulls) — fires loose_cmp's cross-type branches.
-        vec![("note.mixed_num", false)],
+        cfg(vec![("note.mixed_num", false)]),
         // 3: dates, including equal instants (has_time vs not) — date↔date by epoch.
-        vec![("note.date", false)],
+        cfg(vec![("note.date", false)]),
         // 4: MIXED dates + strings — proves `epoch` is NOT used cross-type (display).
-        vec![("note.mixed_date", false)],
+        cfg(vec![("note.mixed_date", false)]),
         // 5: case-insensitive string ordering (incl. non-ASCII).
-        vec![("note.label", false)],
+        cfg(vec![("note.label", false)]),
         // 6: links (display vs basename), case-insensitive by display.
-        vec![("note.owner", false)],
+        cfg(vec![("note.owner", false)]),
         // 7: a list column (sorts by rendered display via the generic branch).
-        vec![("note.tags", false)],
+        cfg(vec![("note.tags", false)]),
         // 8: multi-key with ties — bool primary (many ties) then number, with exact
         //    duplicate (flag, num) rows forcing the final stable id tiebreak.
-        vec![("note.flag", false), ("note.num", false)],
+        cfg(vec![("note.flag", false), ("note.num", false)]),
+        // 9: auto-detected VERSION column — the whole point: "1.19.20" must land
+        //    after "1.2.12", pre-releases before their release, "1.2" == "1.2.0"
+        //    (a duplicate key forcing the id tiebreak), and NULL last.
+        cfg(vec![("note.version", false)]),
+        // 10: the same column DESCENDING — nulls first, and `sv` keys reversed.
+        cfg(vec![("note.version", true)]),
+        // 11: versions + junk: auto-detection declines, so this is plain TEXT
+        //     ordering — the negative control for config 12.
+        cfg(vec![("note.vermixed", false)]),
+        // 12: the same column forced to versions. Exercises the branch nothing
+        //     else reaches: unparseable values ranking after every real version
+        //     but before empties, and TYING with each other.
+        cfg_as(
+            vec![("note.vermixed", false)],
+            vec![("note.vermixed", "semver")],
+        ),
+        // 13: `sortAs: text` opting a detected version column back out.
+        cfg_as(
+            vec![("note.version", false)],
+            vec![("note.version", "text")],
+        ),
     ]
 }
 
@@ -336,18 +405,32 @@ fn interactive_opts() -> RenderOptions {
     }
 }
 
-fn build_base(keys: &[(&str, bool)]) -> BaseFile {
-    let sort: Vec<SortKey> = keys
+fn build_base(c: &Cfg) -> BaseFile {
+    let sort: Vec<SortKey> = c
+        .keys
         .iter()
         .map(|(col, desc)| SortKey::Full {
             property: (*col).to_string(),
             direction: Some(if *desc { "DESC" } else { "ASC" }.to_string()),
         })
         .collect();
+    let interactive = if c.sort_as.is_empty() {
+        None
+    } else {
+        Some(ViewInteractive {
+            sort_as: c
+                .sort_as
+                .iter()
+                .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+                .collect(),
+            ..Default::default()
+        })
+    };
     let view = View {
         view_type: "table".into(),
         order: COLUMNS.iter().map(|c| c.to_string()).collect(),
         sort,
+        interactive,
         ..Default::default()
     };
     BaseFile {
@@ -382,8 +465,8 @@ fn data_row_ids(html: &str) -> Vec<usize> {
 }
 
 /// Build the fixture object for one sort config: `{ keys, payload, rustOrder }`.
-fn build_fixture(keys: &[(&str, bool)]) -> J {
-    let base = build_base(keys);
+fn build_fixture(c: &Cfg) -> J {
+    let base = build_base(c);
     let corpus = corpus();
     let html = render_base(&base, &corpus, &interactive_opts());
 
@@ -400,10 +483,12 @@ fn build_fixture(keys: &[(&str, bool)]) -> J {
         .collect();
     assert_eq!(
         rust_order, payload_ids,
-        "data-row sequence must equal payload rows[].id order for keys {keys:?}"
+        "data-row sequence must equal payload rows[].id order for keys {:?}",
+        c.keys
     );
 
-    let keys_json: Vec<J> = keys
+    let keys_json: Vec<J> = c
+        .keys
         .iter()
         .map(|(col, desc)| json!({ "col": col, "desc": desc }))
         .collect();
@@ -447,11 +532,11 @@ fn sort_parity_fixtures() {
     // Track which files are ours, so a stale fixture can't linger unnoticed.
     let mut expected_files: Vec<String> = Vec::new();
 
-    for (i, keys) in configs().iter().enumerate() {
+    for (i, c) in configs().iter().enumerate() {
         let name = format!("sort-{i}.json");
         expected_files.push(name.clone());
         let path = dir.join(&name);
-        let fixture = build_fixture(keys);
+        let fixture = build_fixture(c);
 
         if bless {
             std::fs::write(&path, to_pretty(&fixture))

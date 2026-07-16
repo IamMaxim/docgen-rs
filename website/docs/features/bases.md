@@ -84,7 +84,8 @@ explore the data without a rebuild:
   low-cardinality text/tag columns (service, releaser, status, …), a **date range**
   for date columns, a **number range** for numeric ones.
 - **Sort / reorder** — click a table header to sort ascending → descending → off;
-  cards and list views get a sort dropdown.
+  cards and list views get a sort dropdown. Version columns sort as versions
+  (see below), not as text.
 - **Pagination** — large views page in the browser (see `pageSize` below).
 - **Shareable URLs** — the active filters, sort, and page are encoded in the URL, so
   a filtered view (e.g. *releases for one service in a date window*) is a copyable,
@@ -96,6 +97,29 @@ present and readable with scripting disabled.
 
 **A worked example** lives at [Releases](/releases): a `.base` over a folder of
 release notes, filterable by service / releaser / status / date range.
+
+### Version columns sort as versions
+
+Sorted as text, `1.19.20` lands *before* `1.2.12` — `'1' < '2'` at the third
+character. So a column whose values **all** parse as versions is ordered
+numerically instead, with no configuration:
+
+| | order |
+|---|---|
+| as text | `1.0.23`, `1.19.20`, `1.2.12` |
+| as versions | `1.0.23`, `1.2.12`, `1.19.20` |
+
+Parsing is lenient: `v1.2.3` and `1.2` are accepted (`1.2` means `1.2.0`), build
+metadata (`+build.5`) is ignored, and a pre-release sorts before its release
+(`1.0.0-rc.1` → `1.0.0-rc.2` → `1.0.0-rc.11` → `1.0.0`).
+
+A single non-version value (`nightly`) turns detection off and the column stays
+text — ordering never depends on *some* rows. Columns of plain numbers are
+untouched: a YAML `version: 1.5` is a number, and numbers already sort
+numerically. Override either way with `sortAs` below.
+
+This applies to the static build too, so a `sort:` on a version column is already
+in version order before any JavaScript runs.
 
 ### Tuning the controls (`docgenInteractive`)
 
@@ -113,12 +137,19 @@ views:
       maxEnum: 40            # ≤ this many distinct values ⇒ a facet, else text
       filters:
         note.version: text   # force a widget: none|text|enum|date|number|boolean
+      sortAs:
+        note.version: semver # force version order: semver|text
       sortable:
         note.notes: false    # disable sorting on a column
       defaultSort:
         - property: note.service
           direction: ASC
 ```
+
+`sortAs: semver` forces version order on a column that would not be detected
+(values that fail to parse sort last); `sortAs: text` opts a detected column back
+out. Unlike the other keys here, `sortAs` also affects the static build, because
+a view's `sort:` is a build-time ordering.
 
 To turn interactivity off for a single base, add `docgenInteractive: false` at the
 top level; the view still renders as static HTML.
