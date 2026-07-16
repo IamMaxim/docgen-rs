@@ -81,22 +81,23 @@ explore the data without a rebuild:
 
 - **Search** — a free-text box that filters across the visible columns.
 - **Faceted filters** — auto-generated per column: a multi-select for
-  low-cardinality text/tag columns (service, releaser, status, …), a **date range**
-  for date columns, a **number range** for numeric ones.
+  low-cardinality text/tag columns (kind, area, status, …), a **date range** for
+  date columns, a **number range** for numeric ones.
 - **Sort / reorder** — click a table header to sort ascending → descending → off;
   cards and list views get a sort dropdown. Version columns sort as versions
   (see below), not as text.
 - **Pagination** — large views page in the browser (see `pageSize` below).
 - **Shareable URLs** — the active filters, sort, and page are encoded in the URL, so
-  a filtered view (e.g. *releases for one service in a date window*) is a copyable,
-  reloadable link.
+  a filtered view (e.g. *releases touching one area in a date window*) is a
+  copyable, reloadable link.
 
 The controls are **derived automatically** from the columns — no configuration
 needed. The static HTML remains the no-JavaScript baseline, so every row is still
 present and readable with scripting disabled.
 
-**A worked example** lives at [Releases](/releases): a `.base` over a folder of
-release notes, filterable by service / releaser / status / date range.
+**A worked example** is the **Releases** page in the sidebar (`/releases`) — a
+`.base` over docgen's own release history, filterable by kind / area / date range
+/ number of crates published, searchable, and sorted by a real version column.
 
 ### Version columns sort as versions
 
@@ -161,7 +162,9 @@ docgen implements the Bases format faithfully:
 - **Five sections** — `filters`, `formulas`, `properties`, `summaries`, `views`.
 - **Filters** — the full `and`/`or`/`not` logical tree over expression strings.
 - **Views** — `table`, `cards`, and `list`, each with its own `name`, `filters`,
-  `order`, `sort`, `groupBy`, `limit`, `columnSize`, and `summaries`.
+  `order`, `sort`, `limit`, `columnSize`, and `summaries`. `groupBy` renders
+  group headings on **`table` views only**; `cards` and `list` parse it and
+  ignore it, so a grouped view of either renders ungrouped rather than failing.
 - **The expression language** — property references (`note.x`, `file.x`,
   `formula.x`, and a bare `x` for a note property), operators (`+ - * / %`,
   comparisons, `&& || !`, date ± duration), and the documented global functions
