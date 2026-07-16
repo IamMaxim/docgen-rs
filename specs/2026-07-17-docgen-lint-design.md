@@ -1,7 +1,19 @@
 # `docgen lint` — Design
 
 Date: 2026-07-17
-Status: approved
+Status: approved (implementation deviations noted below)
+
+> **Implementation deviations (recorded during the overnight build):**
+> - `broken-embed` shipped as **`broken-include`**: docgen has no `![[embed]]` syntax (a literal
+>   `![[x]]` parses as `!` + wikilink and is covered by `broken-wikilink`); docgen's real
+>   transclusion is the `:include{src=…}` directive, which this rule validates instead.
+> - Anchored wikilinks (`[[page#heading]]`) turned out to be broken in the *build* itself (they
+>   always rendered as broken spans); the build was fixed as part of this work so `broken-anchor`
+>   lints against the now-correct render behavior.
+> - Partials (`_*.md`) are linted for content rules (links, assets, diagrams) and skipped by
+>   page-level rules (title, orphan, empty, slug).
+> - Frontmatter suppression applies to page/partial-attributed findings only; findings attributed
+>   to `.base`/`.puml`/`docgen.toml` can only be silenced by re-leveling the rule.
 
 ## Goal
 

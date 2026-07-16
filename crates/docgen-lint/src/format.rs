@@ -125,6 +125,19 @@ fn gh_escape_property(s: &str) -> String {
     gh_escape_data(s).replace(':', "%3A").replace(',', "%2C")
 }
 
+/// The repo-relative path CI annotations should use. Diagnostic `file`s are
+/// docs-relative, so they get the `docs/` prefix — EXCEPT `docgen.toml`, the
+/// one file diagnostics attribute to at the project root (the external-url
+/// bad-glob notice and the engine's `--rules`-allow notice); prefixing it
+/// would point CI at a nonexistent `docs/docgen.toml`.
+fn ci_path(file: &str) -> String {
+    if file == "docgen.toml" {
+        file.to_string()
+    } else {
+        format!("docs/{file}")
+    }
+}
+
 /// GitHub Actions annotations, one workflow command per diagnostic:
 /// `::error file=docs/{file},line={line}::{message} [{rule}]`.
 pub fn github(outcome: &LintOutcome) -> String {
@@ -135,7 +148,7 @@ pub fn github(outcome: &LintOutcome) -> String {
             Severity::Warn => "warning",
             _ => "notice",
         };
-        let file = gh_escape_property(&format!("docs/{}", d.file));
+        let file = gh_escape_property(&ci_path(&d.file));
         let line = d.line.map(|l| format!(",line={l}")).unwrap_or_default();
         let message = gh_escape_data(&format!("{} [{}]", d.message, d.rule));
         out.push_str(&format!("::{level} file={file}{line}::{message}\n"));
@@ -143,14 +156,15 @@ pub fn github(outcome: &LintOutcome) -> String {
     out
 }
 
-/// The stable Code Quality fingerprint: sha256 over rule + file + line + message.
+/// The stable Code Quality fingerprint: sha256 over rule + file + message.
+/// Deliberately excludes the line, per the Code Climate convention — the
+/// fingerprint identifies the ISSUE, so it must survive the finding shifting
+/// lines when unrelated edits move it around.
 fn gitlab_fingerprint(d: &Diagnostic) -> String {
     let mut hasher = Sha256::new();
     hasher.update(d.rule.as_bytes());
     hasher.update(b"\0");
     hasher.update(d.file.as_bytes());
-    hasher.update(b"\0");
-    hasher.update(d.line.map(|l| l.to_string()).unwrap_or_default().as_bytes());
     hasher.update(b"\0");
     hasher.update(d.message.as_bytes());
     let digest = hasher.finalize();
@@ -173,7 +187,7 @@ pub fn gitlab(outcome: &LintOutcome) -> String {
                     _ => "info",
                 },
                 "location": {
-                    "path": format!("docs/{}", d.file),
+                    "path": ci_path(&d.file),
                     "lines": { "begin": d.line.unwrap_or(1) },
                 },
             })
@@ -320,6 +334,47 @@ mod tests {
         assert_eq!(issues[0]["location"]["lines"]["begin"], 3);
         // A diagnostic without a line anchors at line 1.
         assert_eq!(issues[2]["location"]["lines"]["begin"], 1);
+    }
+
+    #[test]
+    fn ci_formats_leave_docgen_toml_unprefixed() {
+        // m4 regression: config-attributed diagnostics must not become the
+        // nonexistent `docs/docgen.toml` in CI annotations.
+        let o = LintOutcome {
+            diagnostics: vec![Diagnostic {
+                rule: "external-url",
+                severity: Severity::Info,
+                file: "docgen.toml".into(),
+                line: None,
+                col: None,
+                message: "invalid exclude glob".into(),
+                note: None,
+            }],
+            files_checked: 1,
+            errors: 0,
+            warnings: 0,
+            infos: 1,
+        };
+        let gh = github(&o);
+        assert!(gh.contains("file=docgen.toml"), "{gh}");
+        assert!(!gh.contains("docs/docgen.toml"), "{gh}");
+        let gl: serde_json::Value = serde_json::from_str(&gitlab(&o)).unwrap();
+        assert_eq!(gl[0]["location"]["path"], "docgen.toml");
+    }
+
+    #[test]
+    fn gitlab_fingerprint_survives_line_shifts() {
+        // m5 regression: per the Code Climate convention the fingerprint
+        // identifies the issue, so moving it to another line must not change it.
+        let mut d = outcome().diagnostics[0].clone();
+        let original = gitlab_fingerprint(&d);
+        d.line = Some(99);
+        d.col = None;
+        assert_eq!(gitlab_fingerprint(&d), original);
+        // ...but a different message or file is a different issue.
+        let mut other = outcome().diagnostics[0].clone();
+        other.message = "something else".into();
+        assert_ne!(gitlab_fingerprint(&other), original);
     }
 
     #[test]

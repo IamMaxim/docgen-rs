@@ -19,12 +19,19 @@ knowledge base: every page tells you what depends on it.
 [[getting-started]]              → links to the Getting started page
 [[getting-started|start here]]   → same link, custom label "start here"
 [[features/history]]             → link by path when names would be ambiguous
+[[getting-started#Install]]      → links straight to a heading on that page
+[[#Syntax]]                      → links to a heading on the current page
 ```
 
 - `[[target]]` uses the target's name as the link text.
 - `[[target|label]]` uses your own label.
 - Targets resolve by page name; use a path segment (`features/history`) to
   disambiguate when two pages share a name.
+- `[[target#Heading]]` resolves the page and jumps to that heading (the anchor
+  is slugified the same way heading ids are); the link text stays
+  `target#Heading` unless a label overrides it. `[[#Heading]]` links within
+  the current page. Anchored links count as real links — they appear in
+  backlinks and the graph like any other wikilink.
 
 ## Backlinks
 

@@ -122,6 +122,26 @@ mod tests {
     }
 
     #[test]
+    fn missing_asset_checks_partials_and_offsets_frontmatter_lines() {
+        // M2 + C1 regression: a partial's missing image is reported against
+        // the partial, at the RAW file line (after its 3-line frontmatter).
+        let diags = lint_fixture(
+            &[
+                ("index.md", "# Home\n\n:include{src=_frag.md}\n"),
+                (
+                    "_frag.md",
+                    "---\ntitle: frag\n---\n![gone](./img/nope.png)\n",
+                ),
+            ],
+            "missing-asset",
+        );
+        assert_eq!(diags.len(), 1, "{diags:?}");
+        assert_eq!(diags[0].file, "_frag.md");
+        assert_eq!(diags[0].line, Some(4));
+        assert!(diags[0].message.contains("./img/nope.png"), "{diags:?}");
+    }
+
+    #[test]
     fn missing_asset_skips_external_data_and_page_links() {
         let diags = lint_fixture(
             &[(

@@ -118,7 +118,11 @@ impl SiteBuild {
     }
 }
 
-fn first_h1(body: &str) -> Option<String> {
+/// The first `# `-prefixed line of a body, as the build's title fallback sees
+/// it. Deliberately a raw line scan (NOT an AST walk): a `# x` line inside a
+/// code fence still counts. Public so the linter's `missing-title` rule can
+/// mirror the build's derivation exactly instead of drifting on edge cases.
+pub fn first_h1(body: &str) -> Option<String> {
     body.lines()
         .find_map(|line| line.strip_prefix("# ").map(|h| h.trim().to_string()))
 }

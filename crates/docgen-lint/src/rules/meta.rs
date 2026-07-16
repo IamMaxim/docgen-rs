@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use docgen_bases::parse_base;
+use docgen_core::pipeline::first_h1;
 
 use crate::context::LintContext;
 use crate::model::{Diagnostic, Severity};
@@ -53,14 +54,26 @@ impl Rule for MissingTitle {
         "page has no frontmatter title and no h1 heading"
     }
     fn check(&self, ctx: &LintContext, out: &mut Vec<Diagnostic>) {
-        for doc in &ctx.docs {
-            let has_fm_title = match doc.prepared.frontmatter.get("title") {
-                // A non-string scalar (`title: 42`) still titles the page.
-                Some(v) => v.as_str().map_or(!v.is_null(), |s| !s.trim().is_empty()),
-                None => false,
-            };
-            let has_h1 = doc.refs.headings.iter().any(|h| h.depth == 1);
+        for doc in ctx.docs.iter().filter(|d| !d.is_partial) {
+            // Mirror the build's `prepare` exactly: only a non-blank STRING
+            // frontmatter title counts (`title: 42` is ignored by `as_str()`
+            // and falls through to the h1/slug fallback).
+            let fm_title = doc.prepared.frontmatter.get("title");
+            let has_fm_title = fm_title
+                .and_then(|v| v.as_str())
+                .is_some_and(|s| !s.trim().is_empty());
+            // Mirror the build's h1 fallback too: `first_h1` is a raw line
+            // scan, NOT an AST walk — a `# x` line inside a code fence titles
+            // the page, so it must satisfy this rule as well.
+            let has_h1 = first_h1(&doc.prepared.body_md).is_some();
             if !has_fm_title && !has_h1 {
+                let note = match fm_title {
+                    Some(v) if !v.is_null() => {
+                        "frontmatter `title` is not a string, so the build ignores it; \
+                         the title falls back to the slug segment"
+                    }
+                    _ => "the title falls back to the slug segment",
+                };
                 out.push(Diagnostic {
                     rule: self.id(),
                     severity: self.default_severity(),
@@ -68,7 +81,7 @@ impl Rule for MissingTitle {
                     line: None,
                     col: None,
                     message: "page has no frontmatter title and no h1 heading".to_string(),
-                    note: Some("the title falls back to the slug segment".to_string()),
+                    note: Some(note.to_string()),
                 });
             }
         }
@@ -95,6 +108,9 @@ impl Rule for DuplicateSlug {
         let entries = ctx
             .docs
             .iter()
+            // Partials are not pages: they claim no slug (and are excluded
+            // from the slug set), so they can never collide.
+            .filter(|d| !d.is_partial)
             .map(|d| (d.prepared.slug.as_str(), d.prepared.rel_path.as_str()))
             .chain(
                 ctx.bases
@@ -225,6 +241,62 @@ mod tests {
         );
         let files: Vec<&str> = diags.iter().map(|d| d.file.as_str()).collect();
         assert_eq!(files, vec!["blank-fm.md", "untitled.md"], "{diags:?}");
+    }
+
+    #[test]
+    fn missing_title_mirrors_build_title_derivation() {
+        // m2 regression, both directions:
+        // (a) a non-string frontmatter title (`title: 42`) is IGNORED by the
+        //     build (`as_str()` fails), so the rule must warn;
+        // (b) the build's h1 fallback is a raw line scan that finds `# x`
+        //     even inside a code fence, so the rule must NOT warn there.
+        let diags = lint_fixture(
+            &[
+                ("numeric.md", "---\ntitle: 42\n---\nno heading here\n"),
+                (
+                    "fenced.md",
+                    "```sh\n# not a real heading, but prepare() takes it\n```\n",
+                ),
+            ],
+            "missing-title",
+        );
+        assert_eq!(diags.len(), 1, "{diags:?}");
+        assert_eq!(diags[0].file, "numeric.md");
+        assert!(
+            diags[0]
+                .note
+                .as_deref()
+                .unwrap_or("")
+                .contains("not a string"),
+            "{diags:?}"
+        );
+    }
+
+    #[test]
+    fn missing_title_skips_partials() {
+        // M2: partials never render as pages, so they need no title.
+        let diags = lint_fixture(
+            &[
+                ("index.md", "# Home\n\n:include{src=_frag.md}\n"),
+                ("_frag.md", "just a fragment\n"),
+            ],
+            "missing-title",
+        );
+        assert!(diags.is_empty(), "{diags:?}");
+    }
+
+    #[test]
+    fn invalid_frontmatter_reported_for_partials_too() {
+        // M2: a partial's malformed frontmatter block is a real finding.
+        let diags = lint_fixture(
+            &[
+                ("index.md", "# Home\n\n:include{src=_frag.md}\n"),
+                ("_frag.md", "---\n: not: valid: yaml\n---\nbody\n"),
+            ],
+            "invalid-frontmatter",
+        );
+        assert_eq!(diags.len(), 1, "{diags:?}");
+        assert_eq!(diags[0].file, "_frag.md");
     }
 
     #[test]

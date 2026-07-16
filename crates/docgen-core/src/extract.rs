@@ -103,6 +103,32 @@ pub fn extract_refs(body_md: &str) -> DocRefs {
     refs
 }
 
+impl DocRefs {
+    /// Shift every positioned reference down by `lines`. Used when the body the
+    /// refs were extracted from is preceded by stripped content in the on-disk
+    /// file (a frontmatter block), so reported lines match the raw file.
+    pub fn offset_lines(&mut self, lines: usize) {
+        if lines == 0 {
+            return;
+        }
+        for w in &mut self.wikilinks {
+            w.line += lines;
+        }
+        for l in &mut self.links {
+            l.line += lines;
+        }
+        for h in &mut self.headings {
+            h.line += lines;
+        }
+        for f in &mut self.fences {
+            f.line += lines;
+        }
+        for d in &mut self.directives {
+            d.line += lines;
+        }
+    }
+}
+
 /// Recursive worker: `line_offset` is added to every 1-based line found in
 /// `body_md` (0 at the top level; a directive's opening line when recursing
 /// into its `inner_md`, since inner line 1 is the doc line right after it).
@@ -246,8 +272,8 @@ fn scan_wikilinks<'a>(root: &'a AstNode<'a>, line_offset: usize, refs: &mut DocR
                 let inner = &rest[open + 2..close];
 
                 let (target_full, label) = parse_wikilink(inner);
-                // The render pass keeps `#` as part of the target; only the
-                // extractor splits the anchor out.
+                // Split the anchor out, matching the render pass: the build
+                // resolves the page part and appends the anchor as a fragment.
                 let (target, anchor) = match target_full.split_once('#') {
                     Some((t, a)) => (t.trim().to_string(), Some(a.trim().to_string())),
                     None => (target_full, None),
@@ -410,5 +436,23 @@ mod tests {
     #[test]
     fn empty_body_yields_empty_refs() {
         assert_eq!(extract_refs(""), DocRefs::default());
+    }
+
+    #[test]
+    fn offset_lines_shifts_every_ref_kind() {
+        let md = "# H\n\n[[w]] [l](x.md)\n\n```mermaid\npie\n```\n\n:include{src=_p.md}\n";
+        let mut refs = extract_refs(md);
+        refs.offset_lines(4);
+        assert_eq!(refs.headings[0].line, 1 + 4);
+        assert_eq!(refs.wikilinks[0].line, 3 + 4);
+        assert_eq!(refs.links[0].line, 3 + 4);
+        assert_eq!(refs.fences[0].line, 5 + 4);
+        assert_eq!(refs.directives[0].line, 9 + 4);
+
+        // Offset 0 is a no-op.
+        let mut refs2 = extract_refs(md);
+        let snapshot = refs2.clone();
+        refs2.offset_lines(0);
+        assert_eq!(refs2, snapshot);
     }
 }

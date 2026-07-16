@@ -184,6 +184,8 @@ pub struct SiteConfig {
     pub plantuml: PlantumlConfig,
     /// Optional S3 asset offload. `None` = disabled (local copy).
     pub s3: Option<S3Config>,
+    /// `[lint]` — settings for `docgen lint` (ignore globs, per-rule severity
+    /// overrides, external-check toggles). All defaults when absent.
     pub lint: LintConfig,
 }
 

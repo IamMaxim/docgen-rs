@@ -5,26 +5,36 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use docgen_core::assetpass::normalize_join;
 use docgen_core::discover::{
     discover_assets, discover_bases, discover_diagrams, discover_docs, BaseFileInput,
 };
 use docgen_core::extract::{extract_refs, DocRefs, HeadingRef};
 use docgen_core::frontmatter::parse_frontmatter_checked;
-use docgen_core::pipeline::{
-    partition_partials, prepare, resolve_include_key, Diagrams, Partials, PreparedDoc,
-};
+use docgen_core::pipeline::{is_partial_rel, prepare, Diagrams, Partials, PreparedDoc};
 use docgen_core::wikilink::{resolve_target, SlugSet};
 use globset::GlobMatcher;
 
 use crate::engine::LintError;
 
-/// One page doc as the linter sees it: prepared metadata, extracted references,
-/// the raw on-disk text, and per-file lint state from frontmatter.
+/// One doc (page or partial) as the linter sees it: prepared metadata,
+/// extracted references, the raw on-disk text, and per-file lint state from
+/// frontmatter.
 pub struct DocEntry {
     pub prepared: PreparedDoc,
+    /// Extracted references, with lines already shifted by [`Self::line_offset`]
+    /// so they point into the RAW on-disk file (frontmatter included).
     pub refs: DocRefs,
     /// The raw file text (frontmatter included), for rules that need exact source.
     pub raw: String,
+    /// Lines the stripped frontmatter block (fences included) occupied in the
+    /// raw file. `refs` is already shifted; rules that re-extract positions
+    /// from `prepared.body_md` themselves must add this to their line numbers.
+    pub line_offset: usize,
+    /// True for include-only `_*.md` partials. Partials are linted for content
+    /// problems (links, assets, diagrams, frontmatter) but skipped by
+    /// page-level rules (titles, orphans, slugs, emptiness).
+    pub is_partial: bool,
     /// Rule ids this file suppresses via frontmatter `lint.ignore`.
     pub suppressed: BTreeSet<String>,
     /// The YAML error message when a frontmatter block exists but is malformed.
@@ -33,7 +43,8 @@ pub struct DocEntry {
 
 /// Everything rules need, computed once per run.
 pub struct LintContext {
-    /// Page docs (partials + ignore-glob matches excluded), discovery order.
+    /// All docs — pages AND include-only partials (`is_partial` distinguishes
+    /// them; ignore-glob matches excluded) — in discovery order.
     pub docs: Vec<DocEntry>,
     /// The wikilink slug set — page-doc slugs only, mirroring the build:
     /// `render_docs` builds its `SlugSet` from prepared markdown docs alone,
@@ -78,26 +89,46 @@ impl LintContext {
             .into_iter()
             .filter(|r| !ignore.iter().any(|g| g.is_match(&r.rel_path)))
             .collect();
-        let (pages, partials) = partition_partials(raws);
 
-        let mut docs = Vec::with_capacity(pages.len());
-        for raw in pages {
+        // Prepare EVERY doc — pages and partials alike — from the original
+        // RawDoc, so partials keep their frontmatter (suppression, invalid-
+        // frontmatter checks) and get the same refs/line-offset treatment.
+        // The `partials` include map is rebuilt from the prepared bodies,
+        // which matches `partition_partials` (frontmatter-stripped).
+        let mut docs = Vec::with_capacity(raws.len());
+        let mut partials = Partials::new();
+        for raw in raws {
+            let is_partial = is_partial_rel(&raw.rel_path);
             let (_, frontmatter_error) = parse_frontmatter_checked(&raw.raw);
             let raw_text = raw.raw.clone();
             let prepared = prepare(raw);
-            let refs = extract_refs(&prepared.body_md);
+            // Diagnostics must point into the raw file, but the body the refs
+            // are extracted from starts AFTER the stripped frontmatter block —
+            // shift every position once, here, so no rule ever re-adjusts.
+            let line_offset = frontmatter_line_offset(&raw_text, &prepared.body_md);
+            let mut refs = extract_refs(&prepared.body_md);
+            refs.offset_lines(line_offset);
             let suppressed = suppressed_rules(&prepared.frontmatter);
+            if is_partial {
+                partials.insert(prepared.rel_path.clone(), prepared.body_md.clone());
+            }
             docs.push(DocEntry {
                 prepared,
                 refs,
                 raw: raw_text,
+                line_offset,
+                is_partial,
                 suppressed,
                 frontmatter_error,
             });
         }
 
         // Page-doc slugs only — see the `slugs` field docs.
-        let slugs: SlugSet = docs.iter().map(|d| d.prepared.slug.clone()).collect();
+        let slugs: SlugSet = docs
+            .iter()
+            .filter(|d| !d.is_partial)
+            .map(|d| d.prepared.slug.clone())
+            .collect();
 
         let assets: BTreeSet<String> = discover_assets(&docs_dir)?
             .into_iter()
@@ -127,6 +158,9 @@ impl LintContext {
         let components_dir = project_root.join(&config.components.dir);
         let components = docgen_components::build_registry(builtins, &components_dir)?;
 
+        // Keyed by slug for pages; partial slugs (basename starts with `_`)
+        // can never collide with page slugs, so partials are included too —
+        // it lets `broken-anchor` validate a partial's same-page anchors.
         let headings: BTreeMap<String, Vec<HeadingRef>> = docs
             .iter()
             .map(|d| (d.prepared.slug.clone(), d.refs.headings.clone()))
@@ -171,13 +205,27 @@ fn suppressed_rules(frontmatter: &serde_yml::Value) -> BTreeSet<String> {
     out
 }
 
-/// Count inbound links per slug by resolving every doc's wikilinks plus its
-/// internal page links (absolute `/slug` or relative `path.md`). Targets are
-/// deduped per source doc and self-links dropped, mirroring how the build's
-/// link graph treats edges. Every known slug gets an entry (0 when unlinked).
+/// The number of raw-file lines the stripped frontmatter block consumed
+/// (opening fence, YAML, closing fence). `body` is always a byte suffix of the
+/// (BOM-stripped) raw text — see `frontmatter::parse_frontmatter_checked` — so
+/// the offset is exactly the newline count of the prefix before it. Handles
+/// CRLF (counting `\n` covers it) and a leading BOM.
+fn frontmatter_line_offset(raw: &str, body: &str) -> usize {
+    let input = raw.strip_prefix('\u{feff}').unwrap_or(raw);
+    let consumed = input.len().saturating_sub(body.len());
+    input[..consumed].matches('\n').count()
+}
+
+/// Count inbound links per slug by resolving every PAGE doc's wikilinks plus
+/// its internal page links (absolute `/slug` or relative `path.md`). Targets
+/// are deduped per source doc and self-links dropped, mirroring how the
+/// build's link graph treats edges. Partials are not counted as sources — the
+/// build's graph is built from the top-level render pass only, and included
+/// partial bodies never contribute edges there either. Every known slug gets
+/// an entry (0 when unlinked).
 fn inbound_counts(docs: &[DocEntry], slugs: &SlugSet) -> BTreeMap<String, usize> {
     let mut inbound: BTreeMap<String, usize> = slugs.iter().map(|s| (s.clone(), 0)).collect();
-    for entry in docs {
+    for entry in docs.iter().filter(|d| !d.is_partial) {
         let base_dir = entry
             .prepared
             .rel_path
@@ -208,6 +256,9 @@ fn inbound_counts(docs: &[DocEntry], slugs: &SlugSet) -> BTreeMap<String, usize>
 
 /// Resolve an internal markdown-link URL to a page slug, if it names one.
 /// External URLs (scheme), mailto and pure-fragment links yield `None`.
+/// Path joining uses `normalize_join` — `..` climbing past the docs root is
+/// CLAMPED, exactly like the build's `rewrite_page_link` — so a root-escaping
+/// link resolves to the same page the build would link to.
 fn resolve_page_link(url: &str, base_dir: &str, slugs: &SlugSet) -> Option<String> {
     if url.contains("://") || url.starts_with("mailto:") || url.starts_with('#') {
         return None;
@@ -217,8 +268,8 @@ fn resolve_page_link(url: &str, base_dir: &str, slugs: &SlugSet) -> Option<Strin
         return None;
     }
     let key = match path.strip_prefix('/') {
-        Some(rest) => rest.to_string(),
-        None => resolve_include_key(base_dir, path)?,
+        Some(rest) => normalize_join("", rest),
+        None => normalize_join(base_dir, path),
     };
     let slug = key
         .strip_suffix(".md")
@@ -261,6 +312,38 @@ mod tests {
         assert_eq!(resolve_page_link("https://example.com/x", "", &slugs), None);
         assert_eq!(resolve_page_link("#anchor", "", &slugs), None);
         assert_eq!(resolve_page_link("/nope", "", &slugs), None);
+        // Root-escaping `..` is clamped, like the build's normalize_join —
+        // NOT treated as unresolvable (M3).
+        assert_eq!(
+            resolve_page_link("../index.md", "", &slugs).as_deref(),
+            Some("index")
+        );
+    }
+
+    #[test]
+    fn frontmatter_line_offset_counts_stripped_lines_exactly() {
+        let cases: Vec<(String, usize)> = vec![
+            // No frontmatter -> no offset.
+            ("# Body\n".to_string(), 0),
+            // 3-line block (---, title, ---).
+            ("---\ntitle: X\n---\n# Body\n".to_string(), 3),
+            // 4-line block.
+            ("---\ntitle: X\ndescription: D\n---\nbody\n".to_string(), 4),
+            // CRLF endings.
+            ("---\r\ntitle: X\r\n---\r\nbody\r\n".to_string(), 3),
+            // Leading BOM is stripped before counting.
+            ("\u{feff}---\ntitle: X\n---\nbody\n".to_string(), 3),
+            // Unterminated block: the whole input is body, offset 0.
+            ("---\ntitle: X\n".to_string(), 0),
+        ];
+        for (raw, want) in cases {
+            let (parsed, _) = parse_frontmatter_checked(&raw);
+            assert_eq!(
+                frontmatter_line_offset(&raw, &parsed.body),
+                want,
+                "raw: {raw:?}"
+            );
+        }
     }
 
     #[test]

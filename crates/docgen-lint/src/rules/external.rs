@@ -49,7 +49,9 @@ impl Rule for PlantumlSyntax {
         // `plantuml-empty` does, so reported lines match the source file.
         let mut jobs: Vec<(String, Option<u32>, String)> = Vec::new();
         for doc in &ctx.docs {
-            walk_directives(&doc.prepared.body_md, 0, &mut |inst, line| {
+            // Seed the walk with the frontmatter line offset so reported
+            // lines point into the raw file, matching `DocEntry::refs`.
+            walk_directives(&doc.prepared.body_md, doc.line_offset, &mut |inst, line| {
                 if inst.name != "plantuml" {
                     return;
                 }
@@ -299,15 +301,13 @@ fn checkable_url(url: &str) -> bool {
     !(host == "localhost" || host == "127.0.0.1")
 }
 
-/// Probe one URL: HEAD first; on 405/404-from-HEAD or any HEAD transport
-/// error, retry once with GET (some servers reject HEAD outright). `Some` is
-/// the failure text for the diagnostic; `None` means the URL is fine.
+/// Probe one URL: HEAD first; on ANY failed HEAD (every >=400 status or a
+/// transport error), retry once with GET — plenty of servers/CDNs reject or
+/// 403 HEAD while serving GET fine. `Some` is the failure text for the
+/// diagnostic; `None` means the URL is fine.
 fn check_url(agent: &ureq::Agent, url: &str) -> Option<String> {
     match agent.head(url).call() {
         Ok(_) => None,
-        Err(ureq::Error::Status(status, _)) if status != 404 && status != 405 => {
-            Some(format!("returned HTTP {status}"))
-        }
         Err(_) => match agent.get(url).call() {
             Ok(_) => None,
             Err(ureq::Error::Status(status, _)) => Some(format!("returned HTTP {status}")),
@@ -775,11 +775,44 @@ mod tests {
     #[test]
     fn external_url_is_off_by_default() {
         // A 404 link, but no [lint.rules] opt-in → the Allow default means the
-        // engine never runs the rule (and no network is touched).
+        // engine never runs the rule (and no network is touched). Because the
+        // rule was EXPLICITLY selected via only_rules, the engine emits one
+        // Info notice explaining the no-op instead of staying silent.
         let server = url_stub();
         let tmp = write_project(&[("index.md", &format!("[gone]({server}/missing)\n"))]);
         let diags = lint(tmp.path(), "external-url");
-        assert!(diags.is_empty(), "{diags:?}");
+        assert_eq!(diags.len(), 1, "{diags:?}");
+        assert_eq!(diags[0].severity, Severity::Info);
+        assert_eq!(diags[0].file, "docgen.toml");
+        assert!(diags[0].message.contains("allow-level"), "{diags:?}");
+        // The actual URL check never ran.
+        assert!(!diags[0].message.contains("404"), "{diags:?}");
+    }
+
+    #[test]
+    fn external_url_retries_with_get_when_head_is_rejected() {
+        // Some CDNs 403 HEAD requests while serving GET fine — any failed
+        // HEAD must trigger one GET retry before the URL is reported.
+        let server = stub_http("[::1]:0", |method, path| match (method, path) {
+            ("HEAD", _) => response(method, 403, "Forbidden", "", ""),
+            (_, "/ok") => response(method, 200, "OK", "", "hello"),
+            _ => response(method, 404, "Not Found", "", "gone"),
+        });
+        let tmp = write_project(&[
+            (
+                "docgen.toml",
+                "[lint.rules]\n\"external-url\" = \"warn\"\n\n[lint.external-urls]\ntimeout-secs = 5\n",
+            ),
+            (
+                "index.md",
+                &format!("[ok]({server}/ok)\n[gone]({server}/missing)\n"),
+            ),
+        ]);
+        let diags = lint(tmp.path(), "external-url");
+        // /ok passes via the GET retry; /missing still fails (403 HEAD, 404 GET).
+        assert_eq!(diags.len(), 1, "{diags:?}");
+        assert!(diags[0].message.contains("/missing"), "{diags:?}");
+        assert!(diags[0].message.contains("returned HTTP 404"), "{diags:?}");
     }
 
     #[test]

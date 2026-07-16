@@ -79,7 +79,7 @@ fn default_pretty_run_reports_findings_and_exits_1() {
 
     // Summary line with true counts; piped output carries no ANSI colors.
     assert!(
-        text.contains("6 errors, 7 warnings, 2 infos · 10 files checked"),
+        text.contains("6 errors, 7 warnings, 2 infos · 12 files checked"),
         "{text}"
     );
     assert!(!text.contains('\x1b'), "{text}");
@@ -102,7 +102,7 @@ fn json_format_matches_summary_and_sorts_files() {
     assert_eq!(parsed["summary"]["errors"].as_u64(), Some(count("error")));
     assert_eq!(parsed["summary"]["warnings"].as_u64(), Some(count("warn")));
     assert_eq!(parsed["summary"]["infos"].as_u64(), Some(count("info")));
-    assert_eq!(parsed["summary"]["files_checked"].as_u64(), Some(10));
+    assert_eq!(parsed["summary"]["files_checked"].as_u64(), Some(12));
 
     // Expected rules present.
     let rules: Vec<&str> = diags.iter().map(|d| d["rule"].as_str().unwrap()).collect();
@@ -265,7 +265,7 @@ fn quiet_hides_warn_and_info_but_keeps_true_summary_counts() {
 
     // The summary line keeps the TRUE counts.
     assert!(
-        text.contains("6 errors, 7 warnings, 2 infos · 10 files checked"),
+        text.contains("6 errors, 7 warnings, 2 infos · 12 files checked"),
         "{text}"
     );
 

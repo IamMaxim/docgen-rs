@@ -18,6 +18,11 @@ list you can review, and into an exit code your CI can gate on.
 Because it is built on the same discovery, slug-resolution, and link-graph code
 as `docgen build`, what the linter sees is exactly what the build sees.
 
+Include-only partials (`_*.md`) are linted too: content rules (broken links,
+missing assets, diagrams, frontmatter validity) run on them and they count as
+checked files, while page-level rules (`missing-title`, `empty-page`,
+`orphan-page`, `duplicate-slug`) skip them — a partial is not a page.
+
 ## Quickstart
 
 ```sh

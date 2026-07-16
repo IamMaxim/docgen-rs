@@ -19,4 +19,5 @@ rules only — no network/external checks. Expected findings:
 | `docs/_used.md` | (clean; included from index) |
 | `docs/drafts/broken.md` | none — excluded by the `drafts/**` ignore glob despite its broken wikilink |
 
-Totals: 6 errors, 7 warnings, 2 infos across 10 checked files.
+Totals: 6 errors, 7 warnings, 2 infos across 12 checked files (partials are
+linted and counted too — content rules run on them; page-level rules skip them).

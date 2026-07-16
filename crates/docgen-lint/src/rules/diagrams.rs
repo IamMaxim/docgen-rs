@@ -79,8 +79,11 @@ impl Rule for PlantumlEmpty {
     fn check(&self, ctx: &LintContext, out: &mut Vec<Diagnostic>) {
         for doc in &ctx.docs {
             // `DocRefs` doesn't retain block bodies, so re-run the (cheap)
-            // directive pass to see whether the inline body is blank.
-            walk_directives(&doc.prepared.body_md, 0, &mut |inst, line| {
+            // directive pass to see whether the inline body is blank. The walk
+            // positions lines within `body_md`, which starts AFTER any stripped
+            // frontmatter — seed it with the doc's offset so reported lines
+            // point into the raw file.
+            walk_directives(&doc.prepared.body_md, doc.line_offset, &mut |inst, line| {
                 if inst.name != "plantuml" {
                     return;
                 }
@@ -278,6 +281,18 @@ mod tests {
         );
         assert_eq!(diags.len(), 1, "{diags:?}");
         assert_eq!(diags[0].line, Some(1));
+    }
+
+    #[test]
+    fn plantuml_empty_line_accounts_for_frontmatter() {
+        // C1 regression for rules that re-walk directives themselves: the
+        // directive on body line 1 sits after a 3-line frontmatter block.
+        let diags = lint_fixture(
+            &[("index.md", "---\ntitle: T\n---\n:::plantuml{}\n:::\n")],
+            "plantuml-empty",
+        );
+        assert_eq!(diags.len(), 1, "{diags:?}");
+        assert_eq!(diags[0].line, Some(4));
     }
 
     #[test]

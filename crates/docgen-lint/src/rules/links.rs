@@ -1,7 +1,7 @@
 //! Link integrity rules: wikilinks, relative markdown links, includes and
 //! wikilink anchors.
 
-use docgen_core::assetpass::is_asset_path;
+use docgen_core::assetpass::{is_asset_path, normalize_join};
 use docgen_core::headings::anchor_ids;
 use docgen_core::pipeline::resolve_include_key;
 use docgen_core::wikilink::resolve_target;
@@ -65,30 +65,26 @@ impl Rule for BrokenRelativeLink {
         for doc in &ctx.docs {
             let base_dir = doc_dir(&doc.prepared.rel_path);
             for l in doc.refs.links.iter().filter(|l| !l.is_image) {
-                let path = match classify_url(&l.url) {
+                // Join with `normalize_join` — the SAME clamping semantics the
+                // build's `rewrite_page_link` uses, so a root-escaping `..`
+                // resolves to the page the build would actually link to
+                // instead of a false positive.
+                let key = match classify_url(&l.url) {
                     LinkTarget::External => continue,
-                    LinkTarget::Absolute(p) => {
-                        // Docs-root-absolute: already root-relative.
-                        resolve_include_key("", p)
-                    }
-                    LinkTarget::Relative(p) => resolve_include_key(base_dir, p),
+                    LinkTarget::Absolute(p) => normalize_join("", p),
+                    LinkTarget::Relative(p) => normalize_join(base_dir, p),
                 };
                 // Only page links here (a `.md` target or an extensionless
                 // clean-URL target); links to asset files are `missing-asset`'s job.
-                let is_page = |p: &str| p.ends_with(".md") || !is_asset_path(p);
-                match path {
-                    Some(key) if is_page(&key) => {
-                        let slug = key
-                            .strip_suffix(".md")
-                            .unwrap_or(&key)
-                            .trim_end_matches('/');
-                        if !page_exists(ctx, slug) {
-                            out.push(self.diag(doc, l));
-                        }
-                    }
-                    // Escapes the docs root: nothing it could point at.
-                    None => out.push(self.diag(doc, l)),
-                    Some(_) => {} // asset target — not this rule's concern
+                if !key.ends_with(".md") && is_asset_path(&key) {
+                    continue; // asset target — not this rule's concern
+                }
+                let slug = key
+                    .strip_suffix(".md")
+                    .unwrap_or(&key)
+                    .trim_end_matches('/');
+                if !page_exists(ctx, slug) {
+                    out.push(self.diag(doc, l));
                 }
             }
         }
@@ -254,6 +250,21 @@ mod tests {
     }
 
     #[test]
+    fn broken_wikilink_line_accounts_for_frontmatter() {
+        // C1 regression: the body starts after a 4-line frontmatter block, so
+        // the wikilink on body line 2 is RAW-file line 6.
+        let diags = lint_fixture(
+            &[(
+                "index.md",
+                "---\ntitle: Home\ndescription: D\n---\n# Home\nSee [[nope]].\n",
+            )],
+            "broken-wikilink",
+        );
+        assert_eq!(diags.len(), 1, "{diags:?}");
+        assert_eq!(diags[0].line, Some(6), "line must be raw-file-based");
+    }
+
+    #[test]
     fn broken_relative_link_flags_missing_pages_only() {
         let diags = lint_fixture(
             &[
@@ -284,6 +295,39 @@ mod tests {
         );
         assert_eq!(diags.len(), 1, "{diags:?}");
         assert!(diags[0].message.contains("/nope"));
+    }
+
+    #[test]
+    fn broken_relative_link_clamps_root_escaping_dotdot_like_the_build() {
+        // M3 regression: the build's `normalize_join` CLAMPS `..` at the docs
+        // root, so `[a](../a.md)` from a root doc links to `a.md` — the linter
+        // must agree instead of flagging a false positive.
+        let diags = lint_fixture(
+            &[
+                ("index.md", "[a](../a.md) [gone](../../nope.md)\n"),
+                ("a.md", "# A\n[[index]]\n"),
+            ],
+            "broken-relative-link",
+        );
+        assert_eq!(diags.len(), 1, "{diags:?}");
+        assert!(diags[0].message.contains("../../nope.md"), "{diags:?}");
+    }
+
+    #[test]
+    fn partials_are_checked_for_broken_wikilinks() {
+        // M2 regression: a partial's broken wikilink is reported, attributed
+        // to the partial file itself.
+        let diags = lint_fixture(
+            &[
+                ("index.md", "# Home\n\n:include{src=_frag.md}\n"),
+                ("_frag.md", "See [[ghost-page]].\n"),
+            ],
+            "broken-wikilink",
+        );
+        assert_eq!(diags.len(), 1, "{diags:?}");
+        assert_eq!(diags[0].file, "_frag.md");
+        assert_eq!(diags[0].line, Some(1));
+        assert!(diags[0].message.contains("ghost-page"), "{diags:?}");
     }
 
     #[test]

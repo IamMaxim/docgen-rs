@@ -131,6 +131,29 @@ pub(crate) fn run_with_rules(
             .copied()
             .unwrap_or_else(|| rule.default_severity());
         if severity == Severity::Allow {
+            // A rule the user EXPLICITLY asked for via `--rules` that resolves
+            // to allow would otherwise no-op silently — surface why.
+            if options
+                .only_rules
+                .as_ref()
+                .is_some_and(|only| only.iter().any(|n| n == rule.id()))
+            {
+                diagnostics.push(Diagnostic {
+                    rule: rule.id(),
+                    severity: Severity::Info,
+                    file: "docgen.toml".to_string(),
+                    line: None,
+                    col: None,
+                    message: format!(
+                        "rule `{}` is allow-level and did not run",
+                        rule.id()
+                    ),
+                    note: Some(format!(
+                        "enable it with `[lint.rules] \"{}\" = \"warn\"` (or \"info\"/\"error\") in docgen.toml",
+                        rule.id()
+                    )),
+                });
+            }
             continue;
         }
         let mut emitted = Vec::new();
@@ -169,6 +192,8 @@ pub(crate) fn run_with_rules(
 
     let count = |sev: Severity| diagnostics.iter().filter(|d| d.severity == sev).count();
     Ok(LintOutcome {
+        // Pages AND partials: both are linted (partials run the content rules),
+        // so both count as checked files.
         files_checked: ctx.docs.len(),
         errors: count(Severity::Error),
         warnings: count(Severity::Warn),
@@ -382,6 +407,59 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(err, LintError::UnknownRule { name } if name == "nope"));
+    }
+
+    #[test]
+    fn explicitly_selected_allow_rule_emits_an_info_notice() {
+        // m3 regression: `--rules fake-rule` with the rule configured to allow
+        // must say WHY nothing ran instead of silently no-opping.
+        let tmp = mini_site("[lint.rules]\n\"fake-rule\" = \"allow\"\n");
+        let out = run_fake(
+            tmp.path(),
+            &LintOptions {
+                only_rules: Some(vec!["fake-rule".to_string()]),
+                deny_warnings: false,
+            },
+        )
+        .unwrap();
+        assert_eq!(out.diagnostics.len(), 1, "{:?}", out.diagnostics);
+        let d = &out.diagnostics[0];
+        assert_eq!(d.rule, "fake-rule");
+        assert_eq!(d.severity, Severity::Info);
+        assert_eq!(d.file, "docgen.toml");
+        assert_eq!(d.line, None);
+        assert!(d.message.contains("allow-level"), "{d:?}");
+        assert!(
+            d.note.as_deref().unwrap_or("").contains("[lint.rules]"),
+            "{d:?}"
+        );
+
+        // Without --rules the allow-level rule stays silent, as before.
+        let out = run_fake(tmp.path(), &LintOptions::default()).unwrap();
+        assert!(out.diagnostics.iter().all(|d| d.rule != "fake-rule"));
+    }
+
+    #[test]
+    fn partials_are_linted_counted_and_suppressible() {
+        // M2 regression: partials appear in ctx.docs (flagged), run through
+        // rules, count as checked files, and honor frontmatter suppression.
+        let tmp = mini_site("");
+        std::fs::write(
+            tmp.path().join("docs/_frag.md"),
+            "---\nlint:\n  ignore: [fake-rule]\n---\nshared\n",
+        )
+        .unwrap();
+        std::fs::write(tmp.path().join("docs/_loud.md"), "shared too\n").unwrap();
+        let out = run_fake(tmp.path(), &LintOptions::default()).unwrap();
+        // 3 pages + 2 partials all count as checked.
+        assert_eq!(out.files_checked, 5);
+        // The fake rule ran on the unsuppressed partial...
+        assert!(out
+            .diagnostics
+            .iter()
+            .any(|d| d.rule == "fake-rule" && d.file == "_loud.md"));
+        // ...and the suppressed partial's frontmatter opt-out held.
+        assert!(!out.diagnostics.iter().any(|d| d.file == "_frag.md"));
     }
 
     #[test]
