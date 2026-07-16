@@ -868,7 +868,6 @@
     "v": 1,
     "view": {
       "groupBy": null,
-      "limit": null,
       "name": null,
       "sort": [
         {

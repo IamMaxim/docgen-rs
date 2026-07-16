@@ -68,6 +68,55 @@ pub struct ViewInteractive {
     /// Initial sort override (`defaultSort`).
     #[serde(rename = "defaultSort")]
     pub default_sort: Vec<SortKey>,
+    /// Any key here docgen does not recognize. Unlike the Obsidian-owned parts of
+    /// the format — where an unknown property is forgiving by design — this block
+    /// is docgen's OWN namespace, so a key in it that docgen ignores is always an
+    /// author mistake. Captured rather than dropped so the renderer can say so;
+    /// see `ViewInteractive::unknown_key_warning`.
+    #[serde(flatten)]
+    pub unknown: BTreeMap<String, serde_yml::Value>,
+}
+
+impl ViewInteractive {
+    /// Every key docgen understands here, for diagnostics.
+    const KNOWN: &'static [&'static str] = &[
+        "enabled",
+        "search",
+        "pageSize",
+        "maxEnum",
+        "filters",
+        "sortable",
+        "sortAs",
+        "defaultSort",
+    ];
+
+    /// A human message naming every unrecognized key, or `None` when clean.
+    ///
+    /// These keys are camelCase, so the overwhelmingly likely typo is a case slip
+    /// (`pagesize`, `defaultsort`) — match case-insensitively to name the intended
+    /// key. Anything else is reported without a guess rather than with a wrong one.
+    pub fn unknown_key_warning(&self) -> Option<String> {
+        if self.unknown.is_empty() {
+            return None;
+        }
+        let parts: Vec<String> = self
+            .unknown
+            .keys()
+            .map(|k| {
+                match Self::KNOWN
+                    .iter()
+                    .find(|known| known.eq_ignore_ascii_case(k))
+                {
+                    Some(known) => format!("`{k}` (did you mean `{known}`?)"),
+                    None => format!("`{k}`"),
+                }
+            })
+            .collect();
+        Some(format!(
+            "unknown docgenInteractive key: {}",
+            parts.join(", ")
+        ))
+    }
 }
 
 /// Per-property display config (`properties.<key>.displayName`).

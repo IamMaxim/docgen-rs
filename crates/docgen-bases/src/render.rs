@@ -181,14 +181,27 @@ fn render_view(
         row.id = i;
     }
 
-    // Group (optional), then limit within the whole view.
+    // `limit` truncates the row set, in interactive mode too — it means the same
+    // thing Obsidian means by it, and the same thing this renderer's static mode
+    // has always meant. Pagination is `docgenInteractive.pageSize`'s job and only
+    // its job; conflating the two made `limit: 10` ship every matched row to the
+    // client and page them 10 at a time, so a cap the author wrote was not a cap
+    // at all. Truncating HERE (once, before both the payload and the body) is what
+    // keeps them agreeing: a row the DOM does not contain must not appear in the
+    // payload, or the island would hold ids with no node. Applies across the whole
+    // view, not per group.
+    if let Some(limit) = view.limit {
+        rows.truncate(limit);
+    }
+
+    // Group (optional).
     let name = view
         .name
         .clone()
         .unwrap_or_else(|| opts.default_view_name.clone());
 
     let body = match view.view_type.as_str() {
-        "cards" => render_cards(&rows, view, base, &columns, opts, corpus),
+        "cards" => render_cards(&rows, base, &columns, opts, corpus),
         "list" => render_list(&rows, &columns, opts, corpus, formulas),
         // "table" and any unknown type fall back to a table.
         _ => render_table(
@@ -225,6 +238,20 @@ fn render_view(
         section.push_str(&format!(
             "<div class=\"docgen-base-warning\">Filter parse error: {}</div>",
             escape(&errs.join("; "))
+        ));
+    }
+    // A typo'd key in docgen's own `docgenInteractive` block would otherwise do
+    // nothing, forever, while looking like it worked. Warn visibly but keep
+    // rendering: the build always succeeds (the graceful-degradation contract),
+    // and only the mistyped knob is lost, not the view.
+    if let Some(warning) = view
+        .interactive
+        .as_ref()
+        .and_then(|iv| iv.unknown_key_warning())
+    {
+        section.push_str(&format!(
+            "<div class=\"docgen-base-warning\">{}</div>",
+            escape(&warning)
         ));
     }
     // Interactive payload: after the optional title/warning, before the body.
@@ -375,9 +402,8 @@ fn render_table(
     custom_summaries: &BTreeMap<String, Expr>,
 ) -> String {
     let group_by = view.group_by.as_ref();
-    // Interactive mode paginates client-side, so emit ALL matched rows (the
-    // limit is carried in the payload); static mode keeps the hard truncation.
-    let limit = if opts.interactive { None } else { view.limit };
+    // `rows` is already truncated to the view's `limit` by render_view.
+    let limit: Option<usize> = None;
 
     let mut html = String::new();
     // Reuse the same horizontal-scroll wrapper docgen uses for wide markdown tables.
@@ -523,20 +549,14 @@ fn group_rows<'a, 'b>(
 
 fn render_cards(
     rows: &[Row],
-    view: &View,
     base: &BaseFile,
     columns: &[String],
     opts: &RenderOptions,
     corpus: &Corpus,
 ) -> String {
-    // Interactive mode emits ALL rows (island paginates); static mode truncates.
-    let limit = if opts.interactive {
-        usize::MAX
-    } else {
-        view.limit.unwrap_or(usize::MAX)
-    };
+    // `rows` is already truncated to the view's `limit` by render_view.
     let mut html = String::from("<div class=\"docgen-base-cards\">");
-    for row in rows.iter().take(limit) {
+    for row in rows.iter() {
         if opts.interactive {
             html.push_str(&format!(
                 "<div class=\"docgen-base-card\" data-row=\"{}\">",
@@ -1060,7 +1080,7 @@ mod tests {
     }
 
     #[test]
-    fn payload_parses_and_limit_not_applied() {
+    fn payload_parses_and_limit_is_applied() {
         let base =
             parse_base("views:\n  - type: table\n    order: [file.name]\n    limit: 1\n").unwrap();
         let corpus = Corpus::new(vec![
@@ -1069,15 +1089,92 @@ mod tests {
             note("c", "C", &[]),
         ]);
         let html = render_base(&base, &corpus, &interactive_opts());
-        // Full matched set present in the DOM despite limit:1.
-        assert_eq!(html.matches("data-row=").count(), 3);
+        // `limit` is a row cap, not a page size: it truncates in interactive mode
+        // exactly as it does statically, so the rows it cut never reach the client.
+        assert_eq!(html.matches("data-row=").count(), 1);
         let payload = extract_payload(&html);
         let v: serde_json::Value = serde_json::from_str(&payload).expect("valid JSON");
         assert_eq!(v["v"], 1);
         assert_eq!(v["columns"].as_array().unwrap().len(), 1);
-        assert_eq!(v["rows"].as_array().unwrap().len(), 3);
-        // limit is carried, not applied.
-        assert_eq!(v["view"]["limit"], 1);
+        // The payload must never carry a row the DOM lacks — the island would hold
+        // an id with no node to move or hide.
+        assert_eq!(v["rows"].as_array().unwrap().len(), 1);
+        // `limit` is not shipped: already applied, and re-applying would double-cap.
+        assert_eq!(v["view"]["limit"], serde_json::Value::Null);
+        // A row cap is not pagination. 1 row => no pager.
+        assert_eq!(v["controls"]["pageSize"], 0);
+    }
+
+    /// A key docgen does not know in ITS OWN namespace is always an author error
+    /// (Obsidian never reads this block), so it must not vanish silently. The view
+    /// still renders — only the mistyped knob is lost.
+    #[test]
+    fn unknown_docgen_interactive_key_warns_but_still_renders() {
+        let corpus = Corpus::new(vec![note("a", "A", &[])]);
+        let base = parse_base(
+            "views:\n  - type: table\n    order: [file.name]\n    docgenInteractive:\n      pagesize: 25\n",
+        )
+        .unwrap();
+        let html = render_base(&base, &corpus, &interactive_opts());
+        assert!(
+            html.contains("docgen-base-warning"),
+            "warning must be shown"
+        );
+        assert!(html.contains("pagesize"), "must name the offending key");
+        assert!(
+            html.contains("did you mean `pageSize`?"),
+            "a case slip is the likely typo; name the intended key"
+        );
+        // The view still renders: degradation, not failure.
+        assert!(html.contains("docgen-base-table"));
+        assert!(html.contains(">A<"));
+        // ...and the typo really did NOT take effect (default paging, not 25).
+        let v: serde_json::Value = serde_json::from_str(&extract_payload(&html)).unwrap();
+        assert_eq!(v["controls"]["pageSize"], 0);
+    }
+
+    /// The warning must not fire on a correct block, or it is noise.
+    #[test]
+    fn known_docgen_interactive_keys_do_not_warn() {
+        let corpus = Corpus::new(vec![note("a", "A", &[])]);
+        let base = parse_base(
+            "views:\n  - type: table\n    order: [file.name]\n    docgenInteractive:\n      pageSize: 25\n      search: false\n      maxEnum: 10\n",
+        )
+        .unwrap();
+        let html = render_base(&base, &corpus, &interactive_opts());
+        assert!(!html.contains("docgen-base-warning"));
+        let v: serde_json::Value = serde_json::from_str(&extract_payload(&html)).unwrap();
+        assert_eq!(v["controls"]["pageSize"], 25);
+        assert_eq!(v["controls"]["search"], false);
+    }
+
+    /// `limit` must cap every view type. `render_list` never applied it at all —
+    /// not even in static mode — because it was the one renderer that did not
+    /// receive `view`. Capping centrally in `render_view` covers all three.
+    #[test]
+    fn limit_truncates_every_view_type() {
+        let corpus = Corpus::new(vec![
+            note("a", "A", &[]),
+            note("b", "B", &[]),
+            note("c", "C", &[]),
+        ]);
+        for (ty, marker) in [
+            ("table", "<tr data-row="),
+            ("cards", "docgen-base-card\" data-row="),
+            ("list", "<li data-row="),
+        ] {
+            let base = parse_base(&format!(
+                "views:\n  - type: {ty}\n    order: [file.name]\n    limit: 2\n"
+            ))
+            .unwrap();
+            let html = render_base(&base, &corpus, &interactive_opts());
+            assert_eq!(
+                html.matches(marker).count(),
+                2,
+                "{ty} view must honor limit: 2"
+            );
+            assert!(!html.contains(">C<"), "{ty}: the cut row must be absent");
+        }
     }
 
     #[test]

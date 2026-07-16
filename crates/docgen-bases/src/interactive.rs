@@ -315,10 +315,12 @@ pub(crate) fn build_payload(
     // controls.search — override else default true.
     let search = overrides.and_then(|iv| iv.search).unwrap_or(true);
 
-    // controls.pageSize — override → view.limit → default 50 when >50 rows else 0.
+    // controls.pageSize — override → default 50 when >50 rows else 0. Deliberately
+    // does NOT fall back to `view.limit`: that is a row cap the renderer has
+    // already applied, not a page size (see render_view). `rows` here is the
+    // post-limit set, so the default keys off what the reader will actually get.
     let page_size = overrides
         .and_then(|iv| iv.page_size)
-        .or(view.limit)
         .unwrap_or(if rows.len() > 50 { 50 } else { 0 });
 
     let payload = json!({
@@ -328,7 +330,8 @@ pub(crate) fn build_payload(
             "name": view.name,
             "groupBy": group_by,
             "sort": ssr_sort_json,
-            "limit": view.limit,
+            // No `limit`: it is applied server-side, so `rows` here is already the
+            // capped set. Shipping it would invite the island to cap a second time.
         },
         "columns": cols_json,
         "rows": rows_json,

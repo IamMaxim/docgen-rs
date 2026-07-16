@@ -152,6 +152,15 @@ views:
 out. Unlike the other keys here, `sortAs` also affects the static build, because
 a view's `sort:` is a build-time ordering.
 
+`pageSize` pages the rows a view already has; the view's `limit` decides how many
+rows it has at all. They compose: `limit: 100` with `pageSize: 25` renders 100
+rows, shown 25 at a time.
+
+Because this block is docgen's own, a key it does not recognize is an author
+mistake rather than an Obsidian key to tolerate — so a misspelling (`pagesize`)
+renders a **visible warning** naming the key, instead of doing nothing. The view
+still renders; only the mistyped setting is ignored.
+
 To turn interactivity off for a single base, add `docgenInteractive: false` at the
 top level; the view still renders as static HTML.
 
@@ -162,9 +171,12 @@ docgen implements the Bases format faithfully:
 - **Five sections** — `filters`, `formulas`, `properties`, `summaries`, `views`.
 - **Filters** — the full `and`/`or`/`not` logical tree over expression strings.
 - **Views** — `table`, `cards`, and `list`, each with its own `name`, `filters`,
-  `order`, `sort`, `limit`, `columnSize`, and `summaries`. `groupBy` renders
-  group headings on **`table` views only**; `cards` and `list` parse it and
-  ignore it, so a grouped view of either renders ungrouped rather than failing.
+  `order`, `sort`, `limit`, `columnSize`, and `summaries`. `limit` **caps the
+  rows** — the rows it cuts are never rendered and never reach the browser, so it
+  means the same thing here that it means in Obsidian. It is not a page size: to
+  page a long view, use `pageSize` below. `groupBy` renders group headings on
+  **`table` views only**; `cards` and `list` parse it and ignore it, so a grouped
+  view of either renders ungrouped rather than failing.
 - **The expression language** — property references (`note.x`, `file.x`,
   `formula.x`, and a bare `x` for a note property), operators (`+ - * / %`,
   comparisons, `&& || !`, date ± duration), and the documented global functions
