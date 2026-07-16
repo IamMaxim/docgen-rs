@@ -244,6 +244,22 @@ pub struct Renderer {
     env: Environment<'static>,
 }
 
+/// Make a JSON payload safe to inline inside `<script type="application/json">`.
+///
+/// Escapes EVERY `<`, not just `</`. A lone `</script>` guard is not enough: per
+/// the HTML tokenizer, a `<!--` followed by `<script` puts the element into
+/// "script data double escaped" state, in which the next `</script>` does NOT
+/// close it — the rest of the document is swallowed as script text and the
+/// payload stops being parseable JSON. A doc title is enough to carry that
+/// sequence. `\u003c` is valid JSON and parses back to `<`, so the island sees
+/// identical data.
+///
+/// Any other JSON payload inlined into a script element needs this same guard
+/// (the interactive-bases payload builder carries its own copy).
+fn escape_json_for_script(json: &str) -> String {
+    json.replace('<', "\\u003c")
+}
+
 impl Renderer {
     /// Build a renderer from a page-template source string.
     pub fn new(page_template: &str) -> Result<Self, minijinja::Error> {
@@ -262,10 +278,10 @@ impl Renderer {
     /// Render one page to a full HTML document.
     pub fn render_page(&self, ctx: &PageContext) -> Result<String, minijinja::Error> {
         let tmpl = self.env.get_template("page.html")?;
-        // Escape `</` so a literal `</script>` inside a doc title can't break out
-        // of the inline `<script type="application/json">` graph payload (same
-        // guard as `render_graph`). Empty → still empty, so the block is skipped.
-        let safe_graph_json = ctx.graph_json.replace("</", "<\\/");
+        // Neutralize the inline `<script type="application/json">` graph payload
+        // (same guard as `render_graph`). Empty → still empty, so the block is
+        // skipped.
+        let safe_graph_json = escape_json_for_script(ctx.graph_json);
         tmpl.render(context! {
             title => ctx.title,
             description => ctx.description,
@@ -296,12 +312,11 @@ impl Renderer {
     /// Render the `/graph/` doc-link-graph page to a full HTML document.
     ///
     /// `graph_json` is injected raw (the island's `JSON.parse` needs valid JSON,
-    /// not HTML-escaped text). To stop a literal `</script>` inside a doc title
-    /// from breaking out of the embedding `<script type="application/json">` tag,
-    /// `</` is rewritten to `<\/` first — still valid JSON, inert as markup.
+    /// not HTML-escaped text), so it is neutralized by
+    /// [`escape_json_for_script`] first.
     pub fn render_graph(&self, ctx: &GraphContext) -> Result<String, minijinja::Error> {
         let tmpl = self.env.get_template("graph.html")?;
-        let safe_json = ctx.graph_json.replace("</", "<\\/");
+        let safe_json = escape_json_for_script(ctx.graph_json);
         tmpl.render(context! {
             tree => ctx.tree,
             slug => "",
@@ -1220,7 +1235,72 @@ mod tests {
             })
             .unwrap();
         assert!(!html.contains("a</script>b")); // raw close-tag must not survive
-        assert!(html.contains(r#"a<\/script>b"#)); // escaped form present
+        assert!(html.contains(r#"a\u003c/script>b"#)); // escaped form present
+    }
+
+    /// `</script>` is not the only way out of a `<script>` element. Per the HTML
+    /// tokenizer, `<!--` followed by `<script` puts it in "script data double
+    /// escaped" state, where the NEXT `</script>` does not close the element — it
+    /// swallows the following markup instead, so the payload stops being valid
+    /// JSON and the island dies. Escaping only `</` does nothing about this,
+    /// which is why every `<` has to go (`<` is valid JSON and parses back
+    /// to `<`, so the island is unaffected).
+    #[test]
+    fn embedded_json_neutralizes_script_double_escape_sequence() {
+        let r = Renderer::new(DEFAULT_PAGE_TEMPLATE).unwrap();
+        // A doc TITLE is enough to carry this: it is author-controlled text that
+        // reaches graph_json verbatim.
+        let json = r#"{"nodes":[{"slug":"x","title":"<!--<script>","x":0.0,"y":0.0,"degree":0}],"edges":[]}"#;
+        let ctx = GraphContext {
+            tree: &[],
+            graph_json: json,
+            node_count: 1,
+            has_diff: false,
+            edge_count: 0,
+            base: "",
+            site_title: "",
+            search_enabled: true,
+        };
+        let html = r.render_graph(&ctx).unwrap();
+        assert!(
+            !html.contains("<!--<script>"),
+            "the double-escape sequence must not survive into the payload"
+        );
+        assert!(html.contains(r#"\u003c!--\u003cscript>"#));
+
+        // render_page embeds the same payload and needs the same guard.
+        let page = r
+            .render_page(&PageContext {
+                title: "T",
+                slug: "s",
+                body_html: "",
+                tree: &[],
+                backlinks: &[],
+                headings: &[],
+                commit: "",
+                built: "",
+                has_history: false,
+                has_mermaid: false,
+                has_math: false,
+                base: "",
+                site_title: "",
+                search_enabled: true,
+                has_components_css: false,
+                has_component_island: false,
+                is_home: true,
+                has_diff: false,
+                graph_json: json,
+                graph_node_count: 1,
+                graph_edge_count: 0,
+                description: "",
+                home: None,
+            })
+            .unwrap();
+        assert!(!page.contains("<!--<script>"));
+        // Positive counterpart: proves the payload block was actually emitted
+        // with the escaped bytes, so this half cannot pass vacuously if the
+        // `is_home`-gated embed ever regresses to not rendering at all.
+        assert!(page.contains(r#"\u003c!--\u003cscript>"#));
     }
 
     #[test]
