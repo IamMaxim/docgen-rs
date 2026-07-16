@@ -21,9 +21,30 @@ fn island_pure_logic_parity_suite() {
         }
     }
 
+    // Pass the test files explicitly instead of the directory: what `--test`
+    // makes of a directory argument has changed across Node releases (v22.23
+    // requires it as a module and dies with MODULE_NOT_FOUND, where v20 scans
+    // it), and an explicit file list behaves identically on every version.
+    // Enumerating also turns "suite missing" into a loud failure instead of a
+    // run over zero files.
+    let mut test_files: Vec<std::path::PathBuf> =
+        std::fs::read_dir(std::path::Path::new(manifest).join("js-tests"))
+            .expect("js-tests/ directory missing")
+            .filter_map(|e| Some(e.ok()?.path()))
+            .filter(|p| {
+                p.file_name()
+                    .is_some_and(|n| n.to_string_lossy().ends_with(".test.mjs"))
+            })
+            .collect();
+    test_files.sort();
+    assert!(
+        !test_files.is_empty(),
+        "no *.test.mjs files found in js-tests/"
+    );
+
     let out = Command::new("node")
         .arg("--test")
-        .arg("js-tests/")
+        .args(&test_files)
         .current_dir(manifest)
         .output()
         .expect("failed to spawn node --test");
