@@ -31,5 +31,7 @@ example rendered by docgen itself.
   evolved, with line- and block-level diffs.
 - **[[s3-offload|S3 asset offload]]** — optionally store large binaries in an
   S3-compatible bucket and serve them from a CDN.
+- **[[lint|Linting]]** — `docgen lint` finds broken links, missing assets, and
+  malformed diagrams before you publish. Advisory: it never blocks the build.
 
 Prefer a linear read? Start at [[wikilinks]] and follow the links.
