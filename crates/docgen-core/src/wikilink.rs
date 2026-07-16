@@ -108,7 +108,7 @@ fn render_link(
 /// surrounding Text nodes + raw-HTML inline nodes for each wikilink.
 /// The flat source text a child node contributes when reconstructing an inline
 /// run, or `None` if the node breaks the run (it is not foldable into text).
-fn flat_source(node: &AstNode<'_>) -> Option<String> {
+pub(crate) fn flat_source(node: &AstNode<'_>) -> Option<String> {
     match &node.data.borrow().value {
         NodeValue::Text(t) => Some(t.to_string()),
         // Raw inline HTML inside `[[ ... ]]` is folded back into the target string

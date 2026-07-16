@@ -2,6 +2,7 @@
 //! reproduces docgen's pre-P6 hard-coded behaviour exactly, so a project with
 //! no config builds identically to before.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::Deserialize;
@@ -98,6 +99,74 @@ pub struct S3Config {
     pub path_style: bool,
 }
 
+/// `[lint]` section — settings for `docgen lint`. Absent = all defaults
+/// (nothing ignored, built-in rule severities, syntax checks off).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+#[serde(default)]
+pub struct LintConfig {
+    /// Globs (relative to `docs/`) of files the linter skips entirely.
+    pub ignore: Vec<String>,
+    /// Per-rule severity overrides: rule-id -> `"error"`/`"warn"`/`"info"`/
+    /// `"allow"`. Stored as raw strings; docgen-lint validates them.
+    pub rules: BTreeMap<String, String>,
+    /// `[lint.plantuml]` — PlantUML-specific lint settings.
+    pub plantuml: LintPlantumlConfig,
+    /// `[lint.mermaid]` — mermaid-specific lint settings.
+    pub mermaid: LintMermaidConfig,
+    /// `[lint.external-urls]` — external-URL check settings.
+    #[serde(rename = "external-urls")]
+    pub external_urls: LintExternalUrlsConfig,
+}
+
+/// `[lint.plantuml]` section.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+#[serde(default)]
+pub struct LintPlantumlConfig {
+    /// Validate PlantUML diagram syntax (requires a PlantUML server).
+    #[serde(rename = "check-syntax")]
+    pub check_syntax: bool,
+}
+
+/// `[lint.mermaid]` section.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct LintMermaidConfig {
+    /// Validate mermaid diagram syntax (requires the `mmdc` CLI).
+    #[serde(rename = "check-syntax")]
+    pub check_syntax: bool,
+    /// Path to / name of the mermaid CLI binary.
+    pub mmdc: String,
+}
+
+impl Default for LintMermaidConfig {
+    fn default() -> Self {
+        Self {
+            check_syntax: false,
+            mmdc: "mmdc".to_string(),
+        }
+    }
+}
+
+/// `[lint.external-urls]` section.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct LintExternalUrlsConfig {
+    /// Per-request timeout for external-URL checks, in seconds.
+    #[serde(rename = "timeout-secs")]
+    pub timeout_secs: u64,
+    /// URL patterns excluded from external-URL checking.
+    pub exclude: Vec<String>,
+}
+
+impl Default for LintExternalUrlsConfig {
+    fn default() -> Self {
+        Self {
+            timeout_secs: 10,
+            exclude: Vec::new(),
+        }
+    }
+}
+
 /// The whole resolved site config. `Default` == pre-P6 behaviour.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
 #[serde(default)]
@@ -115,6 +184,7 @@ pub struct SiteConfig {
     pub plantuml: PlantumlConfig,
     /// Optional S3 asset offload. `None` = disabled (local copy).
     pub s3: Option<S3Config>,
+    pub lint: LintConfig,
 }
 
 /// Resolve the effective PlantUML server URL, applying precedence (first match
@@ -432,6 +502,89 @@ mod tests {
         // 5. nothing set -> root.
         assert_eq!(resolve_base_from("", None, None, None), "");
         assert_eq!(resolve_base_from("  ", None, None, Some("  ")), "");
+    }
+}
+
+#[cfg(test)]
+mod lint_tests {
+    use super::*;
+
+    #[test]
+    fn absent_lint_section_yields_defaults() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("docgen.toml"), "title = \"Docs\"\n").unwrap();
+        let c = load(dir.path()).unwrap();
+        assert_eq!(c.lint, LintConfig::default());
+        assert!(c.lint.ignore.is_empty());
+        assert!(c.lint.rules.is_empty());
+        assert!(!c.lint.plantuml.check_syntax);
+        assert!(!c.lint.mermaid.check_syntax);
+        assert_eq!(c.lint.mermaid.mmdc, "mmdc");
+        assert_eq!(c.lint.external_urls.timeout_secs, 10);
+        assert!(c.lint.external_urls.exclude.is_empty());
+    }
+
+    #[test]
+    fn full_lint_section_parses() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("docgen.toml"),
+            r#"
+            [lint]
+            ignore = ["drafts/**", "archive/*.md"]
+
+            [lint.rules]
+            orphan-page = "warn"
+            broken-wikilink = "error"
+
+            [lint.plantuml]
+            check-syntax = true
+
+            [lint.mermaid]
+            check-syntax = true
+            mmdc = "/usr/local/bin/mmdc"
+
+            [lint.external-urls]
+            timeout-secs = 5
+            exclude = ["https://intranet.example.com/*"]
+            "#,
+        )
+        .unwrap();
+        let c = load(dir.path()).unwrap();
+        assert_eq!(c.lint.ignore, vec!["drafts/**", "archive/*.md"]);
+        assert_eq!(
+            c.lint.rules.get("orphan-page").map(String::as_str),
+            Some("warn")
+        );
+        assert_eq!(
+            c.lint.rules.get("broken-wikilink").map(String::as_str),
+            Some("error")
+        );
+        assert!(c.lint.plantuml.check_syntax);
+        assert!(c.lint.mermaid.check_syntax);
+        assert_eq!(c.lint.mermaid.mmdc, "/usr/local/bin/mmdc");
+        assert_eq!(c.lint.external_urls.timeout_secs, 5);
+        assert_eq!(
+            c.lint.external_urls.exclude,
+            vec!["https://intranet.example.com/*"]
+        );
+    }
+
+    #[test]
+    fn malformed_severity_is_accepted_at_parse_time() {
+        // Severity strings are validated downstream by docgen-lint, so an
+        // unknown value parses fine here.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("docgen.toml"),
+            "[lint.rules]\norphan-page = \"loud\"\n",
+        )
+        .unwrap();
+        let c = load(dir.path()).unwrap();
+        assert_eq!(
+            c.lint.rules.get("orphan-page").map(String::as_str),
+            Some("loud")
+        );
     }
 }
 

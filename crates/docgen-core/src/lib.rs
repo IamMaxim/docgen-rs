@@ -5,6 +5,7 @@ pub mod basepass;
 pub mod bases;
 pub mod directivepass;
 pub mod discover;
+pub mod extract;
 pub mod frontmatter;
 pub mod graph;
 pub mod graphlayout;
@@ -23,6 +24,9 @@ pub mod util;
 pub mod wikilink;
 
 pub use bases::{build_corpus, note_from_doc, FileFacts};
+pub use extract::{
+    extract_refs, DirectiveRef, DocRefs, FenceRef, HeadingRef, MdLinkRef, WikilinkRef,
+};
 pub use graph::LinkGraph;
 pub use graphlayout::{
     graph_data_json, layout_graph, GraphData, GraphDataEdge, GraphNode, LayoutParams,

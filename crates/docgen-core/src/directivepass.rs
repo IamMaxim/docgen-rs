@@ -25,11 +25,14 @@ pub struct DirectiveInstance {
     /// Block inner markdown; empty for leaf form.
     pub inner_md: String,
     pub is_block: bool,
+    /// 1-based line of the opening delimiter (`:::name…` or the line carrying
+    /// the leaf `:name[…]{…}`) in the body passed to [`extract`].
+    pub line: usize,
 }
 
 /// The sentinel a directive is replaced with in the rewritten source. `idx` is
 /// the instance index. An HTML comment so comrak passes it through verbatim.
-fn sentinel(idx: usize) -> String {
+pub(crate) fn sentinel(idx: usize) -> String {
     format!("<!--docgen-directive:{idx}-->")
 }
 
@@ -243,6 +246,7 @@ pub fn extract(body_md: &str) -> (String, Vec<DirectiveInstance>) {
                     label: String::new(),
                     inner_md: inner.join("\n"),
                     is_block: true,
+                    line: i + 1,
                 });
                 out_lines.push(sentinel(idx));
                 i = j + 1; // skip past the closing `:::`
@@ -252,7 +256,7 @@ pub fn extract(body_md: &str) -> (String, Vec<DirectiveInstance>) {
         }
 
         // Otherwise scan the line for inline leaf directives.
-        out_lines.push(scan_leaf_line(line, &mut instances));
+        out_lines.push(scan_leaf_line(line, i + 1, &mut instances));
         i += 1;
     }
 
@@ -284,7 +288,7 @@ fn looks_like_leaf(rest: &str) -> bool {
 /// sentinel, appending instances. A `:::` block opener is never matched here
 /// (block openers are handled before this is called, and a `::` prefix is
 /// skipped). Plain `:` in prose (`10:30`) is left untouched.
-fn scan_leaf_line(line: &str, instances: &mut Vec<DirectiveInstance>) -> String {
+fn scan_leaf_line(line: &str, line_no: usize, instances: &mut Vec<DirectiveInstance>) -> String {
     let chars: Vec<char> = line.chars().collect();
     let mut out = String::with_capacity(line.len());
     let mut i = 0;
@@ -309,7 +313,8 @@ fn scan_leaf_line(line: &str, instances: &mut Vec<DirectiveInstance>) -> String 
             let prev_colon = i > 0 && chars[i - 1] == ':';
             let next_colon = i + 1 < chars.len() && chars[i + 1] == ':';
             if !prev_colon && !next_colon {
-                if let Some((inst, consumed)) = try_parse_leaf(&chars, i) {
+                if let Some((mut inst, consumed)) = try_parse_leaf(&chars, i) {
+                    inst.line = line_no;
                     let idx = instances.len();
                     instances.push(inst);
                     out.push_str(&sentinel(idx));
@@ -410,6 +415,7 @@ fn try_parse_leaf(chars: &[char], start: usize) -> Option<(DirectiveInstance, us
             label,
             inner_md: String::new(),
             is_block: false,
+            line: 0, // stamped by `scan_leaf_line`, which knows the line number
         },
         i - start,
     ))
@@ -560,6 +566,7 @@ mod substitute_tests {
             label: String::new(),
             inner_md: String::new(),
             is_block: false,
+            line: 1,
         }];
         let html = sentinel_doc();
         let (out, _) = substitute(
@@ -708,6 +715,28 @@ mod extract_tests {
         let src = "- item\n\n  ```\n  :::callout{}\n  body\n  ```\n";
         let (_out, inst) = extract(src);
         assert!(inst.is_empty());
+    }
+
+    #[test]
+    fn block_and_leaf_directives_carry_their_opening_line() {
+        let src = "# Title\n\n:::callout{type=note}\nbody\n:::\n\nSee :youtube[x]{id=1} here.\n";
+        let (_out, inst) = extract(src);
+        assert_eq!(inst.len(), 2);
+        assert!(inst[0].is_block);
+        assert_eq!(inst[0].line, 3);
+        assert!(!inst[1].is_block);
+        assert_eq!(inst[1].line, 7);
+    }
+
+    #[test]
+    fn directive_line_after_fence_containing_colons_is_correct() {
+        // The `:::` inside the fence must count as ordinary lines, not shift
+        // the line number of the real directive below.
+        let src = "```text\n:::\n```\n:note[x]{}\n";
+        let (_out, inst) = extract(src);
+        assert_eq!(inst.len(), 1);
+        assert_eq!(inst[0].name, "note");
+        assert_eq!(inst[0].line, 4);
     }
 
     #[test]
