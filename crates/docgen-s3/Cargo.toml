@@ -9,6 +9,20 @@ repository.workspace = true
 [dependencies]
 docgen-config = { workspace = true }
 docgen-core = { workspace = true }
-rust-s3 = { version = "0.37", default-features = false, features = ["sync-rustls-tls"] }
+# TLS is deliberately NOT selected via rust-s3's `sync-rustls-tls`: that forwards
+# to `attohttpc/tls-rustls`, which enables rustls' default features and so pulls in
+# `aws-lc-rs`. `ureq` (docgen-plantuml) asks the same rustls for `ring`, and Cargo
+# unifies features additively, so the binary got both providers — rustls then
+# refuses to pick one and `attohttpc` panics on the first upload, while
+# `aws-lc-sys` needs cmake/NASM to build at all. So take `sync` for the client and
+# name the ring-backed TLS stack ourselves, below.
+rust-s3 = { version = "0.37", default-features = false, features = ["sync"] }
+# Not used directly — this is here purely to pin the TLS backend of the
+# `attohttpc` that rust-s3 uses. `-ring` is the same webpki-roots stack as
+# `tls-rustls`, minus the aws-lc-rs default. Keep it single-provider; the guard in
+# crates/docgen/tests/crypto_provider.rs fails if this regresses.
+attohttpc = { version = "0.30", default-features = false, features = [
+	"tls-rustls-webpki-roots-ring",
+] }
 sha2 = "0.10"
 anyhow = "1"
