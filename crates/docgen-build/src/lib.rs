@@ -154,6 +154,8 @@ fn render_base_pages(
         base: base_path.to_string(),
         default_view_name: String::new(),
         interactive: true,
+        // A standalone `.base` file is the only base on its own page.
+        block_index: 0,
     };
     let mut docs = Vec::with_capacity(base_inputs.len());
     let mut search = Vec::with_capacity(base_inputs.len());

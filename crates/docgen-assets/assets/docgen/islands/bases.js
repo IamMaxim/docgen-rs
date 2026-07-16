@@ -469,20 +469,31 @@
       rowsById: rowsById,
       nodeById: nodeById,
       container: container,
-      grouped: !!(data.view && data.view.groupBy),
+      // Only a table actually renders group headings; cards/list ignore `groupBy`
+      // by design. The emitter already withholds the field for those, so the type
+      // check is belt-and-braces — but `grouped` suppresses the sort dropdown that
+      // is cards/list's only sort affordance, so a stale payload must not be able
+      // to strip it.
+      grouped: !!(data.view && data.view.groupBy && data.view.type === 'table'),
       controls: {}, // {facetPanels, updaters:[]}
       updaters: [], // fns that push state -> widget values
       state: makeState(data),
       allIds: (data.rows || []).map(function (r) {
         return r.id;
       }),
-      // The SSR DOM is already emitted in the default (payload) sort order, so the
-      // first render only reorders if the URL restores a different sort.
       domOrderSig: null,
       prevVisible: null
     };
+    // The order the SSR rows are ACTUALLY in, which is `view.sort` — NOT
+    // `controls.sort`. The two differ whenever `docgenInteractive.defaultSort` is
+    // set, because that overrides only where the controls START, while the server
+    // still arranges rows by `view.sort` (or leaves corpus order when it is
+    // empty). Seeding from `controls.sort` made the first render believe the DOM
+    // was already in the default sort and skip the corrective reorder, so the
+    // controls advertised an order the rows were not in until the reader touched
+    // something.
     V.domOrderSig = sortSig(
-      (data.controls && data.controls.sort ? data.controls.sort : []).map(function (k) {
+      (data.view && data.view.sort ? data.view.sort : []).map(function (k) {
         return { col: k.col, desc: !!k.desc };
       })
     );

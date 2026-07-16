@@ -32,6 +32,12 @@ pub struct RenderOptions {
     /// island hydrates against. When false, output is byte-for-byte the pure
     /// static HTML (no `data-*` hooks, no payload script).
     pub interactive: bool,
+    /// Which base on the page this is: 0 for a standalone `.base`, else the index
+    /// of the ` ```base ` block. Views number from 0 within their own base, so the
+    /// emitted `data-base-view` is `{block_index}-{view_index}` — the island keys
+    /// URL-hash segments and facet-panel DOM ids off that string, and two blocks
+    /// on one page would otherwise both claim `0` and clobber each other.
+    pub block_index: usize,
 }
 
 impl RenderOptions {
@@ -200,7 +206,8 @@ fn render_view(
     let mut section = String::new();
     if opts.interactive {
         section.push_str(&format!(
-            "<section class=\"docgen-base-view\" data-base-view=\"{view_index}\">"
+            "<section class=\"docgen-base-view\" data-base-view=\"{}-{view_index}\">",
+            opts.block_index
         ));
     } else {
         section.push_str("<section class=\"docgen-base-view\">");
@@ -751,6 +758,7 @@ mod tests {
             base: String::new(),
             default_view_name: "Base".into(),
             interactive: false,
+            block_index: 0,
         }
     }
 
@@ -759,6 +767,7 @@ mod tests {
             base: String::new(),
             default_view_name: "Base".into(),
             interactive: true,
+            block_index: 0,
         }
     }
 
@@ -1019,6 +1028,7 @@ mod tests {
             base: "/docs".into(),
             default_view_name: "Base".into(),
             interactive: false,
+            block_index: 0,
         };
         let html = render_base(&base, &corpus, &o);
         assert!(html.contains("href=\"/docs/guide/a\""));
@@ -1042,7 +1052,8 @@ mod tests {
             parse_base("views:\n  - type: table\n    order: [file.name, note.rating]\n").unwrap();
         let corpus = Corpus::new(vec![note("a", "A", &[("rating", Value::Number(5.0))])]);
         let html = render_base(&base, &corpus, &interactive_opts());
-        assert!(html.contains("data-base-view=\"0\""));
+        // `{block}-{view}`: block 0 (a standalone base), first view.
+        assert!(html.contains("data-base-view=\"0-0\""));
         assert!(html.contains("<script type=\"application/json\" class=\"docgen-base-data\">"));
         assert!(html.contains("<tr data-row=\"0\""));
         assert!(html.contains("<th data-col=\"file.name\""));
@@ -1313,5 +1324,115 @@ mod tests {
             v["rows"][0]["cells"]["note.x"]["d"],
             "</script><!--<script><b>hi"
         );
+    }
+
+    /// `groupBy` is table-only (see the graceful-degradation contract in
+    /// website/docs/features/bases.md): cards/list parse it and render ungrouped.
+    /// The payload has to say so too — the island derives `V.grouped` from this
+    /// field, and a truthy `grouped` suppresses the sort dropdown that IS the only
+    /// sort affordance a cards/list view has. Emitting it for a view that renders
+    /// ungrouped left the reader with no way to sort at all.
+    #[test]
+    fn group_by_is_not_emitted_for_non_table_views() {
+        let corpus = Corpus::new(vec![note("a", "A", &[("status", Value::Str("x".into()))])]);
+        for ty in ["cards", "list"] {
+            let base = parse_base(&format!(
+                "views:\n  - type: {ty}\n    order: [file.name, note.status]\n    groupBy: note.status\n"
+            ))
+            .unwrap();
+            let v: serde_json::Value = serde_json::from_str(&extract_payload(&render_base(
+                &base,
+                &corpus,
+                &interactive_opts(),
+            )))
+            .unwrap();
+            assert_eq!(
+                v["view"]["groupBy"],
+                serde_json::Value::Null,
+                "{ty} renders ungrouped, so its payload must not claim a groupBy"
+            );
+        }
+
+        // The table case is the control: it really does group, so it keeps the field.
+        let base = parse_base(
+            "views:\n  - type: table\n    order: [file.name, note.status]\n    groupBy: note.status\n",
+        )
+        .unwrap();
+        let v: serde_json::Value = serde_json::from_str(&extract_payload(&render_base(
+            &base,
+            &corpus,
+            &interactive_opts(),
+        )))
+        .unwrap();
+        assert_eq!(v["view"]["groupBy"]["col"], "note.status");
+    }
+
+    /// The island skips its corrective reorder when the requested sort already
+    /// matches the order the SSR DOM is in. It therefore needs to know that real
+    /// order — which is `view.sort`, since `apply_sort` never consults
+    /// `defaultSort`. Reporting `controls.sort` (= defaultSort) as the DOM order
+    /// made the island think the rows were already arranged that way.
+    #[test]
+    fn payload_reports_the_ssr_sort_not_the_default_sort_override() {
+        let corpus = Corpus::new(vec![note("a", "A", &[("date", Value::Number(1.0))])]);
+        let base = parse_base(
+            "views:\n  - type: table\n    order: [file.name, note.date]\n    sort:\n      - property: note.date\n        direction: DESC\n    docgenInteractive:\n      defaultSort:\n        - property: file.name\n          direction: ASC\n",
+        )
+        .unwrap();
+        let v: serde_json::Value = serde_json::from_str(&extract_payload(&render_base(
+            &base,
+            &corpus,
+            &interactive_opts(),
+        )))
+        .unwrap();
+
+        // What the rows are actually arranged by on the server.
+        assert_eq!(v["view"]["sort"][0]["col"], "note.date");
+        assert_eq!(v["view"]["sort"][0]["desc"], true);
+        // What the controls should open on — deliberately different.
+        assert_eq!(v["controls"]["sort"][0]["col"], "file.name");
+        assert_eq!(v["controls"]["sort"][0]["desc"], false);
+    }
+
+    /// With no `sort:`, `apply_sort` early-returns and the rows keep corpus order.
+    /// An empty `view.sort` is what tells the island that, so a `defaultSort` will
+    /// correctly be seen as a change and applied on first render.
+    #[test]
+    fn payload_ssr_sort_is_empty_when_the_view_does_not_sort() {
+        let corpus = Corpus::new(vec![note("a", "A", &[])]);
+        let base = parse_base(
+            "views:\n  - type: table\n    order: [file.name]\n    docgenInteractive:\n      defaultSort:\n        - property: file.name\n          direction: ASC\n",
+        )
+        .unwrap();
+        let v: serde_json::Value = serde_json::from_str(&extract_payload(&render_base(
+            &base,
+            &corpus,
+            &interactive_opts(),
+        )))
+        .unwrap();
+        assert_eq!(v["view"]["sort"].as_array().unwrap().len(), 0);
+        assert_eq!(v["controls"]["sort"][0]["col"], "file.name");
+    }
+
+    /// `data-base-view` has to be unique per PAGE, not per base: the island uses it
+    /// to namespace URL-hash segments and facet-panel DOM ids. Two embedded blocks
+    /// both starting their enumeration at 0 made each block strip the other's URL
+    /// state and emit colliding element ids.
+    #[test]
+    fn view_ids_are_namespaced_by_block() {
+        let corpus = Corpus::new(vec![note("a", "A", &[])]);
+        let base = parse_base("views:\n  - type: table\n    order: [file.name]\n").unwrap();
+
+        let first = render_base(&base, &corpus, &interactive_opts());
+        let second = render_base(
+            &base,
+            &corpus,
+            &RenderOptions {
+                block_index: 1,
+                ..interactive_opts()
+            },
+        );
+        assert!(first.contains("data-base-view=\"0-0\""));
+        assert!(second.contains("data-base-view=\"1-0\""));
     }
 }

@@ -878,6 +878,16 @@
       "groupBy": null,
       "limit": null,
       "name": null,
+      "sort": [
+        {
+          "col": "note.flag",
+          "desc": false
+        },
+        {
+          "col": "note.num",
+          "desc": false
+        }
+      ],
       "type": "table"
     }
   },

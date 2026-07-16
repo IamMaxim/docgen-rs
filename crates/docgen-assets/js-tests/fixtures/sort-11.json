@@ -870,6 +870,12 @@
       "groupBy": null,
       "limit": null,
       "name": null,
+      "sort": [
+        {
+          "col": "note.vermixed",
+          "desc": false
+        }
+      ],
       "type": "table"
     }
   },

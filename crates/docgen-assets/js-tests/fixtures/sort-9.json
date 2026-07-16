@@ -870,6 +870,12 @@
       "groupBy": null,
       "limit": null,
       "name": null,
+      "sort": [
+        {
+          "col": "note.version",
+          "desc": false
+        }
+      ],
       "type": "table"
     }
   },

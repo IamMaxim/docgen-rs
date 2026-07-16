@@ -402,6 +402,7 @@ fn interactive_opts() -> RenderOptions {
         base: String::new(),
         default_view_name: "Parity".into(),
         interactive: true,
+        block_index: 0,
     }
 }
 

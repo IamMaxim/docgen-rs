@@ -13,7 +13,7 @@ use std::collections::BTreeSet;
 
 use serde_json::{json, Map, Value as J};
 
-use crate::model::{BaseFile, View, ViewInteractive};
+use crate::model::{BaseFile, SortKey, View, ViewInteractive};
 use crate::render::{self, column_header, RenderOptions};
 use crate::semver;
 use crate::value::Value;
@@ -278,21 +278,39 @@ pub(crate) fn build_payload(
         })
         .collect();
 
-    // view.groupBy
+    // view.groupBy — table-only. `render_cards`/`render_list` never consult
+    // `group_by` (a grouped cards/list view renders ungrouped by design), so
+    // reporting it here would be a lie about the DOM: the island reads this field
+    // to set `V.grouped`, and a grouped view suppresses the sort dropdown that is
+    // the ONLY sort affordance cards/list have — leaving an ungrouped view the
+    // reader cannot sort.
     let group_by = view
         .group_by
         .as_ref()
+        .filter(|_| view.view_type == "table")
         .map(|gb| json!({ "col": gb.property(), "desc": gb.descending() }));
 
-    // controls.sort — override defaultSort wins over view.sort.
+    let key_json = |keys: &[SortKey]| -> Vec<J> {
+        keys.iter()
+            .map(|k| json!({ "col": k.property(), "desc": k.descending() }))
+            .collect()
+    };
+
+    // view.sort — the order the SSR rows are ACTUALLY in. `apply_sort` reads only
+    // `view.sort` (and early-returns when it is empty, leaving corpus order), so
+    // this is not interchangeable with `controls.sort` below: the island compares
+    // the two to decide whether the DOM needs reordering on first render, and
+    // conflating them made a `defaultSort` silently never apply.
+    let ssr_sort_json = key_json(&view.sort);
+
+    // controls.sort — what the controls open on. `defaultSort` overrides
+    // `view.sort` here, and ONLY here; it is an interactive-time initial sort and
+    // deliberately does not move the static build's rows.
     let sort_keys = overrides
         .filter(|iv| !iv.default_sort.is_empty())
         .map(|iv| iv.default_sort.as_slice())
         .unwrap_or(view.sort.as_slice());
-    let sort_json: Vec<J> = sort_keys
-        .iter()
-        .map(|k| json!({ "col": k.property(), "desc": k.descending() }))
-        .collect();
+    let sort_json: Vec<J> = key_json(sort_keys);
 
     // controls.search — override else default true.
     let search = overrides.and_then(|iv| iv.search).unwrap_or(true);
@@ -309,6 +327,7 @@ pub(crate) fn build_payload(
             "type": view.view_type,
             "name": view.name,
             "groupBy": group_by,
+            "sort": ssr_sort_json,
             "limit": view.limit,
         },
         "columns": cols_json,
