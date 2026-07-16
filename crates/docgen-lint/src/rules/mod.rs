@@ -4,6 +4,7 @@
 
 mod assets;
 mod diagrams;
+mod external;
 mod links;
 mod meta;
 mod structure;
@@ -26,7 +27,7 @@ pub trait Rule {
 }
 
 /// Every built-in rule, in the order they run (stable output grouping:
-/// links, diagrams, assets, meta, structure).
+/// links, diagrams, assets, meta, structure, external).
 pub fn all_rules() -> Vec<Box<dyn Rule>> {
     vec![
         Box::new(links::BrokenWikilink),
@@ -49,6 +50,9 @@ pub fn all_rules() -> Vec<Box<dyn Rule>> {
         Box::new(structure::HeadingLevelJump),
         Box::new(structure::EmptyPage),
         Box::new(structure::UnusedPartial),
+        Box::new(external::PlantumlSyntax),
+        Box::new(external::MermaidSyntax),
+        Box::new(external::ExternalUrl),
     ]
 }
 
@@ -91,7 +95,7 @@ mod tests {
     #[test]
     fn registry_ids_are_unique_kebab_case_and_grouped() {
         let rules = all_rules();
-        assert_eq!(rules.len(), 20);
+        assert_eq!(rules.len(), 23);
         let ids: Vec<&str> = rules.iter().map(|r| r.id()).collect();
         let unique: BTreeSet<&str> = ids.iter().copied().collect();
         assert_eq!(unique.len(), ids.len(), "duplicate rule id");
@@ -105,13 +109,16 @@ mod tests {
             );
             assert!(!rule.description().is_empty());
         }
-        // Stable group order: links, diagrams, assets, meta, structure.
+        // Stable group order: links, diagrams, assets, meta, structure, external.
         assert_eq!(ids[0], "broken-wikilink");
         assert_eq!(ids[4], "plantuml-src-missing");
         assert_eq!(ids[8], "missing-asset");
         assert_eq!(ids[10], "invalid-frontmatter");
         assert_eq!(ids[15], "orphan-page");
         assert_eq!(ids[19], "unused-partial");
+        assert_eq!(ids[20], "plantuml-syntax");
+        assert_eq!(ids[21], "mermaid-syntax");
+        assert_eq!(ids[22], "external-url");
     }
 
     #[test]

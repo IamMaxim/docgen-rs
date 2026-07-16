@@ -738,6 +738,7 @@ dependencies = [
  "docgen-components",
  "docgen-config",
  "docgen-core",
+ "docgen-plantuml",
  "globset",
  "serde",
  "serde_json",
@@ -745,6 +746,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "thiserror 2.0.18",
+ "ureq",
 ]
 
 [[package]]

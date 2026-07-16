@@ -137,7 +137,13 @@ pub(crate) fn run_with_rules(
         rule.check(&ctx, &mut emitted);
         for mut d in emitted {
             // Rules emit at their default level; the engine owns re-leveling.
-            d.severity = severity;
+            // A diagnostic a rule explicitly emitted at a DIFFERENT level (the
+            // external rules' Info "check skipped" notices) keeps that level —
+            // an unreachable-server notice must stay Info even when the rule
+            // itself is configured to error.
+            if d.severity == rule.default_severity() {
+                d.severity = severity;
+            }
             if suppression
                 .get(d.file.as_str())
                 .is_some_and(|s| s.contains(d.rule))
@@ -376,6 +382,55 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(err, LintError::UnknownRule { name } if name == "nope"));
+    }
+
+    #[test]
+    fn releveling_preserves_explicitly_non_default_severities() {
+        // A rule (default Warn) that emits one finding at its default level and
+        // one explicit Info notice, like the external rules' "check skipped".
+        struct Mixed;
+        impl Rule for Mixed {
+            fn id(&self) -> &'static str {
+                "mixed-rule"
+            }
+            fn default_severity(&self) -> Severity {
+                Severity::Warn
+            }
+            fn description(&self) -> &'static str {
+                "emits a default-level finding plus an explicit info (test-only)"
+            }
+            fn check(&self, _ctx: &LintContext, out: &mut Vec<Diagnostic>) {
+                for (sev, msg) in [
+                    (Severity::Warn, "real finding"),
+                    (Severity::Info, "check skipped"),
+                ] {
+                    out.push(Diagnostic {
+                        rule: self.id(),
+                        severity: sev,
+                        file: "index.md".into(),
+                        line: None,
+                        col: None,
+                        message: msg.into(),
+                        note: None,
+                    });
+                }
+            }
+        }
+        let tmp = mini_site("[lint.rules]\n\"mixed-rule\" = \"error\"\n");
+        let rules: Vec<Box<dyn Rule>> = vec![Box::new(Mixed)];
+        let out = run_with_rules(tmp.path(), &LintOptions::default(), &rules).unwrap();
+        // The default-level finding is re-leveled to the configured error; the
+        // explicit Info notice keeps its severity.
+        assert_eq!((out.errors, out.warnings, out.infos), (1, 0, 1));
+        let by_msg = |m: &str| {
+            out.diagnostics
+                .iter()
+                .find(|d| d.message == m)
+                .unwrap()
+                .severity
+        };
+        assert_eq!(by_msg("real finding"), Severity::Error);
+        assert_eq!(by_msg("check skipped"), Severity::Info);
     }
 
     #[test]

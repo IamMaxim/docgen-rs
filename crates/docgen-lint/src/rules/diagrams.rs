@@ -51,7 +51,12 @@ pub struct PlantumlEmpty;
 
 /// Walk every directive instance in `body`, recursing into block bodies the
 /// same way `extract_refs` does (so reported lines match the source file).
-fn walk_directives(body: &str, offset: usize, f: &mut dyn FnMut(&DirectiveInstance, usize)) {
+/// Shared with the external `plantuml-syntax` rule, which needs inline bodies.
+pub(crate) fn walk_directives(
+    body: &str,
+    offset: usize,
+    f: &mut dyn FnMut(&DirectiveInstance, usize),
+) {
     let (_, instances) = directivepass::extract(body);
     for inst in &instances {
         f(inst, offset + inst.line);
