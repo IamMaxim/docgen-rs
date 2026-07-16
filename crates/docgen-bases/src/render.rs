@@ -1,7 +1,13 @@
 //! Static HTML rendering of a base's views. Produces a self-contained
-//! `<div class="docgen-base">` — no scripts, no runtime — styled by the shared
-//! `docgen.css`. Each view (table/cards/list) is filtered, sorted, grouped, and
-//! limited exactly as configured, then rendered to server-side HTML.
+//! `<div class="docgen-base">` styled by the shared `docgen.css`. Each view
+//! (table/cards/list) is filtered, sorted, grouped, and limited exactly as
+//! configured, then rendered to server-side HTML.
+//!
+//! When [`RenderOptions::interactive`] is set the same HTML additionally carries
+//! `data-*` hooks and a per-view JSON payload (see [`crate::interactive`]) that the
+//! client island progressively enhances into an interactive view; the payload is
+//! keys-only, so the server HTML stays the single source of what each cell looks
+//! like. With `interactive` false the output is exactly the pure static HTML.
 
 use std::collections::{BTreeMap, BTreeSet};
 
