@@ -1481,6 +1481,211 @@ kbd,
 	border-radius: var(--r-md);
 }
 
+/* ---- Interactive controls (islands/bases.js enhances the static views) ----
+   All structure/classes come from the island's DOM contract (see bases.js).
+   Everything is token-driven so light/dark themes are automatic. When JS is off
+   none of these elements exist and the static view renders unchanged. */
+.docgen-base-controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin: 0 0 10px;
+	font-size: 13px;
+}
+/* Shared field/input look. */
+.docgen-base-controls input[type='search'],
+.docgen-base-controls input[type='date'],
+.docgen-base-controls input[type='number'],
+.docgen-base-controls select,
+.docgen-base-facet__button,
+.docgen-base-reset,
+.docgen-base-pager button {
+	font: inherit;
+	color: var(--text);
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--r-sm);
+	padding: 4px 9px;
+	line-height: 1.4;
+	transition: border-color 0.12s ease, background 0.12s ease;
+}
+.docgen-base-controls input[type='search'] {
+	min-width: 190px;
+	flex: 0 1 240px;
+}
+.docgen-base-controls input[type='date'],
+.docgen-base-controls input[type='number'] {
+	width: auto;
+	max-width: 148px;
+}
+.docgen-base-controls input:hover,
+.docgen-base-controls select:hover,
+.docgen-base-facet__button:hover,
+.docgen-base-reset:hover,
+.docgen-base-pager button:hover:not(:disabled) {
+	border-color: var(--border-strong);
+	background: var(--surface-hi);
+}
+.docgen-base-controls input:focus-visible,
+.docgen-base-controls select:focus-visible,
+.docgen-base-facet__button:focus-visible,
+.docgen-base-reset:focus-visible,
+.docgen-base-pager button:focus-visible,
+.docgen-base-sort-th:focus-visible {
+	outline: 2px solid var(--accent-line);
+	outline-offset: 1px;
+	border-color: var(--accent);
+}
+/* Generic label+control wrapper (date/number ranges wrap two inputs). */
+.docgen-base-field,
+.docgen-base-daterange,
+.docgen-base-numrange {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+}
+.docgen-base-field__label {
+	color: var(--text-dim);
+	white-space: nowrap;
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+}
+/* Faceted-enum filter: a toggle button + a popover panel of checkboxes. */
+.docgen-base-facet {
+	position: relative;
+	display: inline-flex;
+}
+.docgen-base-facet__button {
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+.docgen-base-facet__button[aria-expanded='true'] {
+	border-color: var(--accent);
+	background: var(--surface-hi);
+}
+.docgen-base-facet__badge {
+	background: var(--accent-soft);
+	color: var(--accent);
+	border-radius: var(--r-xs);
+	padding: 0 5px;
+	font-size: 0.85em;
+	font-variant-numeric: tabular-nums;
+}
+.docgen-base-facet__panel {
+	position: absolute;
+	z-index: 20;
+	top: calc(100% + 4px);
+	left: 0;
+	min-width: 180px;
+	max-height: 280px;
+	overflow-y: auto;
+	padding: 6px;
+	background: var(--bg-elev);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--r-md);
+	box-shadow: 0 8px 24px -8px #00000073;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+.docgen-base-facet__option {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 4px 6px;
+	border-radius: var(--r-sm);
+	cursor: pointer;
+	white-space: nowrap;
+}
+.docgen-base-facet__option:hover {
+	background: var(--surface-hi);
+}
+.docgen-base-facet__option input {
+	accent-color: var(--accent);
+}
+.docgen-base-reset {
+	cursor: pointer;
+	color: var(--text-dim);
+}
+/* Result count — pushed to the trailing edge of the control bar. */
+.docgen-base-status {
+	margin-left: auto;
+	color: var(--text-mute);
+	font-size: 0.9em;
+	font-variant-numeric: tabular-nums;
+}
+/* Sortable table headers become buttons with an aria-sort caret. */
+.docgen-base-sort-th {
+	font: inherit;
+	color: inherit;
+	background: none;
+	border: 0;
+	padding: 0;
+	margin: 0;
+	width: 100%;
+	text-align: inherit;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+.docgen-base-sort-th::after {
+	content: '↕';
+	opacity: 0.35;
+	font-size: 0.85em;
+}
+.docgen-base-table th[aria-sort='ascending'] .docgen-base-sort-th::after {
+	content: '↑';
+	opacity: 1;
+	color: var(--accent);
+}
+.docgen-base-table th[aria-sort='descending'] .docgen-base-sort-th::after {
+	content: '↓';
+	opacity: 1;
+	color: var(--accent);
+}
+.docgen-base-sort-th:hover {
+	color: var(--accent);
+}
+/* Pagination. */
+.docgen-base-pager {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-top: 10px;
+	font-size: 13px;
+}
+.docgen-base-pager button {
+	cursor: pointer;
+}
+.docgen-base-pager button:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+.docgen-base-pager__label {
+	color: var(--text-dim);
+	font-variant-numeric: tabular-nums;
+}
+/* The island hides filtered-out / off-page rows with the `hidden` attribute;
+   make sure a `tr { display: table-row }`-style rule can't override it. */
+.docgen-base-view [data-row][hidden],
+.docgen-base-view tr.docgen-base-group[hidden] {
+	display: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+	.docgen-base-controls input,
+	.docgen-base-controls select,
+	.docgen-base-facet__button,
+	.docgen-base-reset,
+	.docgen-base-pager button {
+		transition: none;
+	}
+}
+
 /* =============================== graph =============================== */
 .docgen-graph-page h1 {
 	font-size: 38px;
