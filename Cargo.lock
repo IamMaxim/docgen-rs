@@ -782,6 +782,7 @@ dependencies = [
  "docgen-core",
  "docgen-diff",
  "docgen-init",
+ "docgen-lint",
  "docgen-plantuml",
  "docgen-render",
  "docgen-server",
