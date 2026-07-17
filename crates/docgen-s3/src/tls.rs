@@ -29,34 +29,48 @@ pub(crate) fn ensure_crypto_provider() {
 mod tests {
     use super::*;
 
+    /// Named key-exchange groups, the one part of a provider that differs between
+    /// ring and aws-lc-rs. Cipher suites deliberately do NOT work here: the names
+    /// are IANA-standard and both providers expose the identical nine, so asserting
+    /// on them passes under aws-lc-rs and catches nothing.
+    fn kx_groups(provider: &rustls::crypto::CryptoProvider) -> Vec<String> {
+        provider
+            .kx_groups
+            .iter()
+            .map(|g| format!("{:?}", g.name()))
+            .collect()
+    }
+
     /// The invariant the end-to-end test cannot see: an upload over aws-lc-rs
-    /// succeeds just as happily as one over ring, so only a direct comparison
-    /// catches the provider silently flipping (e.g. someone drops the `-ring`
-    /// feature, or installs a default earlier in `main`).
+    /// succeeds exactly as happily as one over ring, so only a direct comparison
+    /// catches the provider silently flipping (someone drops the `-ring` feature, or
+    /// installs a different default earlier in the process).
     #[test]
     fn ring_is_the_installed_default_provider() {
-        ensure_crypto_provider();
+        let ring = rustls::crypto::ring::default_provider();
+        let aws = rustls::crypto::aws_lc_rs::default_provider();
 
+        // Self-check first: this test is only meaningful while the two providers are
+        // actually distinguishable. Today aws-lc-rs carries X25519MLKEM768 (from
+        // `prefer-post-quantum` in rustls' defaults, which attohttpc forces on) and
+        // ring does not. If a rustls upgrade ever aligns them, this fails loudly and
+        // demands a new discriminator — rather than silently degrading into a test
+        // that passes under either provider, which is the trap that produced this
+        // whole bug.
+        assert_ne!(
+            kx_groups(&ring),
+            kx_groups(&aws),
+            "ring and aws-lc-rs are no longer distinguishable by kx_groups; this test \
+             can no longer tell which provider is installed — find a new discriminator"
+        );
+
+        ensure_crypto_provider();
         let installed = rustls::crypto::CryptoProvider::get_default()
             .expect("ensure_crypto_provider must leave a default installed");
-        let ring = rustls::crypto::ring::default_provider();
-
-        // Compare the suite lists rather than pointers: `get_default` hands back an
-        // Arc to whichever provider won, and ring's suite set is distinct from
-        // aws-lc-rs'.
-        let installed_suites: Vec<_> = installed
-            .cipher_suites
-            .iter()
-            .map(|s| s.suite().as_str())
-            .collect();
-        let ring_suites: Vec<_> = ring
-            .cipher_suites
-            .iter()
-            .map(|s| s.suite().as_str())
-            .collect();
 
         assert_eq!(
-            installed_suites, ring_suites,
+            kx_groups(installed),
+            kx_groups(&ring),
             "process-default rustls provider is not ring"
         );
     }

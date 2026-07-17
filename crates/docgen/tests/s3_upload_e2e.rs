@@ -25,7 +25,12 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-const IMAGE: &str = "minio/minio:latest";
+/// Pinned by digest, not `:latest`: this test leans on two undocumented properties
+/// of the image — `mc` being bundled in the server image (`wait_until_ready` shells
+/// into it) and a top-level directory under the data dir being treated as a bucket.
+/// A floating tag lets an upstream release break CI with no change on our side.
+const IMAGE: &str =
+    "minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e";
 const BUCKET: &str = "docgen-assets";
 const ACCESS_KEY: &str = "docgentest";
 const SECRET_KEY: &str = "docgentest123";
@@ -170,15 +175,19 @@ fn start_minio(dir: &Path) -> Minio {
         "/data",
     ]));
 
-    let mapping = run(Command::new("docker").args(["port", &name, "9000/tcp"]));
-    let port = mapping
+    // Take ownership of the container the moment it exists, before anything that can
+    // panic: `docker port` and the parse below both can, and unwinding without this
+    // guard in scope would leak a running MinIO.
+    let mut minio = Minio { name, port: 0 };
+
+    let mapping = run(Command::new("docker").args(["port", &minio.name, "9000/tcp"]));
+    minio.port = mapping
         .lines()
         .next()
         .and_then(|l| l.rsplit(':').next())
         .and_then(|p| p.trim().parse().ok())
         .unwrap_or_else(|| panic!("could not parse host port from {mapping:?}"));
 
-    let minio = Minio { name, port };
     wait_until_ready(&minio);
     minio
 }

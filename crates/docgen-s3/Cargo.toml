@@ -14,7 +14,7 @@ docgen-core = { workspace = true }
 # stack ourselves on the `attohttpc` dep below.
 rust-s3 = { version = "0.37", default-features = false, features = ["sync"] }
 # Not used directly — this pins the TLS backend of the `attohttpc` that rust-s3
-# uses. BOTH features are required, and the reason is a trap in attohttpc 0.30/0.31:
+# uses. It must be a NON-`-ring` feature, because of a trap in attohttpc 0.30/0.31:
 #
 #   __rustls      = ["dep:rustls", "rustls/default"]   <- the ONLY cfg the TLS impl
 #   __rustls-ring = ["rustls/ring", "rustls/std", ...]    is compiled behind
@@ -23,15 +23,14 @@ rust-s3 = { version = "0.37", default-features = false, features = ["sync"] }
 # still drags rustls into the tree (so the graph *looks* ring-only and healthy) while
 # attohttpc silently compiles `no_tls_impl.rs` — every https:// request then fails
 # with "TLS is disabled, activate one of the tls- features". That is exactly how a
-# release shipped with S3 uploads 100% broken and a green build.
+# release shipped with S3 uploads 100% broken and a green build. Never "fix" a
+# provider complaint here by switching to a `-ring` feature; that is the bug.
 #
-# So `tls-rustls-native-roots` is what actually turns TLS on, and it forces
-# `rustls/default` = aws-lc-rs; there is no ring-only path through attohttpc's rustls.
-# `-ring` then adds ring alongside it. rustls refuses to guess between two providers,
-# so `crate::tls` installs ring as the process default before any request; aws-lc-rs
-# is compiled but never used. Do not drop either feature:
-#   - without `-native-roots`: TLS silently disabled (the bug above)
-#   - without `-ring`:         aws-lc-rs is the only provider, and `tls.rs` won't compile
+# So `tls-rustls-native-roots` is what turns TLS on, and it forces `rustls/default`
+# = aws-lc-rs: there is no ring-only path through attohttpc's rustls. Ring comes
+# from the `rustls` dep below instead, so both providers are compiled in; rustls
+# refuses to guess between them, and `crate::tls` installs ring as the process
+# default before any request. aws-lc-rs is compiled but never used at runtime.
 #
 # `native-roots` (not `webpki-roots`) also makes the trust store the host's, via
 # `rustls-native-certs`, which honours SSL_CERT_FILE/SSL_CERT_DIR — bundled Mozilla
@@ -39,10 +38,11 @@ rust-s3 = { version = "0.37", default-features = false, features = ["sync"] }
 # trust its own CA, and lets users behind a TLS-inspecting proxy trust theirs.
 attohttpc = { version = "0.30", default-features = false, features = [
 	"tls-rustls-native-roots",
-	"tls-rustls-native-roots-ring",
 ] }
-# Direct dep so `crate::tls` can install ring as the process-default provider.
-# `ring` named explicitly: this must not inherit rustls' aws-lc-rs default.
+# Two jobs: it is what `crate::tls` calls `install_default` through, and its `ring`
+# feature is the ONLY thing putting ring in the graph (attohttpc's rustls path can
+# only supply aws-lc-rs — see above). Dropping this dep or its feature leaves
+# aws-lc-rs as the sole provider; `tls::tests` fails if that happens.
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 sha2 = "0.10"
 anyhow = "1"
