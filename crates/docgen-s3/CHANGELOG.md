@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1](https://github.com/IamMaxim/docgen-rs/compare/docgen-s3-v0.8.0...docgen-s3-v0.8.1) - 2026-07-17
+
+### Fixed
+
+- *(s3)* make the provider guard actually discriminate; harden the e2e test
+- *(s3)* enable TLS again; prove it with a MinIO end-to-end test
+
 ## [0.7.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-s3-v0.6.0...docgen-s3-v0.7.0) - 2026-07-16
 
 ### Fixed
