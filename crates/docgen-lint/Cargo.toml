@@ -1,0 +1,24 @@
+[package]
+name = "docgen-lint"
+description = "Linter framework for docgen, the Cargo-only static documentation-site generator"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+repository.workspace = true
+
+[dependencies]
+docgen-core = { workspace = true }
+docgen-config = { workspace = true }
+docgen-components = { workspace = true }
+docgen-bases = { workspace = true }
+docgen-assets = { workspace = true }
+docgen-plantuml = { workspace = true }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+serde_yml = "0.0.13"
+thiserror = "2.0.18"
+globset = { workspace = true }
+sha2 = "0.10"
+# Same major as docgen-plantuml, so the workspace carries one ureq.
+ureq = "2.10"
+tempfile = "3"

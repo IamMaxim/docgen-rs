@@ -27,6 +27,15 @@ pub struct Heading {
     pub depth: u8,
 }
 
+/// Anchorize a sequence of heading texts into the exact ids the rendered page
+/// carries. One [`Anchorizer`] per call, so the `-1`, `-2`, … de-duplication
+/// suffixes match [`collect_headings`] when fed the same `h2`/`h3` sequence.
+/// Used by the linter to validate `[[page#anchor]]` targets without rendering.
+pub fn anchor_ids<'a>(texts: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+    let mut anchorizer = Anchorizer::new();
+    texts.into_iter().map(|t| anchorizer.anchorize(t)).collect()
+}
+
 /// Walk the AST in document order and collect the `h2`/`h3` outline, anchorizing
 /// each heading's text into a unique id. One [`Anchorizer`] per call guarantees
 /// the `-1`, `-2`, … de-duplication suffixes match comrak's own scheme.

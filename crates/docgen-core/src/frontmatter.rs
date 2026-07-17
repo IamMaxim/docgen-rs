@@ -12,6 +12,14 @@ pub struct Parsed {
 /// Handles both LF and CRLF line endings, empty frontmatter blocks, and requires the
 /// closing fence to be a line containing exactly `---` (ignoring trailing whitespace).
 pub fn parse_frontmatter(raw: &str) -> Parsed {
+    parse_frontmatter_checked(raw).0
+}
+
+/// Like [`parse_frontmatter`], but also reports the YAML error message when a
+/// frontmatter block *exists* but fails to parse (the `Parsed` still carries
+/// `Value::Null`, so behavior is identical for callers that ignore the error).
+/// An absent or empty frontmatter block is not an error.
+pub fn parse_frontmatter_checked(raw: &str) -> (Parsed, Option<String>) {
     let input = raw.strip_prefix('\u{feff}').unwrap_or(raw);
 
     // Match an opening `---` fence followed by a line break (LF or CRLF).
@@ -27,11 +35,14 @@ pub fn parse_frontmatter(raw: &str) -> Parsed {
             if trimmed.trim_end() == "---" {
                 let yaml = &rest[..offset];
                 let after = &rest[offset + line.len()..];
-                let frontmatter = serde_yml::from_str(yaml).unwrap_or(Value::Null);
-                return Parsed {
-                    frontmatter,
-                    body: after.to_string(),
-                };
+                let (frontmatter, err) = parse_yaml(yaml);
+                return (
+                    Parsed {
+                        frontmatter,
+                        body: after.to_string(),
+                    },
+                    err,
+                );
             }
             offset += line.len();
         }
@@ -39,17 +50,35 @@ pub fn parse_frontmatter(raw: &str) -> Parsed {
         let last = &rest[offset..];
         if last.trim_end_matches('\r').trim_end() == "---" {
             let yaml = &rest[..offset];
-            let frontmatter = serde_yml::from_str(yaml).unwrap_or(Value::Null);
-            return Parsed {
-                frontmatter,
-                body: String::new(),
-            };
+            let (frontmatter, err) = parse_yaml(yaml);
+            return (
+                Parsed {
+                    frontmatter,
+                    body: String::new(),
+                },
+                err,
+            );
         }
     }
 
-    Parsed {
-        frontmatter: Value::Null,
-        body: input.to_string(),
+    (
+        Parsed {
+            frontmatter: Value::Null,
+            body: input.to_string(),
+        },
+        None,
+    )
+}
+
+/// Parse a frontmatter YAML block. On failure: `(Null, Some(error message))`.
+/// An empty/whitespace-only block is `Null` with no error.
+fn parse_yaml(yaml: &str) -> (Value, Option<String>) {
+    if yaml.trim().is_empty() {
+        return (Value::Null, None);
+    }
+    match serde_yml::from_str(yaml) {
+        Ok(v) => (v, None),
+        Err(e) => (Value::Null, Some(e.to_string())),
     }
 }
 
@@ -114,6 +143,36 @@ mod tests {
         let parsed = parse_frontmatter(raw);
         assert!(parsed.frontmatter.is_null());
         assert_eq!(parsed.body, raw);
+    }
+
+    #[test]
+    fn checked_reports_no_error_for_valid_frontmatter() {
+        let (parsed, err) = parse_frontmatter_checked("---\ntitle: Hello\n---\nbody\n");
+        assert_eq!(parsed.frontmatter["title"].as_str(), Some("Hello"));
+        assert!(err.is_none());
+    }
+
+    #[test]
+    fn checked_reports_yaml_error_for_malformed_frontmatter() {
+        let (parsed, err) = parse_frontmatter_checked("---\n: not: valid: yaml\n---\nbody\n");
+        assert!(parsed.frontmatter.is_null());
+        assert_eq!(parsed.body, "body\n");
+        assert!(
+            err.is_some(),
+            "malformed YAML must surface an error message"
+        );
+        assert!(!err.unwrap().is_empty());
+    }
+
+    #[test]
+    fn checked_reports_no_error_when_frontmatter_absent_or_empty() {
+        let (parsed, err) = parse_frontmatter_checked("# Just body\n");
+        assert!(parsed.frontmatter.is_null());
+        assert!(err.is_none());
+
+        let (parsed, err) = parse_frontmatter_checked("---\n---\nbody\n");
+        assert!(parsed.frontmatter.is_null());
+        assert!(err.is_none());
     }
 
     #[test]

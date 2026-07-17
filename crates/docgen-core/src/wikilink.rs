@@ -70,8 +70,23 @@ fn display_text(target: &str, label: Option<String>) -> String {
         .unwrap_or_else(|| target.to_string())
 }
 
+/// Anchorize a single heading text into the base id the rendered page carries.
+/// Uses comrak's [`Anchorizer`] — the same scheme `headings::collect_headings`
+/// / `stamp_heading_ids` use — so `[[page#Heading]]` fragments match the ids
+/// stamped onto `<h2>`/`<h3>` tags. A fresh anchorizer per string means no
+/// `-1`/`-2` dedup context: an anchor always targets the FIRST heading with
+/// that text (write `[[page#heading-1]]` to hit a duplicate explicitly).
+fn anchorize(text: &str) -> String {
+    comrak::Anchorizer::new().anchorize(text)
+}
+
 /// Build the inline HTML for one wikilink occurrence and, if resolved, push its
 /// target slug into `resolved` (deduped, first-seen order).
+///
+/// `[[page#anchor]]` resolves the page part and links to `{base}/{slug}#{id}`;
+/// `[[#anchor]]` (empty page part) is a same-page fragment link. The display
+/// text stays the ORIGINAL target string, anchor included (Obsidian-style
+/// `page#anchor`), unless a label overrides it.
 fn render_link(
     inner: &str,
     slugs: &SlugSet,
@@ -80,27 +95,50 @@ fn render_link(
     seen: &mut BTreeSet<String>,
 ) -> String {
     let (target, label) = parse_wikilink(inner);
-    match resolve_target(&target, slugs) {
+    // Split the optional `#anchor` off the page part. A blank anchor (`[[x#]]`)
+    // is treated as absent.
+    let (page, anchor) = match target.split_once('#') {
+        Some((p, a)) => (
+            p.trim().to_string(),
+            Some(a.trim()).filter(|a| !a.is_empty()),
+        ),
+        None => (target.clone(), None),
+    };
+    let text = display_text(&target, label);
+
+    // `[[#heading]]`: same-page anchor link — no page to resolve.
+    if page.is_empty() {
+        if let Some(a) = anchor {
+            return format!(
+                r##"<a class="docgen-wikilink" href="#{}">{}</a>"##,
+                esc(&anchorize(a)),
+                esc(&text)
+            );
+        }
+        // Empty target with no anchor falls through to the broken span.
+    }
+
+    match resolve_target(&page, slugs) {
         Some(slug) => {
             if seen.insert(slug.clone()) {
                 resolved.push(slug.clone());
             }
-            let text = display_text(&target, label);
+            let fragment = anchor
+                .map(|a| format!("#{}", esc(&anchorize(a))))
+                .unwrap_or_default();
             format!(
-                r#"<a class="docgen-wikilink" href="{0}/{1}" data-wikilink-title="{2}" data-wikilink-path="/{1}">{2}</a>"#,
+                r#"<a class="docgen-wikilink" href="{0}/{1}{2}" data-wikilink-title="{3}" data-wikilink-path="/{1}">{3}</a>"#,
                 base,
                 esc(&slug),
+                fragment,
                 esc(&text)
             )
         }
-        None => {
-            let text = display_text(&target, label);
-            format!(
-                r#"<span class="docgen-wikilink docgen-wikilink--broken" data-target="{}">{}</span>"#,
-                esc(&target),
-                esc(&text)
-            )
-        }
+        None => format!(
+            r#"<span class="docgen-wikilink docgen-wikilink--broken" data-target="{}">{}</span>"#,
+            esc(&target),
+            esc(&text)
+        ),
     }
 }
 
@@ -108,7 +146,7 @@ fn render_link(
 /// surrounding Text nodes + raw-HTML inline nodes for each wikilink.
 /// The flat source text a child node contributes when reconstructing an inline
 /// run, or `None` if the node breaks the run (it is not foldable into text).
-fn flat_source(node: &AstNode<'_>) -> Option<String> {
+pub(crate) fn flat_source(node: &AstNode<'_>) -> Option<String> {
     match &node.data.borrow().value {
         NodeValue::Text(t) => Some(t.to_string()),
         // Raw inline HTML inside `[[ ... ]]` is folded back into the target string
@@ -347,6 +385,58 @@ mod tests {
         // Two slugs share the basename `dup`; resolution is first by BTreeSet order.
         let amb: SlugSet = ["a/dup", "b/dup"].iter().map(|s| s.to_string()).collect();
         assert_eq!(resolve_target("dup", &amb), Some("a/dup".to_string()));
+    }
+
+    #[test]
+    fn anchored_wikilink_resolves_page_and_appends_anchor_id() {
+        let (html, resolved) = render_with_base("[[guide/intro#Setup Steps]]\n", &slugs(), "/docs");
+        // Page resolves; anchor is anchorized like heading ids.
+        assert!(
+            html.contains(r#"href="/docs/guide/intro#setup-steps""#),
+            "{html}"
+        );
+        // Display text keeps the original target INCLUDING the anchor part.
+        assert!(html.contains(">guide/intro#Setup Steps</a>"), "{html}");
+        // The preview path is the page (no fragment).
+        assert!(
+            html.contains(r#"data-wikilink-path="/guide/intro""#),
+            "{html}"
+        );
+        // Anchored links count as real links to the page (graph/backlinks).
+        assert_eq!(resolved, vec!["guide/intro".to_string()]);
+    }
+
+    #[test]
+    fn anchored_wikilink_label_overrides_display_text() {
+        let (html, _) = render("[[guide/intro#setup|Setup]]\n", &slugs());
+        assert!(html.contains(r#"href="/guide/intro#setup""#), "{html}");
+        assert!(html.contains(">Setup</a>"), "{html}");
+    }
+
+    #[test]
+    fn anchor_only_wikilink_is_a_same_page_fragment_link() {
+        let (html, resolved) = render("[[#My Heading]]\n", &slugs());
+        assert!(
+            html.contains(r##"<a class="docgen-wikilink" href="#my-heading">#My Heading</a>"##),
+            "{html}"
+        );
+        // A same-page link is not an outbound edge.
+        assert!(resolved.is_empty());
+    }
+
+    #[test]
+    fn broken_page_with_anchor_stays_a_broken_span() {
+        let (html, resolved) = render("[[nope#section]]\n", &slugs());
+        assert!(
+            html.contains(r#"data-target="nope#section">nope#section</span>"#),
+            "{html}"
+        );
+        assert!(resolved.is_empty());
+
+        // A blank anchor on a real page is ignored (plain page link).
+        let (html, _) = render("[[index#]]\n", &slugs());
+        assert!(html.contains(r#"href="/index""#), "{html}");
+        assert!(!html.contains(r##"href="/index#""##), "{html}");
     }
 
     #[test]

@@ -79,7 +79,7 @@ pub fn transform_asset_urls<'a>(
 /// `?query`. Returns `None` for anything left untouched: empty, root-absolute
 /// (`/…`) or protocol-relative (`//…`), a pure fragment/query (`#…` / `?…`), or an
 /// external/non-path scheme (`https:`, `mailto:`, `data:`, `tel:`…).
-fn split_relative(url: &str) -> Option<(&str, &str)> {
+pub fn split_relative(url: &str) -> Option<(&str, &str)> {
     let url = url.trim();
     if url.is_empty() {
         return None;
@@ -191,7 +191,7 @@ fn split_suffix(url: &str) -> (&str, &str) {
 /// A link target counts as a static asset when its final path segment has a file
 /// extension other than `.md`. Extensionless targets (clean-URL page links) and
 /// `.md` targets are treated as pages, not assets.
-fn is_asset_path(path: &str) -> bool {
+pub fn is_asset_path(path: &str) -> bool {
     let last = path.rsplit('/').next().unwrap_or(path);
     match last.rsplit_once('.') {
         // A leading dot with nothing before it (e.g. a dotfile) is not an extension.
@@ -203,7 +203,7 @@ fn is_asset_path(path: &str) -> bool {
 /// Join `source_dir` and a relative `path`, then resolve `.`/`..` segments,
 /// producing a clean docs-root-relative path (no leading slash). `..` that would
 /// escape the docs root is clamped (dropped) rather than allowed to walk out.
-fn normalize_join(source_dir: &str, path: &str) -> String {
+pub fn normalize_join(source_dir: &str, path: &str) -> String {
     let mut segments: Vec<&str> = Vec::new();
     let combined = if source_dir.is_empty() {
         path.to_string()

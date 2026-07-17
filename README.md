@@ -33,6 +33,8 @@ dependency-free JavaScript.
 - **Includes & partials** — `:include{src="./_part.md"}` transclusion, with
   `_`-prefixed files treated as include-only partials.
 - **Live dev server** — `docgen dev` with live reload.
+- **Linting** — `docgen lint` finds broken links, missing assets, and malformed
+  diagrams before you publish; advisory, never blocks the build.
 
 ## Install
 
@@ -82,7 +84,17 @@ A project is any directory containing a `docs/` directory of `.md` files.
 ```sh
 docgen build path/to/project    # writes path/to/project/dist/
 docgen dev   path/to/project    # serve with live reload
+docgen lint  path/to/project    # advisory pre-publish checks (never blocks build)
 ```
+
+### Linting
+
+`docgen lint` checks the site for broken wikilinks, missing assets, malformed
+frontmatter/diagrams, and structural issues — exit `0` when clean, `1` on
+error-level findings. `--deny-warnings` and `--format github|gitlab` make it
+CI-friendly; rules are configured via a `[lint]` section in `docgen.toml`. See
+the [lint guide](https://iammaxim.github.io/docgen-rs/features/lint/) for the
+full rule table and config reference.
 
 ### Includes & partials
 

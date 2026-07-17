@@ -1,0 +1,13 @@
+# Lint fixture: a deliberately-unhealthy site exercising the pure lint rules.
+# External checks (plantuml/mermaid syntax, external-url) stay OFF so runs are
+# deterministic and network-free.
+title = "Lint Fixture"
+
+[lint]
+# Prove ignore globs work: drafts/broken.md carries a broken wikilink that
+# must never appear in the output.
+ignore = ["drafts/**"]
+
+[lint.rules]
+# Prove re-leveling works: heading-level-jump defaults to info; here it is warn.
+"heading-level-jump" = "warn"

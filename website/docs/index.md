@@ -59,6 +59,8 @@ action.
   how it changed, with line- and block-level diffs.
 - **[[s3-offload|S3 asset offload]]** — optionally push large attachments to an
   S3-compatible bucket instead of copying them into your site.
+- **[[lint|Linting]]** — `docgen lint` catches broken links, missing assets,
+  and malformed diagrams before you publish; it advises, never blocks a build.
 
 Browse them all under [[features/index|Features]].
 

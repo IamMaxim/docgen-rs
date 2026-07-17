@@ -94,6 +94,13 @@ dir = "components"
 component is a `<name>/template.html` (optionally with a `style.css`). See
 [[components]] for how to write and use them.
 
+## `[lint]` — linter settings
+
+An optional `[lint]` section configures `docgen lint`: ignore globs, per-rule
+severity overrides, and the opt-in external checks (PlantUML/mermaid syntax
+validation, external-URL probing). It has no effect on `docgen build`. The full
+reference is on [[lint]].
+
 ## `[s3]` — optional asset offload
 
 An optional `[s3]` section offloads large attachments to an S3-compatible bucket
