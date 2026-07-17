@@ -9,20 +9,40 @@ repository.workspace = true
 [dependencies]
 docgen-config = { workspace = true }
 docgen-core = { workspace = true }
-# TLS is deliberately NOT selected via rust-s3's `sync-rustls-tls`: that forwards
-# to `attohttpc/tls-rustls`, which enables rustls' default features and so pulls in
-# `aws-lc-rs`. `ureq` (docgen-plantuml) asks the same rustls for `ring`, and Cargo
-# unifies features additively, so the binary got both providers — rustls then
-# refuses to pick one and `attohttpc` panics on the first upload, while
-# `aws-lc-sys` needs cmake/NASM to build at all. So take `sync` for the client and
-# name the ring-backed TLS stack ourselves, below.
+# `sync` only: rust-s3's TLS presets all pick the wrong attohttpc feature for us
+# (`sync-rustls-tls` -> `attohttpc/tls-rustls` -> webpki roots). We name the TLS
+# stack ourselves on the `attohttpc` dep below.
 rust-s3 = { version = "0.37", default-features = false, features = ["sync"] }
-# Not used directly — this is here purely to pin the TLS backend of the
-# `attohttpc` that rust-s3 uses. `-ring` is the same webpki-roots stack as
-# `tls-rustls`, minus the aws-lc-rs default. Keep it single-provider; the guard in
-# crates/docgen/tests/crypto_provider.rs fails if this regresses.
+# Not used directly — this pins the TLS backend of the `attohttpc` that rust-s3
+# uses. It must be a NON-`-ring` feature, because of a trap in attohttpc 0.30/0.31:
+#
+#   __rustls      = ["dep:rustls", "rustls/default"]   <- the ONLY cfg the TLS impl
+#   __rustls-ring = ["rustls/ring", "rustls/std", ...]    is compiled behind
+#
+# `tls-rustls-*-ring` enables `__rustls-ring` but NOT `__rustls`. Selected alone it
+# still drags rustls into the tree (so the graph *looks* ring-only and healthy) while
+# attohttpc silently compiles `no_tls_impl.rs` — every https:// request then fails
+# with "TLS is disabled, activate one of the tls- features". That is exactly how a
+# release shipped with S3 uploads 100% broken and a green build. Never "fix" a
+# provider complaint here by switching to a `-ring` feature; that is the bug.
+#
+# So `tls-rustls-native-roots` is what turns TLS on, and it forces `rustls/default`
+# = aws-lc-rs: there is no ring-only path through attohttpc's rustls. Ring comes
+# from the `rustls` dep below instead, so both providers are compiled in; rustls
+# refuses to guess between them, and `crate::tls` installs ring as the process
+# default before any request. aws-lc-rs is compiled but never used at runtime.
+#
+# `native-roots` (not `webpki-roots`) also makes the trust store the host's, via
+# `rustls-native-certs`, which honours SSL_CERT_FILE/SSL_CERT_DIR — bundled Mozilla
+# roots cannot be extended at runtime. That is what lets the minio end-to-end test
+# trust its own CA, and lets users behind a TLS-inspecting proxy trust theirs.
 attohttpc = { version = "0.30", default-features = false, features = [
-	"tls-rustls-webpki-roots-ring",
+	"tls-rustls-native-roots",
 ] }
+# Two jobs: it is what `crate::tls` calls `install_default` through, and its `ring`
+# feature is the ONLY thing putting ring in the graph (attohttpc's rustls path can
+# only supply aws-lc-rs — see above). Dropping this dep or its feature leaves
+# aws-lc-rs as the sole provider; `tls::tests` fails if that happens.
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 sha2 = "0.10"
 anyhow = "1"

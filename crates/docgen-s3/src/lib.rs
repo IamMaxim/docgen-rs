@@ -2,6 +2,7 @@
 //! manifest of authored attachments and uploads the missing ones. Gated behind
 //! `docgen-build`'s `s3` cargo feature.
 pub mod manifest;
+mod tls;
 pub mod upload;
 
 pub use manifest::{build_manifest, AssetManifest, ManifestEntry};
