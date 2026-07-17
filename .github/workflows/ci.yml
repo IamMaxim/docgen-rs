@@ -24,14 +24,17 @@ jobs:
         run: cargo clippy --workspace --all-targets
       - name: Test
         run: cargo test --workspace --locked
-      # `--workspace` does NOT cover this. It builds docgen-s3 on its own, where
-      # rustls resolves a single crypto provider and everything passes; only
-      # docgen-rs with `s3` puts docgen-s3's attohttpc and docgen-plantuml's ureq
-      # in one graph, which is where their rustls feature demands unify and can
-      # conflict. That gap is why a two-provider build reached a release once
-      # already, and it is what tests/crypto_provider.rs checks — a test that is
-      # `#![cfg(feature = "s3")]`, so it compiles to nothing without this step.
-      - name: Test (s3 feature)
+      # `--workspace` does NOT cover the `s3` feature, and the tests behind it are
+      # `#![cfg(feature = "s3")]`, so they compile to nothing without this step.
+      #
+      # DOCGEN_S3_E2E=1 turns "docker is unavailable" from a skip into a failure.
+      # Without it the S3 end-to-end test would quietly no-op on a runner with no
+      # docker and report green — which is the same class of false confidence that
+      # let a release ship with every upload broken. The test starts its own MinIO
+      # over TLS; ubuntu-latest ships docker and openssl, so nothing else is needed.
+      - name: Test (s3 feature, incl. MinIO end-to-end)
+        env:
+          DOCGEN_S3_E2E: "1"
         run: cargo test -p docgen-rs --features s3 --locked
 
   docs:

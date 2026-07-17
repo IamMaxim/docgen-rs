@@ -85,6 +85,10 @@ pub fn content_type_for(rel_path: &str) -> &'static str {
 /// Construct the `rust-s3` bucket handle from config + credentials, with the
 /// immutable cache header set on every request.
 fn bucket_handle(config: &S3Config, creds: &Credentials) -> Result<Box<Bucket>> {
+    // Before any request reaches rustls: two providers are compiled in, and
+    // `attohttpc` panics on the ambiguity otherwise. See `crate::tls`.
+    crate::tls::ensure_crypto_provider();
+
     let region = Region::Custom {
         region: config.region.clone(),
         endpoint: config
