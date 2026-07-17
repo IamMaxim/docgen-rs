@@ -633,7 +633,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-assets"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "include_dir",
  "tempfile",
@@ -641,7 +641,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-bases"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -651,7 +651,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-build"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -670,7 +670,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-components"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "include_dir",
  "minijinja",
@@ -681,7 +681,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-config"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "serde",
  "tempfile",
@@ -691,7 +691,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-core"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "comrak",
  "docgen-bases",
@@ -707,7 +707,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-diff"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "chrono",
  "docgen-core",
@@ -721,7 +721,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-init"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "docgen-config",
@@ -731,7 +731,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-lint"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "docgen-assets",
  "docgen-bases",
@@ -751,7 +751,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-plantuml"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "docgen-core",
@@ -763,7 +763,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-render"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "docgen-core",
  "minijinja",
@@ -772,7 +772,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-rs"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -793,7 +793,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-s3"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "attohttpc",
@@ -805,7 +805,7 @@ dependencies = [
 
 [[package]]
 name = "docgen-server"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "axum",

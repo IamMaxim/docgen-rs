@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-core-v0.7.0...docgen-core-v0.8.0) - 2026-07-17
+
+### Added
+
+- *(lint)* implement the 20 pure lint rules
+- *(core,config)* lint groundwork — read-only extraction API and [lint] config
+
+### Fixed
+
+- *(lint,core)* resolve adversarial-review findings
+
 ## [0.7.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-core-v0.6.0...docgen-core-v0.7.0) - 2026-07-16
 
 ### Added

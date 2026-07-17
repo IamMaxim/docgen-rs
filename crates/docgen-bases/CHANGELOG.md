@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-bases-v0.7.0...docgen-bases-v0.8.0) - 2026-07-17
+
+### Other
+
+- document docgen lint (website feature page, config section, README)
+
 ## [0.7.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-bases-v0.6.0...docgen-bases-v0.7.0) - 2026-07-16
 
 ### Added
