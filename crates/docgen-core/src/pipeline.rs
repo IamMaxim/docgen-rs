@@ -155,7 +155,8 @@ pub fn prepare(raw: RawDoc) -> PreparedDoc {
 
     // `sidebar: false` opts a page out of the sidebar tree. Any other value
     // (missing, `true`, non-bool) keeps the default: shown.
-    let hidden_from_sidebar = parsed.frontmatter.get("sidebar").and_then(|v| v.as_bool()) == Some(false);
+    let hidden_from_sidebar =
+        parsed.frontmatter.get("sidebar").and_then(|v| v.as_bool()) == Some(false);
 
     PreparedDoc {
         rel_path: raw.rel_path,

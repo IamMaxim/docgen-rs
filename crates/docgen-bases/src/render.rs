@@ -1044,10 +1044,9 @@ mod tests {
 
     #[test]
     fn cards_view_renders_note_body_as_block_and_single_column() {
-        let base = parse_base(
-            "views:\n  - type: cards\n    order: [file.name, note.kind, note.body]\n",
-        )
-        .unwrap();
+        let base =
+            parse_base("views:\n  - type: cards\n    order: [file.name, note.kind, note.body]\n")
+                .unwrap();
         let mut n = note("v0-8-1", "v0-8-1", &[("kind", Value::Str("patch".into()))]);
         n.body = "<p>The <strong>S3</strong> TLS fix.</p>".into();
         let corpus = Corpus::new(vec![n]);
