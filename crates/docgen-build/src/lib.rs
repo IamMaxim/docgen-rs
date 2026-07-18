@@ -183,6 +183,9 @@ fn render_base_pages(
             has_mermaid: false,
             components_used: Default::default(),
             headings: Vec::new(),
+            // A `.base` page is always shown in the sidebar; it's typically the
+            // one entry meant to surface a directory whose pages are hidden.
+            hidden_from_sidebar: false,
         });
         search.push(SearchEntry {
             slug: b.slug.clone(),

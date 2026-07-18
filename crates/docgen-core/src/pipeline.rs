@@ -82,6 +82,8 @@ pub struct PreparedDoc {
     /// The full parsed frontmatter, retained so the bases engine can build a
     /// queryable corpus of note properties. `Value::Null` when there is none.
     pub frontmatter: serde_yml::Value,
+    /// `sidebar: false` in frontmatter — omit this page from the sidebar tree.
+    pub hidden_from_sidebar: bool,
 }
 
 /// The fully assembled site after pass 2.
@@ -151,6 +153,10 @@ pub fn prepare(raw: RawDoc) -> PreparedDoc {
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
+    // `sidebar: false` opts a page out of the sidebar tree. Any other value
+    // (missing, `true`, non-bool) keeps the default: shown.
+    let hidden_from_sidebar = parsed.frontmatter.get("sidebar").and_then(|v| v.as_bool()) == Some(false);
+
     PreparedDoc {
         rel_path: raw.rel_path,
         slug,
@@ -158,6 +164,7 @@ pub fn prepare(raw: RawDoc) -> PreparedDoc {
         description,
         body_md: parsed.body,
         frontmatter: parsed.frontmatter,
+        hidden_from_sidebar,
     }
 }
 
@@ -397,6 +404,7 @@ pub fn render_doc(
             has_mermaid: mermaid_count > 0,
             components_used: used,
             headings,
+            hidden_from_sidebar: p.hidden_from_sidebar,
         },
         search_text,
         resolved_links,

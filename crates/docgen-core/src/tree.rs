@@ -9,16 +9,25 @@ struct Builder {
     /// Folder note: an `index.md` directly inside this directory. Stored as its
     /// slug instead of being added to `docs`, so the folder itself links to it.
     note: Option<String>,
+    /// `sidebar: false` on this directory's `index.md` — hide the entire subtree.
+    hidden: bool,
 }
 
-fn insert(node: &mut Builder, parts: &[&str], slug: &str, title: &str, depth: usize) {
+fn insert(node: &mut Builder, parts: &[&str], slug: &str, title: &str, depth: usize, hidden: bool) {
     match parts {
         // An `index.md` *inside* a folder (depth > 0) is that folder's note, not a
         // child entry. A root-level `index.md` (depth 0) is the site home and stays
-        // an ordinary doc.
+        // an ordinary doc. A hidden folder note hides the whole directory subtree.
         [leaf] if *leaf == "index" && depth > 0 => {
-            node.note = Some(slug.to_string());
+            if hidden {
+                node.hidden = true;
+            } else {
+                node.note = Some(slug.to_string());
+            }
         }
+        // A hidden leaf is dropped from the tree entirely (it still builds + is
+        // reachable by URL; it just doesn't appear in the sidebar).
+        [_] if hidden => {}
         [leaf] => {
             node.docs
                 .insert(leaf.to_string(), (slug.to_string(), title.to_string()));
@@ -30,6 +39,7 @@ fn insert(node: &mut Builder, parts: &[&str], slug: &str, title: &str, depth: us
                 slug,
                 title,
                 depth + 1,
+                hidden,
             );
         }
         [] => {}
@@ -40,11 +50,21 @@ fn to_nodes(builder: Builder) -> Vec<TreeNode> {
     let mut out = Vec::new();
     // Directories first (BTreeMap keeps them name-sorted), then loose docs.
     for (name, child) in builder.dirs {
+        // A directory hidden via its `index.md` drops with its whole subtree.
+        if child.hidden {
+            continue;
+        }
         let slug = child.note.clone();
+        let children = to_nodes(child);
+        // Prune a directory left empty by hidden children: with no children and
+        // no folder note it would render as a dangling, non-navigable group.
+        if children.is_empty() && slug.is_none() {
+            continue;
+        }
         out.push(TreeNode::Dir {
             name,
             slug,
-            children: to_nodes(child),
+            children,
         });
     }
     for (name, (slug, title)) in builder.docs {
@@ -55,12 +75,21 @@ fn to_nodes(builder: Builder) -> Vec<TreeNode> {
 
 /// Build a name-sorted sidebar tree from documents, keyed off their slugs.
 /// A folder's `index.md` becomes the folder's note (the folder links to it)
-/// rather than a separate `index` child entry.
+/// rather than a separate `index` child entry. A doc with `sidebar: false`
+/// (`hidden_from_sidebar`) is omitted; on a folder's `index.md` that hides the
+/// whole subtree, and a directory left empty by hidden children is pruned.
 pub fn build_tree(docs: &[Doc]) -> Vec<TreeNode> {
     let mut root = Builder::default();
     for doc in docs {
         let parts: Vec<&str> = doc.slug.split('/').collect();
-        insert(&mut root, &parts, &doc.slug, &doc.title, 0);
+        insert(
+            &mut root,
+            &parts,
+            &doc.slug,
+            &doc.title,
+            0,
+            doc.hidden_from_sidebar,
+        );
     }
     to_nodes(root)
 }
@@ -81,6 +110,15 @@ mod tests {
             has_mermaid: false,
             components_used: Default::default(),
             headings: Vec::new(),
+            hidden_from_sidebar: false,
+        }
+    }
+
+    /// Like [`doc`], but flagged `sidebar: false`.
+    fn hidden_doc(slug: &str, title: &str) -> Doc {
+        Doc {
+            hidden_from_sidebar: true,
+            ..doc(slug, title)
         }
     }
 
@@ -169,6 +207,51 @@ mod tests {
             }
             other => panic!("expected dir, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn hidden_leaf_is_omitted_from_sidebar() {
+        // `sidebar: false` drops the page from the tree; its siblings remain.
+        let docs = vec![
+            doc("guide/intro", "Intro"),
+            hidden_doc("guide/secret", "Secret"),
+        ];
+        let tree = build_tree(&docs);
+        let children = match &tree[0] {
+            TreeNode::Dir { children, .. } => children,
+            other => panic!("expected dir, got {other:?}"),
+        };
+        assert_eq!(children.len(), 1);
+        assert!(matches!(&children[0], TreeNode::Doc { slug, .. } if slug == "guide/intro"));
+    }
+
+    #[test]
+    fn directory_emptied_by_hidden_children_is_pruned() {
+        // Every page under `releases/` is hidden and there's no folder note, so the
+        // whole `releases` group vanishes — while a sibling top-level doc remains.
+        let docs = vec![
+            hidden_doc("releases/v0-1-0", "0.1.0"),
+            hidden_doc("releases/v0-2-0", "0.2.0"),
+            doc("releases", "Releases"), // the `.base` page — a loose top-level doc
+        ];
+        let tree = build_tree(&docs);
+        // No `releases` Dir node; only the loose `releases` Doc (the base page).
+        assert_eq!(tree.len(), 1);
+        assert!(matches!(&tree[0], TreeNode::Doc { slug, .. } if slug == "releases"));
+    }
+
+    #[test]
+    fn hidden_folder_note_hides_whole_subtree() {
+        // `sidebar: false` on a directory's `index.md` hides the entire subtree,
+        // even pages that are not themselves flagged.
+        let docs = vec![
+            hidden_doc("archive/index", "Archive"),
+            doc("archive/old", "Old"),
+            doc("guide/intro", "Intro"),
+        ];
+        let tree = build_tree(&docs);
+        assert_eq!(tree.len(), 1);
+        assert!(matches!(&tree[0], TreeNode::Dir { name, .. } if name == "guide"));
     }
 
     #[test]
