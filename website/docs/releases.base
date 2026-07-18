@@ -1,3 +1,4 @@
+title: Releases
 filters:
   - file.hasTag("release")
 properties:
@@ -12,30 +13,38 @@ properties:
   note.crates:
     displayName: Crates
 views:
+  # Primary view: a single-column list of cards, each showing the release's full
+  # rendered body (`note.body`, a docgen extension). The card title is the version
+  # (the file name, linked to the individual release page); date/kind/areas sit in
+  # a compact meta row above the prose. Newest first.
+  # No `name:` — the page is already titled "Releases", so a view label here would
+  # just repeat it. (The table below keeps its label to distinguish the two.)
+  - type: cards
+    order: [file.name, note.date, note.kind, note.areas, note.body]
+    sort:
+      - property: note.date
+        direction: DESC
+      - property: note.version
+        direction: DESC
+    # Static: the cards are a reading view, not a data grid. Disabling the island
+    # keeps the rendered bodies in the DOM (they aren't part of the interactive
+    # payload) and drops the filter/sort chrome. The table below stays interactive.
+    docgenInteractive:
+      enabled: false
+  # Secondary view: a compact, sortable/filterable index of every release. Kept as
+  # a quick-reference table beneath the cards.
   - type: table
     name: All releases
     order: [file.name, note.date, note.version, note.kind, note.areas, note.crates]
     sort:
+      - property: note.date
+        direction: DESC
       - property: note.version
         direction: DESC
     # docgen-specific (Obsidian ignores this): page at 8 so the pager is visible
-    # over these 9 releases, and treat the version column as text rather than a
+    # over these 12 releases, and treat the version column as text rather than a
     # facet — every value is unique, so a facet of them would filter to one row.
-    # It still sorts as a version (see `sortAs` in the Bases docs); nothing here
-    # asks for that, because the column is detected automatically.
     docgenInteractive:
       pageSize: 8
       filters:
         note.version: text
-  - type: cards
-    name: Cards
-    order: [file.name, note.date, note.version, note.areas]
-    sort:
-      - property: note.date
-        direction: DESC
-  - type: list
-    name: Recent releases
-    order: [file.name, note.date, note.version, note.kind]
-    sort:
-      - property: note.date
-        direction: DESC

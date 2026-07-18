@@ -547,6 +547,12 @@ fn group_rows<'a, 'b>(
         .collect()
 }
 
+/// Whether a column names the note's rendered body (`note.body` / `file.body`) —
+/// a docgen extension that cards render as a full-width block.
+fn is_body_col(col: &str) -> bool {
+    col == "note.body" || col == "file.body"
+}
+
 fn render_cards(
     rows: &[Row],
     base: &BaseFile,
@@ -555,7 +561,16 @@ fn render_cards(
     corpus: &Corpus,
 ) -> String {
     // `rows` is already truncated to the view's `limit` by render_view.
-    let mut html = String::from("<div class=\"docgen-base-cards\">");
+    // A `note.body`/`file.body` column turns the cards into a single-column list,
+    // each card carrying the note's rendered body beneath its fields — a readable
+    // layout for long-form entries (e.g. release notes) rather than a tile grid.
+    let has_body = columns.iter().any(|c| is_body_col(c));
+    let container = if has_body {
+        "docgen-base-cards docgen-base-cards--list"
+    } else {
+        "docgen-base-cards"
+    };
+    let mut html = format!("<div class=\"{container}\">");
     for row in rows.iter() {
         if opts.interactive {
             html.push_str(&format!(
@@ -578,7 +593,9 @@ fn render_cards(
         ));
         html.push_str("<dl class=\"docgen-base-card__fields\">");
         for col in columns {
-            if col == "file.name" || col == "file.basename" {
+            // The name columns become the card title; the body column becomes a
+            // full-width block below — neither belongs in the field list.
+            if col == "file.name" || col == "file.basename" || is_body_col(col) {
                 continue;
             }
             let val = row.cells.get(col).cloned().unwrap_or(Value::Null);
@@ -591,7 +608,15 @@ fn render_cards(
                 render_cell(&val, col, row.note, opts, corpus)
             ));
         }
-        html.push_str("</dl></div>");
+        html.push_str("</dl>");
+        // Body: the note's already-rendered HTML, emitted verbatim (not escaped).
+        if has_body && !row.note.body.is_empty() {
+            html.push_str(&format!(
+                "<div class=\"docgen-base-card__body\">{}</div>",
+                row.note.body
+            ));
+        }
+        html.push_str("</div>");
     }
     if rows.is_empty() {
         html.push_str("<div class=\"docgen-base-empty\">No results</div>");
@@ -1015,6 +1040,37 @@ mod tests {
         let p2 = html.find(">2<").unwrap();
         let p10 = html.find(">10<").unwrap();
         assert!(p1 < p2 && p2 < p10, "expected 1 < 2 < 10 group order");
+    }
+
+    #[test]
+    fn cards_view_renders_note_body_as_block_and_single_column() {
+        let base = parse_base(
+            "views:\n  - type: cards\n    order: [file.name, note.kind, note.body]\n",
+        )
+        .unwrap();
+        let mut n = note("v0-8-1", "v0-8-1", &[("kind", Value::Str("patch".into()))]);
+        n.body = "<p>The <strong>S3</strong> TLS fix.</p>".into();
+        let corpus = Corpus::new(vec![n]);
+        let html = render_base(&base, &corpus, &opts());
+        // Single-column list layout, plus the body emitted verbatim in its block.
+        assert!(html.contains("docgen-base-cards--list"));
+        assert!(html.contains(
+            "<div class=\"docgen-base-card__body\"><p>The <strong>S3</strong> TLS fix.</p></div>"
+        ));
+        // The body column is NOT also emitted as a <dt>/<dd> field pair.
+        assert!(!html.contains("<dt>Body</dt>"));
+        // A normal field still renders.
+        assert!(html.contains("patch"));
+    }
+
+    #[test]
+    fn cards_view_without_body_stays_a_grid() {
+        let base =
+            parse_base("views:\n  - type: cards\n    order: [file.name, note.kind]\n").unwrap();
+        let corpus = Corpus::new(vec![note("a", "A", &[("kind", Value::Str("x".into()))])]);
+        let html = render_base(&base, &corpus, &opts());
+        assert!(html.contains("docgen-base-cards"));
+        assert!(!html.contains("docgen-base-cards--list"));
     }
 
     #[test]

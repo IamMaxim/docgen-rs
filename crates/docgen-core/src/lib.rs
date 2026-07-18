@@ -23,7 +23,7 @@ pub mod tree;
 pub mod util;
 pub mod wikilink;
 
-pub use bases::{build_corpus, note_from_doc, FileFacts};
+pub use bases::{build_corpus, note_from_doc, set_note_bodies, FileFacts};
 pub use extract::{
     extract_refs, DirectiveRef, DocRefs, FenceRef, HeadingRef, MdLinkRef, WikilinkRef,
 };

@@ -171,7 +171,13 @@ fn render_base_pages(
             );
             continue;
         }
-        let title = b.slug.rsplit('/').next().unwrap_or(&b.slug).to_string();
+        // Prefer an explicit `title:` in the base; else fall back to the file name.
+        // (Parsing here is cheap and keeps `render_base_source`'s graceful
+        // error-on-bad-YAML behaviour below intact.)
+        let title = docgen_bases::parse_base(&b.source)
+            .ok()
+            .and_then(|bf| bf.title)
+            .unwrap_or_else(|| b.slug.rsplit('/').next().unwrap_or(&b.slug).to_string());
         let body_html = docgen_bases::render_base_source(&b.source, corpus, &opts);
         docs.push(Doc {
             rel_path: b.rel_path.clone(),
@@ -519,7 +525,7 @@ pub(crate) fn build_site_inner(
     // the prepared docs plus filesystem metadata, and load the `.base` files. Both
     // are feature-gated: when `bases` is off the corpus is `None` (embedded blocks
     // render as plain code) and no `.base` pages are emitted.
-    let bases_corpus = if config.features.bases {
+    let mut bases_corpus = if config.features.bases {
         Some(docgen_core::build_corpus(&prepared, &|rel| {
             file_facts(&docs_dir, rel)
         }))
@@ -557,6 +563,18 @@ pub(crate) fn build_site_inner(
         )
     };
     t.mark("render_docs");
+
+    // Now that bodies are rendered, feed them back into the corpus so `.base`
+    // pages (rendered just below) can surface `note.body` — the Releases page
+    // shows each release's full body in a card this way.
+    if let Some(corpus) = bases_corpus.as_mut() {
+        let bodies: std::collections::HashMap<&str, &str> = site
+            .docs
+            .iter()
+            .map(|d| (d.slug.as_str(), d.body_html.as_str()))
+            .collect();
+        docgen_core::set_note_bodies(corpus, &|slug| bodies.get(slug).map(|s| s.to_string()));
+    }
 
     // Render each `.base` file to a page (its views as static HTML) and a search
     // entry, querying the markdown corpus. Kept as a separate list from `site.docs`

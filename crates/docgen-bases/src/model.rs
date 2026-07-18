@@ -10,6 +10,10 @@ use serde::Deserialize;
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct BaseFile {
+    /// docgen-specific (Obsidian-ignored): the page title for a standalone `.base`
+    /// file. `None` falls back to the file's name. Lets a base whose file name is
+    /// a slug (e.g. `releases.base`) present a proper title ("Releases").
+    pub title: Option<String>,
     /// Global filter tree applied to every view.
     pub filters: Option<Filter>,
     /// Named formulas: name → expression string.

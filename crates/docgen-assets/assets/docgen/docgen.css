@@ -1461,6 +1461,47 @@ kbd,
 	margin: 0;
 	color: var(--text);
 }
+/* Single-column card list — a card carries a full-width rendered body (e.g.
+   release notes). One readable column instead of the tile grid, and the fields
+   sit inline as a compact meta row above the prose. */
+.docgen-base-cards--list {
+	grid-template-columns: 1fr;
+	gap: 14px;
+}
+.docgen-base-cards--list .docgen-base-card {
+	padding: 16px 18px;
+}
+.docgen-base-cards--list .docgen-base-card__title {
+	font-size: 1.15em;
+	font-weight: 600;
+}
+.docgen-base-cards--list .docgen-base-card__fields {
+	grid-template-columns: none;
+	grid-auto-flow: column;
+	justify-content: start;
+	gap: 4px 14px;
+	margin-bottom: 10px;
+	color: var(--text-dim);
+}
+.docgen-base-cards--list .docgen-base-card__fields dt {
+	font-size: 0.82em;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+/* The card body: rendered markdown. Reuse the prose rhythm but tighten the
+   outer margins so it sits snugly inside the card. */
+.docgen-base-card__body {
+	border-top: 1px solid var(--border);
+	padding-top: 12px;
+	color: var(--text);
+	line-height: 1.6;
+}
+.docgen-base-card__body > :first-child {
+	margin-top: 0;
+}
+.docgen-base-card__body > :last-child {
+	margin-bottom: 0;
+}
 /* List view. */
 .docgen-base-list {
 	margin: 0;
