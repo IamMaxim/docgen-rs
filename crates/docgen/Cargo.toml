@@ -9,6 +9,12 @@ readme.workspace = true
 keywords = ["documentation", "static-site", "generator", "markdown", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 
+# docs.rs documents the library target (`src/lib.rs`), which re-exports the
+# workspace's library crates. Default features only: the `s3` feature pulls in a
+# TLS stack that needs a C toolchain, which we don't need just to render docs.
+[package.metadata.docs.rs]
+all-features = false
+
 [[bin]]
 name = "docgen"
 path = "src/main.rs"
