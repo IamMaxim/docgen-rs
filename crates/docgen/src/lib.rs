@@ -2,7 +2,7 @@
 //!
 //! **No npm, no Node.** `docgen` turns a `docs/` tree of Markdown files into a
 //! fast, fully static site: server-side syntax highlighting, `[[wikilinks]]`
-//! with backlinks, a zero-JS-build search index, a per-document git-history
+//! with backlinks, a zero-JS-build search index, an interactive git-history
 //! timeline, a knowledge graph, and Obsidian-style `.base` views — all rendered
 //! ahead of time.
 //!
@@ -29,7 +29,7 @@
 //! | [`render`] | `docgen-render` | HTML rendering (pages, graph, history, diff) |
 //! | [`build`] | `docgen-build` | The `build` orchestration that ties it together |
 //! | [`server`] | `docgen-server` | The `dev` live-reload server |
-//! | [`diff`] | `docgen-diff` | Per-document git-history timelines |
+//! | [`diff`] | `docgen-diff` | Git-history diffing (the `/diff/` timeline) |
 //! | [`assets`] | `docgen-assets` | Vendored CSS/JS and static assets |
 //! | [`init`] | `docgen-init` | Site scaffolding (`docgen init`) |
 //! | [`lint`] | `docgen-lint` | Pre-publish link/asset/frontmatter checks |
@@ -41,7 +41,7 @@ pub use docgen_assets as assets;
 pub use docgen_build as build;
 /// Document model, discovery, sidebar tree, and pipeline. See [`docgen_core`].
 pub use docgen_core as core;
-/// Per-document git-history timelines. See [`docgen_diff`].
+/// Git-history diffing behind the `/diff/` timeline. See [`docgen_diff`].
 pub use docgen_diff as diff;
 /// Site scaffolding (`docgen init`). See [`docgen_init`].
 pub use docgen_init as init;

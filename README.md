@@ -20,7 +20,7 @@ No npm, no Node — just `cargo install` and a directory of Markdown.
 
 docgen turns a `docs/` tree of `.md` files into a fast, fully static site —
 server-side syntax highlighting, `[[wikilinks]]` with backlinks, a zero-JS-build
-search index, a per-document git-history timeline, and a knowledge graph — all
+search index, an interactive git-history timeline, and a knowledge graph — all
 rendered ahead of time and served as plain HTML/CSS with a sprinkle of vendored,
 dependency-free JavaScript.
 
@@ -53,7 +53,8 @@ their own — no configuration needed.
 - **[Static search](https://iammaxim.github.io/docgen-rs/features/search-and-graph/)**
   — a prebuilt index served by a dependency-free ⌘K modal, plus a knowledge graph.
 - **[Git-history timeline](https://iammaxim.github.io/docgen-rs/features/history/)**
-  — every tracked doc gets a `/history/` page with line- and block-level diffs.
+  — a site-wide `/diff/` workspace with line- and block-level diffs for every
+  commit that touched your docs, reached from a topbar icon.
 - **[Math & Mermaid](https://iammaxim.github.io/docgen-rs/features/math-and-mermaid/)**,
   **[PlantUML](https://iammaxim.github.io/docgen-rs/features/plantuml/)**,
   and **[Obsidian Bases](https://iammaxim.github.io/docgen-rs/features/bases/)**
