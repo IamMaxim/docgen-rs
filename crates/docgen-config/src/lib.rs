@@ -414,11 +414,7 @@ mod tests {
     #[test]
     fn parses_diff_feature_toggle() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("docgen.toml"),
-            "[features]\ndiff = false\n",
-        )
-        .unwrap();
+        std::fs::write(dir.path().join("docgen.toml"), "[features]\ndiff = false\n").unwrap();
         let c = load(dir.path()).unwrap();
         assert!(!c.features.diff);
         // Unspecified toggles keep their default (true).
