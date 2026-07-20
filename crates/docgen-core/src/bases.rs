@@ -65,6 +65,22 @@ pub fn note_from_doc(p: &PreparedDoc, facts: FileFacts) -> Note {
         tags,
         links,
         slug: p.slug.clone(),
+        // Rendered body HTML isn't available yet at corpus-build time (pass 1);
+        // the host fills it in after the document pass. See [`set_note_bodies`].
+        body: String::new(),
+    }
+}
+
+/// After the document render pass, give each corpus note its rendered body HTML
+/// (keyed by slug), so `.base` *pages* can surface `note.body` — e.g. release
+/// notes shown in full on a Releases page. Notes with no matching rendered doc
+/// keep their empty body. Embedded ```base blocks render during the document
+/// pass, before this runs, so `note.body` is empty within them by construction.
+pub fn set_note_bodies(corpus: &mut Corpus, body_html_by_slug: &dyn Fn(&str) -> Option<String>) {
+    for note in &mut corpus.notes {
+        if let Some(html) = body_html_by_slug(&note.slug) {
+            note.body = html;
+        }
     }
 }
 

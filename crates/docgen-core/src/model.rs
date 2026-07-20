@@ -36,6 +36,12 @@ pub struct Doc {
     /// onto the rendered heading tags in `body_html`.
     #[serde(default)]
     pub headings: Vec<crate::headings::Heading>,
+    /// `sidebar: false` in frontmatter — the page is still built and reachable by
+    /// URL, but is omitted from the sidebar tree (see [`crate::tree::build_tree`]).
+    /// On a folder's `index.md`, it hides the whole directory subtree.
+    /// Build-internal; never serialized.
+    #[serde(skip)]
+    pub hidden_from_sidebar: bool,
 }
 
 /// A node in the sidebar tree.

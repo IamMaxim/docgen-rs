@@ -82,6 +82,13 @@ and the [[search-and-graph|graph and search index]] update — no configuration
 needed. See [[wikilinks]] for how linking works and [[features/index|Features]]
 for everything else you can drop into a page.
 
+Frontmatter keys docgen understands: `title:` (falls back to the first `# H1`,
+then the file name), `description:` (a lede under the title and the backlink-card
+summary), and `sidebar: false` (keep the page out of the sidebar tree while it
+stays built and reachable by URL — set it on a folder's `index.md` to hide the
+whole subtree). The [[releases/v0-8-1|release notes]] on this very site use
+`sidebar: false` so the individual versions surface only on the Releases page.
+
 ## 5. Build the static site
 
 ```sh

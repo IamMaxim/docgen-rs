@@ -25,6 +25,11 @@ pub struct Features {
     pub bases: bool,
     /// Emit the search index + search client.
     pub search: bool,
+    /// Emit the `/diff/` git-history timeline workspace + its client assets
+    /// (`diff.css`, `islands/diff.js`). When `false`, none of `dist/diff/` is
+    /// written and the diff assets are excluded — a smaller build. Inert (no
+    /// diff output) outside a git repo regardless.
+    pub diff: bool,
 }
 
 impl Default for Features {
@@ -36,6 +41,7 @@ impl Default for Features {
             plantuml: true,
             bases: true,
             search: true,
+            diff: true,
         }
     }
 }
@@ -326,6 +332,7 @@ mod tests {
         assert!(c.features.graph && c.features.math && c.features.mermaid && c.features.search);
         assert!(c.features.plantuml);
         assert!(c.features.bases);
+        assert!(c.features.diff);
         assert_eq!(c.components.dir, "components");
         assert_eq!(c.plantuml.server, DEFAULT_PLANTUML_SERVER);
     }
@@ -402,6 +409,17 @@ mod tests {
         let c = load(dir.path()).unwrap();
         assert!(!c.features.search);
         assert!(c.features.graph);
+    }
+
+    #[test]
+    fn parses_diff_feature_toggle() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("docgen.toml"), "[features]\ndiff = false\n").unwrap();
+        let c = load(dir.path()).unwrap();
+        assert!(!c.features.diff);
+        // Unspecified toggles keep their default (true).
+        assert!(c.features.graph);
+        assert!(c.features.search);
     }
 
     #[test]

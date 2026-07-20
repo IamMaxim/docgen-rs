@@ -37,6 +37,10 @@ pub struct Note {
     /// The doc's site slug (docgen-specific; used to build the cell hyperlink to
     /// the rendered page). Not exposed as a base property.
     pub slug: String,
+    /// The note's rendered body HTML, surfaced in a card via a `note.body` column.
+    /// Populated by the host only for `.base` *pages* (rendered after the document
+    /// pass); empty inside inline ```base blocks, which render before bodies exist.
+    pub body: String,
 }
 
 impl Note {
