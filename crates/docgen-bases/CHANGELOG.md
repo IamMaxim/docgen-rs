@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-bases-v0.8.1...docgen-bases-v0.9.0) - 2026-07-20
+
+### Added
+
+- *(bases)* note bodies in cards + single-column card list; base title
+
+### Other
+
+- correct stale per-doc /history wording to the /diff workspace
+- apply rustfmt
+- *(readme)* concise, friendly redesign with logo hero
+
 ## [0.8.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-bases-v0.7.0...docgen-bases-v0.8.0) - 2026-07-17
 
 ### Other

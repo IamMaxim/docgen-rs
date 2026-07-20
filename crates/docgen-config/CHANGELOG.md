@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-config-v0.8.1...docgen-config-v0.9.0) - 2026-07-20
+
+### Added
+
+- *(config)* add [features] diff toggle (default on)
+
+### Other
+
+- apply rustfmt to the diff-toggle test
+
 ## [0.8.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-config-v0.7.0...docgen-config-v0.8.0) - 2026-07-17
 
 ### Added

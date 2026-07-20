@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-build-v0.8.1...docgen-build-v0.9.0) - 2026-07-20
+
+### Added
+
+- *(build)* skip /diff workspace + assets when features.diff = false
+- *(bases)* note bodies in cards + single-column card list; base title
+- *(core)* `sidebar: false` frontmatter to hide pages from the nav tree
+
 ## [0.7.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-build-v0.6.0...docgen-build-v0.7.0) - 2026-07-16
 
 ### Added
