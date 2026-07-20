@@ -20,10 +20,13 @@ title = "My Docs"
 base = ""
 
 [features]
-graph = true     # emit the /graph/ knowledge-graph page
-math = true      # render LaTeX math at build time
-mermaid = true   # render mermaid diagrams
-search = true    # emit the search index + Ctrl/Cmd-K modal
+graph = true      # emit the /graph/ knowledge-graph page
+math = true       # render LaTeX math at build time
+mermaid = true    # render mermaid diagrams
+plantuml = true   # render PlantUML diagrams
+bases = true      # render Obsidian .base views
+search = true     # emit the search index + Ctrl/Cmd-K modal
+diff = true       # emit the /diff/ git-history timeline
 
 [components]
 dir = "components"   # directory holding your custom components
@@ -63,7 +66,7 @@ The full precedence and the GitLab story live in [[deployment]].
 
 ## `[features]`
 
-Four toggles, all `true` by default. Turn one off to drop its output and its
+Seven toggles, all `true` by default. Turn one off to drop its output and its
 client-side JavaScript entirely — useful for a leaner build when you don't need
 a feature.
 
@@ -72,7 +75,10 @@ a feature.
 | `graph` | `true` | Emits the `/graph/` page and its interactive island. |
 | `math` | `true` | Renders LaTeX math at build time and links the math stylesheet. |
 | `mermaid` | `true` | Enables mermaid diagram blocks (lazy-loaded island). |
+| `plantuml` | `true` | Renders PlantUML diagrams (see [[plantuml]]). |
+| `bases` | `true` | Renders Obsidian `.base` views (see [[bases]]). |
 | `search` | `true` | Emits `search-index.json` and the search modal. |
+| `diff` | `true` | Emits the `/diff/` git-history timeline and its assets (see [[history]]). Inert outside a git repo either way. |
 
 A partial `[features]` table keeps the unspecified toggles at their default:
 

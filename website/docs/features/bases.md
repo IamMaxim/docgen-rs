@@ -24,7 +24,8 @@ with your content and versions in git as plain text.
 
 **A standalone `.base` file.** Drop a `.base` file anywhere under `docs/`. It
 appears in the sidebar and gets its own page at a clean URL (a `Bases/Books.base`
-file is served at `/Bases/Books`):
+file is served at `/Bases/Books`). The page title defaults to the file name; set
+a docgen-specific top-level `title:` to override it (Obsidian ignores the key):
 
 ```yaml
 # Bases/Books.base
@@ -177,6 +178,12 @@ docgen implements the Bases format faithfully:
   page a long view, use `pageSize` below. `groupBy` renders group headings on
   **`table` views only**; `cards` and `list` parse it and ignore it, so a grouped
   view of either renders ungrouped rather than failing.
+- **Card bodies** — a `cards` view whose `order` includes a `note.body` (or
+  `file.body`) column renders each note's **full rendered body** inside the card.
+  docgen then lays the cards out as a single readable column instead of the tile
+  grid, with the other columns as a compact meta row above the prose — ideal for a
+  changelog or release-notes reading view. (`note.body`/`file.body` is a
+  docgen extension; Obsidian has no such column.)
 - **The expression language** — property references (`note.x`, `file.x`,
   `formula.x`, and a bare `x` for a note property), operators (`+ - * / %`,
   comparisons, `&& || !`, date ± duration), and the documented global functions
