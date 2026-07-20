@@ -685,49 +685,51 @@ pub(crate) fn build_site_inner(
                 commit_hash = s.chars().take(7).collect();
             }
         }
-        if let Some(workdir) = repo.workdir().map(Path::to_path_buf) {
-            // The docs dir as git sees it, e.g. `docs` (trailing slash trimmed —
-            // `git_rel_path` joins an empty leaf to the prefix).
-            if let Some(docs_prefix) =
-                git_rel_path(&docs_dir, &workdir, "").map(|p| p.trim_end_matches('/').to_string())
-            {
-                let limit = diff_limit();
-                // The global doc-diff report across all docs, with rendered block
-                // diffs — the analogue of the original `/docs/diff` payload.
-                let report =
-                    docgen_diff::build_global_doc_diff_report(&repo, &docs_prefix, limit, true)
-                        .with_context(|| {
-                            format!("building global doc diff report for {docs_prefix}")
-                        })?;
-                t.mark("diff_report");
-                if let Some(report) = report {
-                    let diff_dir = dist_dir.join("diff");
-                    fs::create_dir_all(diff_dir.join("revisions"))?;
-                    // timeline.json — the lightweight index (hunks/blocks stripped).
-                    let summary = docgen_diff::summarize_report(&report);
-                    fs::write(
-                        diff_dir.join("timeline.json"),
-                        serde_json::to_vec(&summary)?,
-                    )?;
-                    // revisions/<id>.json — each commit's full per-file block diff,
-                    // lazily fetched by the island when a commit is selected.
-                    for point in &report.timeline {
+        if config.features.diff {
+            if let Some(workdir) = repo.workdir().map(Path::to_path_buf) {
+                // The docs dir as git sees it, e.g. `docs` (trailing slash trimmed —
+                // `git_rel_path` joins an empty leaf to the prefix).
+                if let Some(docs_prefix) = git_rel_path(&docs_dir, &workdir, "")
+                    .map(|p| p.trim_end_matches('/').to_string())
+                {
+                    let limit = diff_limit();
+                    // The global doc-diff report across all docs, with rendered block
+                    // diffs — the analogue of the original `/docs/diff` payload.
+                    let report =
+                        docgen_diff::build_global_doc_diff_report(&repo, &docs_prefix, limit, true)
+                            .with_context(|| {
+                                format!("building global doc diff report for {docs_prefix}")
+                            })?;
+                    t.mark("diff_report");
+                    if let Some(report) = report {
+                        let diff_dir = dist_dir.join("diff");
+                        fs::create_dir_all(diff_dir.join("revisions"))?;
+                        // timeline.json — the lightweight index (hunks/blocks stripped).
+                        let summary = docgen_diff::summarize_report(&report);
                         fs::write(
-                            diff_dir
-                                .join("revisions")
-                                .join(format!("{}.json", point.id)),
-                            serde_json::to_vec(point)?,
+                            diff_dir.join("timeline.json"),
+                            serde_json::to_vec(&summary)?,
                         )?;
+                        // revisions/<id>.json — each commit's full per-file block diff,
+                        // lazily fetched by the island when a commit is selected.
+                        for point in &report.timeline {
+                            fs::write(
+                                diff_dir
+                                    .join("revisions")
+                                    .join(format!("{}.json", point.id)),
+                                serde_json::to_vec(point)?,
+                            )?;
+                        }
+                        // The /diff workspace shell (hydrated client-side by diff.js).
+                        let diff_html = renderer.render_diff(&docgen_render::DiffContext {
+                            tree: &tree,
+                            base: &config.base,
+                            site_title: config.title.as_deref().unwrap_or(""),
+                            search_enabled: config.features.search,
+                        })?;
+                        fs::write(diff_dir.join("index.html"), diff_html)?;
+                        has_diff = true;
                     }
-                    // The /diff workspace shell (hydrated client-side by diff.js).
-                    let diff_html = renderer.render_diff(&docgen_render::DiffContext {
-                        tree: &tree,
-                        base: &config.base,
-                        site_title: config.title.as_deref().unwrap_or(""),
-                        search_enabled: config.features.search,
-                    })?;
-                    fs::write(diff_dir.join("index.html"), diff_html)?;
-                    has_diff = true;
                 }
             }
         }

@@ -111,6 +111,47 @@ fn build_emits_global_diff_workspace_for_docs_in_a_git_repo() {
 }
 
 #[test]
+fn build_omits_diff_workspace_when_feature_disabled() {
+    let tmp = unique_temp_dir("git-nodiff");
+    let repo = Repository::init(&tmp).unwrap();
+    configure_local_user(&repo);
+    write_and_commit(
+        &repo,
+        &tmp,
+        "docs/guide/intro.md",
+        "# Intro\n\nfirst body.\n",
+        "add intro",
+    );
+    write_and_commit(
+        &repo,
+        &tmp,
+        "docs/guide/intro.md",
+        "# Intro\n\nsecond body.\n",
+        "edit intro",
+    );
+    // Turn the diff feature off.
+    fs::write(tmp.join("docgen.toml"), "[features]\ndiff = false\n").unwrap();
+
+    let status = Command::new(env!("CARGO_BIN_EXE_docgen"))
+        .arg("build")
+        .arg(&tmp)
+        .status()
+        .unwrap();
+    assert!(status.success());
+
+    // No /diff workspace and no diff client assets were emitted.
+    assert!(!tmp.join("dist/diff").exists());
+    assert!(!tmp.join("dist/diff.css").exists());
+    assert!(!tmp.join("dist/islands/diff.js").exists());
+
+    // The doc page still builds, but carries no link to the (absent) diff.
+    let page = fs::read_to_string(tmp.join("dist/guide/intro/index.html")).unwrap();
+    assert!(!page.contains(r#"href="/diff""#));
+
+    let _ = fs::remove_dir_all(&tmp);
+}
+
+#[test]
 fn build_in_non_git_dir_skips_history_without_error() {
     let tmp = unique_temp_dir("nogit");
     fs::create_dir_all(tmp.join("docs/guide")).unwrap();
