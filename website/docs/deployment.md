@@ -117,3 +117,27 @@ docgen build
 
 For root-hosted targets keep `base = ""`; for sub-path hosting set `base`
 accordingly.
+
+## Content-Security-Policy
+
+The emitted site contains no inline scripts — every `<script>` tag either
+loads a same-origin file or is a non-executable JSON data block — so
+`script-src` needs neither `'unsafe-inline'` nor hash allowlisting. The theme
+is applied before first paint by `/theme-preflight.js`, loaded as a blocking
+script in `<head>`, and the deploy base is carried on
+`<html data-docgen-base="...">`.
+
+Two qualifiers, verified against a live strict-CSP deploy:
+
+- `script-src` still needs `'unsafe-eval'`: the vendored Alpine.js evaluates
+  the `x-data`/`@click` expressions in the markup at runtime. Without it the
+  page renders and the content is fully readable, but Alpine-driven controls
+  (theme toggle, sidebar/rail toggles, graph) go inert.
+- Build-time-rendered math (KaTeX) emits inline `style=` attributes, so pages
+  containing math need `style-src 'self' 'unsafe-inline'`.
+
+A known-good policy for the full feature set:
+
+```
+default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:
+```

@@ -94,6 +94,11 @@ fn same(path: &'static str, kind: AssetKind) -> Asset {
 pub fn core_assets() -> Vec<Asset> {
     vec![
         same("vendor/alpine/alpine.min.js", AssetKind::Js),
+        embed(
+            "docgen/theme-preflight.js",
+            "theme-preflight.js",
+            AssetKind::Js,
+        ),
         embed("docgen/bootstrap.js", "bootstrap.js", AssetKind::Js),
         embed("docgen/docgen.css", "docgen.css", AssetKind::Css),
         embed("docgen/code.css", "code.css", AssetKind::Css),
@@ -395,10 +400,43 @@ mod tests {
     fn core_assets_cover_alpine_bootstrap_css_search() {
         let paths: Vec<_> = core_assets().iter().map(|a| a.path).collect();
         assert!(paths.contains(&"vendor/alpine/alpine.min.js"));
+        assert!(paths.contains(&"theme-preflight.js"));
         assert!(paths.contains(&"bootstrap.js"));
         assert!(paths.contains(&"docgen.css"));
         assert!(paths.contains(&"search.js"));
         assert!(paths.contains(&"islands/theme-toggle.js"));
+    }
+
+    /// The externalized no-flash preflight (the templates load it blocking in
+    /// <head>) keeps its pre-paint behaviour: theme from localStorage, dark as
+    /// the bare default, saved rail width restored. Pinned here because the
+    /// snippet no longer appears in rendered HTML.
+    #[test]
+    fn theme_preflight_keeps_prepaint_behaviour() {
+        let js = core_assets()
+            .iter()
+            .find(|a| a.path == "theme-preflight.js")
+            .unwrap()
+            .bytes;
+        let js = std::str::from_utf8(js).unwrap();
+        assert!(js.contains("localStorage.getItem('doc-theme')"));
+        assert!(js.contains("prefers-color-scheme"));
+        assert!(js.contains("'light' : 'dark'"), "dark is the bare default");
+        assert!(js.contains("doc-left-rail-width"));
+    }
+
+    /// bootstrap.js recovers the deploy base from <html data-docgen-base> —
+    /// the CSP-clean replacement for the old inline DOCGEN_BASE script.
+    #[test]
+    fn bootstrap_reads_base_from_html_attribute() {
+        let js = core_assets()
+            .iter()
+            .find(|a| a.path == "bootstrap.js")
+            .unwrap()
+            .bytes;
+        let js = std::str::from_utf8(js).unwrap();
+        assert!(js.contains("data-docgen-base"));
+        assert!(js.contains("window.DOCGEN_BASE"));
     }
 
     #[test]
