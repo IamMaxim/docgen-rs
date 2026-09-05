@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1](https://github.com/IamMaxim/docgen-rs/compare/docgen-build-v0.9.0...docgen-build-v0.9.1) - 2026-09-05
+
+### Added
+
+- emit CSP-clean pages with no inline scripts in built HTML
+
 ## [0.9.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-build-v0.8.1...docgen-build-v0.9.0) - 2026-07-20
 
 ### Added
