@@ -110,11 +110,14 @@ fn base_subpath_prefixes_assets_and_wikilinks_end_to_end() {
     // Nothing left at the bare root.
     assert!(!html.contains(r#"href="/docgen.css""#));
     assert!(!html.contains(r#"href="/guide""#));
-    // The client (search.js etc.) learns the base via a JS global.
+    // The client (search.js etc.) learns the base from the <html> attribute —
+    // bootstrap.js turns it into window.DOCGEN_BASE. An inline script would be
+    // blocked by a strict CSP (script-src 'self').
     assert!(
-        html.contains(r#"window.DOCGEN_BASE = "/docs";"#),
-        "DOCGEN_BASE: {html}"
+        html.contains(r#"<html lang="en" data-docgen-base="/docs">"#),
+        "data-docgen-base: {html}"
     );
+    assert!(!html.contains("window.DOCGEN_BASE ="));
 }
 
 #[test]

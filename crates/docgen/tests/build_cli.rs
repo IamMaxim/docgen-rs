@@ -359,3 +359,78 @@ fn broken_math_degrades_without_failing_build() {
 
     let _ = fs::remove_dir_all(&tmp);
 }
+
+/// CSP pin, end to end: no emitted HTML page contains an inline executable
+/// <script> — every script tag either loads a file (`src=`) or is a
+/// non-executable JSON data block. This is what lets the built site run under
+/// a strict `Content-Security-Policy: script-src 'self'` with no hash
+/// allowlisting. The theme preflight lives in `/theme-preflight.js` (blocking
+/// in <head>, so there is still no theme flash) and the deploy base rides
+/// `<html data-docgen-base>`, read by bootstrap.js.
+#[test]
+fn emitted_html_has_no_inline_scripts() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let workspace = manifest.parent().unwrap().parent().unwrap();
+    let fixture = workspace.join("fixtures/site-basic");
+
+    let tmp =
+        std::env::temp_dir().join(format!("docgen_build_cli_csp_test_{}", std::process::id()));
+    let _ = fs::remove_dir_all(&tmp);
+    fs::create_dir_all(tmp.join("docs/guide")).unwrap();
+    fs::copy(fixture.join("docs/index.md"), tmp.join("docs/index.md")).unwrap();
+    fs::copy(
+        fixture.join("docs/guide/intro.md"),
+        tmp.join("docs/guide/intro.md"),
+    )
+    .unwrap();
+    // Full fixture config: graph page on, so the scan covers the graph shell too.
+    fs::copy(fixture.join("docgen.toml"), tmp.join("docgen.toml")).unwrap();
+
+    let status = Command::new(env!("CARGO_BIN_EXE_docgen"))
+        .arg("build")
+        .arg(&tmp)
+        .status()
+        .unwrap();
+    assert!(status.success());
+
+    fn walk(dir: &std::path::Path, pages: &mut Vec<PathBuf>) {
+        for entry in fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                walk(&path, pages);
+            } else if path.extension().is_some_and(|e| e == "html") {
+                pages.push(path);
+            }
+        }
+    }
+    let mut pages = Vec::new();
+    walk(&tmp.join("dist"), &mut pages);
+    assert!(pages.len() >= 4, "expected several pages, got {pages:?}");
+
+    for page in &pages {
+        let html = fs::read_to_string(page).unwrap();
+        for (at, _) in html.match_indices("<script") {
+            let end = html[at..].find('>').expect("script tag closed") + at;
+            let tag = &html[at..=end];
+            assert!(
+                tag.contains("src=") || tag.contains(r#"type="application/json""#),
+                "{}: inline <script>: {tag}",
+                page.display()
+            );
+        }
+    }
+
+    // The preflight ships and is linked blocking from <head>.
+    assert!(tmp.join("dist/theme-preflight.js").is_file());
+    let home = fs::read_to_string(tmp.join("dist/index/index.html")).unwrap();
+    let preflight_at = home
+        .find(r#"<script src="/theme-preflight.js"></script>"#)
+        .unwrap();
+    let css_at = home.find("/docgen.css").unwrap();
+    assert!(
+        preflight_at < css_at,
+        "preflight must precede the stylesheet"
+    );
+
+    let _ = fs::remove_dir_all(&tmp);
+}

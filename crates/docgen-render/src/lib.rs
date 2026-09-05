@@ -1544,17 +1544,16 @@ mod tests {
     #[test]
     fn page_has_no_flash_script_in_head() {
         let html = page("x", &[]);
+        // External (CSP-clean) but still BLOCKING and ahead of the stylesheet,
+        // so the theme lands on <html> before first paint.
         let script_at = html
-            .find("localStorage.getItem('doc-theme')")
+            .find(r#"<script src="/theme-preflight.js"></script>"#)
             .expect("no-flash script present");
         let css_at = html.find("/docgen.css").expect("docgen.css link present");
         assert!(
             script_at < css_at,
             "no-flash script must precede docgen.css link"
         );
-        assert!(html.contains("prefers-color-scheme"));
-        // Dark is the bare default: pre-paint falls back to dark, not light.
-        assert!(html.contains("'light':'dark'"));
     }
 
     #[test]
@@ -1630,9 +1629,85 @@ mod tests {
             .unwrap();
         for html in [&graph, &hist] {
             assert!(html.contains("docgen-topbar"));
-            assert!(html.contains("data-theme"));
             assert!(html.contains("/islands/theme-toggle.js"));
-            assert!(html.contains("localStorage.getItem('doc-theme')"));
+            assert!(html.contains("/theme-preflight.js"));
+        }
+    }
+
+    /// CSP pin: every template emits only external (`src=`) or JSON-data
+    /// script tags. An inline executable <script> would be blocked by a strict
+    /// `script-src 'self'` policy, so this property must survive template
+    /// changes. The base rides `<html data-docgen-base>`; the theme preflight
+    /// is the external `/theme-preflight.js`.
+    #[test]
+    fn no_template_emits_inline_scripts() {
+        let r = renderer();
+        let rendered = [
+            ("page", page("x", &[])),
+            (
+                "graph",
+                r.render_graph(&GraphContext {
+                    tree: &[],
+                    graph_json: r#"{"nodes":[],"edges":[]}"#,
+                    node_count: 0,
+                    edge_count: 0,
+                    base: "/docs",
+                    site_title: "",
+                    search_enabled: true,
+                    has_diff: false,
+                })
+                .unwrap(),
+            ),
+            (
+                "history",
+                r.render_history(&HistoryContext {
+                    title: "A",
+                    slug: "a",
+                    tree: &[],
+                    buckets: &[],
+                    base: "/docs",
+                    site_title: "",
+                    search_enabled: true,
+                })
+                .unwrap(),
+            ),
+            (
+                "diff",
+                r.render_diff(&DiffContext {
+                    tree: &[],
+                    base: "/docs",
+                    site_title: "",
+                    search_enabled: true,
+                })
+                .unwrap(),
+            ),
+            (
+                "preview",
+                r.render_preview(&PreviewContext {
+                    title: "P",
+                    body_html: "<p>hi</p>",
+                    base: "/docs",
+                    has_mermaid: true,
+                    has_math: false,
+                    has_components_css: false,
+                    has_component_island: false,
+                })
+                .unwrap(),
+            ),
+        ];
+        for (name, html) in &rendered {
+            for (at, _) in html.match_indices("<script") {
+                let end = html[at..].find('>').expect("script tag closed") + at;
+                let tag = &html[at..=end];
+                assert!(
+                    tag.contains("src=") || tag.contains(r#"type="application/json""#),
+                    "{name}: inline <script>: {tag}"
+                );
+            }
+            assert!(
+                html.contains(r#"data-docgen-base="/docs""#) || *name == "page",
+                "{name}: base attribute missing"
+            );
         }
     }
 }

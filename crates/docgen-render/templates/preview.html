@@ -1,14 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-docgen-base="{{ base | safe }}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ title }} — preview</title>
-  <script>(function(){try{
-  var s=localStorage.getItem('doc-theme');
-  var t=s||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');
-  document.documentElement.setAttribute('data-theme',t);
-}catch(e){}})();</script>
+  {#- blocking on purpose: sets the theme before first paint (see theme-preflight.js) #}
+  <script src="{{ base | safe }}/theme-preflight.js"></script>
   <link rel="stylesheet" href="{{ base | safe }}/docgen.css" />
   <link rel="stylesheet" href="{{ base | safe }}/code.css" />
   {% if has_components_css %}<link rel="stylesheet" href="{{ base | safe }}/components.css" />{% endif %}
@@ -28,7 +25,6 @@
   </article>
   <!-- island infra: same stack a published page runs, so mermaid diagrams,
        custom components, and wikilink tooltips hydrate identically here. -->
-  <script>window.DOCGEN_BASE = {{ base | tojson | safe }};</script>
   <script src="{{ base | safe }}/bootstrap.js"></script>
   <script src="{{ base | safe }}/islands/wikilink.js"></script>
   {% if has_mermaid %}<script src="{{ base | safe }}/islands/mermaid.js"></script>{% endif %}
