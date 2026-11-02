@@ -27,12 +27,11 @@ jobs:
       # `--workspace` does NOT cover the `s3` feature, and the tests behind it are
       # `#![cfg(feature = "s3")]`, so they compile to nothing without this step.
       #
-      # The MinIO end-to-end inside it is self-gating: MinIO archived the
-      # open-source server in 2026 and removed its images from every public
-      # registry (Docker Hub dropped `minio/minio`, quay is auth-only, dl.min.io
-      # serves 410), so the container e2e runs only where a MinIO image is already
-      # in the local docker store and skips loudly elsewhere — the test output
-      # states this on every run. DOCGEN_S3_E2E=1 keeps "docker is unavailable"
+      # The MinIO end-to-end inside it pulls `pgsty/minio` — the community
+      # continuation of the archived upstream (Docker Hub dropped `minio/minio`,
+      # dl.min.io serves 410) — and runs a real asset upload over real TLS. If the
+      # image can be neither pulled nor found locally, the test skips loudly rather
+      # than failing the workflow; DOCGEN_S3_E2E=1 keeps "docker is unavailable"
       # fatal, preserving the original guard against a silently no-op'ing green.
       - name: Test (s3 feature, incl. MinIO end-to-end)
         env:

@@ -30,13 +30,17 @@ use std::time::{Duration, Instant};
 /// into it) and a top-level directory under the data dir being treated as a bucket.
 /// A floating tag lets an upstream release break CI with no change on our side.
 ///
-/// This digest is now also the ONLY remaining copy in common reach: MinIO archived
-/// the open-source server and client in 2026 and stripped the images from every
-/// public registry (Docker Hub dropped the `minio/minio` repository entirely,
-/// quay requires auth, dl.min.io returns 410). The image therefore only runs on
-/// machines that still hold it in their local docker store — see `image_cached`.
+/// Why the fork: MinIO archived the open-source server in 2026 and then stripped
+/// everything downstream — Docker Hub dropped the `minio/minio` repository,
+/// `quay.io` requires auth, `dl.min.io` serves 410 for the binaries (all verified
+/// 2026-11-02; the original pinned digest only survives in machines that pulled it
+/// before the removal). This points at the community continuation `pgsty/minio`
+/// (AGPL fork by the Pigsty author, rebuilt release pipeline, console restored),
+/// which republishes both architectures. Digest pinned to
+/// RELEASE.2026-08-04T00-00-00Z; both undocumented properties above were verified
+/// on 2026-11-02 by running this very test green against it.
 const IMAGE: &str =
-    "minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e";
+    "pgsty/minio@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372";
 const BUCKET: &str = "docgen-assets";
 const ACCESS_KEY: &str = "docgentest";
 const SECRET_KEY: &str = "docgentest123";
@@ -64,15 +68,25 @@ fn docker_available() -> bool {
         .unwrap_or(false)
 }
 
-/// Whether the pinned image is already in the local docker store. Deliberately
-/// `docker image inspect` — an offline check — and NOT `docker pull`: the image can
-/// no longer be pulled anywhere (see the note on `IMAGE`), so a pull can only
-/// fail. Where a cached image exists the full TLS e2e below runs exactly as it
-/// always did; where it doesn't, the honest signal is a loud skip, not a
-/// permanently red workflow against a deleted upstream artifact.
-fn image_cached() -> bool {
-    Command::new("docker")
+/// Whether the pinned image is usable: cached locally, or pullable. Local wins
+/// (`docker image inspect`, offline — machines that pulled the original upstream
+/// digest keep running against their cached copy without touching the network);
+/// otherwise pull once, which is what CI runners do against Docker Hub. A failed
+/// pull skips the test loudly rather than failing the workflow: a registry hiccup
+/// should not read as a code regression. (There was a window — after MinIO
+/// stripped its public images, before the `pgsty/minio` fork — where no pull
+/// could succeed at all, and this guard is what kept that era honest.)
+fn image_ready() -> bool {
+    let cached = Command::new("docker")
         .args(["image", "inspect", IMAGE])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if cached {
+        return true;
+    }
+    Command::new("docker")
+        .args(["pull", IMAGE])
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
@@ -314,18 +328,16 @@ fn uploads_assets_to_s3_over_tls() {
         eprintln!("skipping s3 e2e: docker unavailable (set DOCGEN_S3_E2E=1 to make this fatal)");
         return;
     }
-    if !image_cached() {
-        // Unlike the docker case above, this skip cannot be made fatal: there is
-        // no registry left to install MinIO from (upstream archived the
-        // distribution and removed the images — see the note on IMAGE), so a
-        // failing workflow would not be strict, just permanently red against a
-        // deleted artifact. The loud skip keeps that visible in every CI run;
-        // machines with the cached image still exercise the real TLS path below.
+    if !image_ready() {
+        // The image is neither cached nor pullable (registry outage or removal).
+        // This cannot be made fatal: a CI-wide red caused by a registry hiccup
+        // would not be strict, just wrong-shaped — the loud skip keeps it visible
+        // in every run, and machines with a working registry still exercise the
+        // real TLS path below.
         eprintln!(
-            "skipping s3 e2e: MinIO image is not in the local docker store and can no \
-             longer be pulled from any public registry (upstream archived the \
-             open-source distribution in 2026). Run on a machine that still has the \
-             image cached to exercise the TLS upload path."
+            "skipping s3 e2e: MinIO image is neither in the local docker store nor \
+             pullable (registry unavailable). Run on a machine with the image cached \
+             to exercise the TLS upload path."
         );
         return;
     }
