@@ -9,6 +9,7 @@
     <nav class="docgen-sidebar" id="docgen-sidebar" :class="{ 'is-open': navOpen }">
       {{ render_tree(tree, 0, "", false) }}
     </nav>
+    {% include "partials/sidebar-preflight.html" %}
     <div class="docgen-rail-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-valuemin="180" aria-valuemax="560" aria-valuenow="264" tabindex="-1"></div>
     <main class="docgen-content docgen-graph-page" id="docgen-main" tabindex="-1">
       <article class="docgen-doc-content">

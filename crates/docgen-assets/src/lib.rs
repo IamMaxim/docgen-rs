@@ -108,6 +108,13 @@ pub fn core_assets() -> Vec<Asset> {
             "theme-preflight.js",
             AssetKind::Js,
         ),
+        // Blocking restore of the sidebar tree state, loaded right after the
+        // sidebar markup (partials/sidebar-preflight.html) — see the file.
+        embed(
+            "docgen/sidebar-preflight.js",
+            "sidebar-preflight.js",
+            AssetKind::Js,
+        ),
         embed("docgen/bootstrap.js", "bootstrap.js", AssetKind::Js),
         // Self-hosted type: the faces are declared in fonts.css, which the
         // templates link before docgen.css; the files themselves sit under

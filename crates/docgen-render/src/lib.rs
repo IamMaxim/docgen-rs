@@ -18,6 +18,12 @@ const DEFAULT_TOPBAR_PARTIAL: &str = include_str!("../templates/partials/topbar.
 /// Shared sidebar-tree partial.
 const DEFAULT_TREE_PARTIAL: &str = include_str!("../templates/partials/tree.html");
 
+/// Pre-paint sidebar restore, inlined right after the sidebar markup so the
+/// first painted frame already shows the preserved tree state (see the partial
+/// for the full rationale; keys must match the layout island).
+const DEFAULT_SIDEBAR_PREFLIGHT_PARTIAL: &str =
+    include_str!("../templates/partials/sidebar-preflight.html");
+
 /// The dev editor's page shell template (chrome around the CodeMirror mount).
 const DEFAULT_EDITOR_TEMPLATE: &str = include_str!("../templates/editor.html");
 
@@ -276,6 +282,10 @@ fn register_builtin_templates(
     env.add_template_owned("base.html", DEFAULT_BASE_TEMPLATE.to_string())?;
     env.add_template_owned("partials/topbar.html", DEFAULT_TOPBAR_PARTIAL.to_string())?;
     env.add_template_owned("partials/tree.html", DEFAULT_TREE_PARTIAL.to_string())?;
+    env.add_template_owned(
+        "partials/sidebar-preflight.html",
+        DEFAULT_SIDEBAR_PREFLIGHT_PARTIAL.to_string(),
+    )?;
     env.add_template_owned("page.html", page_template.to_string())?;
     env.add_template_owned("history.html", DEFAULT_HISTORY_TEMPLATE.to_string())?;
     env.add_template_owned("graph.html", DEFAULT_GRAPH_TEMPLATE.to_string())?;

@@ -19,6 +19,11 @@
 // `<details data-tree-path>` open/closed state is stored so the tree looks the
 // same after a reload or navigation (folders default open server-side).
 //
+// The pre-paint restore lives in templates/partials/sidebar-preflight.html: it
+// applies TREE_KEY + SCROLL_KEY synchronously before first paint so navigations
+// never flash the default tree. init() below re-applies both as an idempotent
+// backstop and owns all the live wiring.
+//
 // localStorage keys (match ui-prefs.ts):
 //   doc-full-width            "true"/"false"  default false
 //   doc-right-rail-collapsed  "true"/"false"  default false (rail VISIBLE)

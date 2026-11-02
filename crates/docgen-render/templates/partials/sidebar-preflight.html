@@ -1,0 +1,9 @@
+{#- Pre-paint sidebar restore — the tree sibling of theme-preflight.js. A
+    BLOCKING external script right after the sidebar markup: it runs before
+    anything below it paints, applying the persisted folder state and scroll
+    offset that the layout island would otherwise only restore at DOM-ready
+    (after first paint — that gap was the navigation flash, chevrons animating
+    into place). External file, not inline, to keep the CSP pin asserted by
+    docgen-render's no_template_emits_inline_scripts test. Keys live in
+    islands/layout.js and sidebar-preflight.js. -#}
+<script src="{{ base | safe }}/sidebar-preflight.js"></script>
