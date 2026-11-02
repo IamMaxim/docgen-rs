@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-server-v0.9.1...docgen-server-v0.10.0) - 2026-11-02
+
+### Fixed
+
+- fix clippy
+
+### Other
+
+- Removed some duplication in HTML code
+- Update logo
+
 ## [0.6.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-server-v0.5.0...docgen-server-v0.6.0) - 2026-07-15
 
 ### Added

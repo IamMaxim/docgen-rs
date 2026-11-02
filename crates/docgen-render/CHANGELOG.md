@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/IamMaxim/docgen-rs/compare/docgen-render-v0.9.1...docgen-render-v0.10.0) - 2026-11-02
+
+### Other
+
+- Button flash fixes
+- Fix the sidebar one-frame flash on navigation
+- Restyle
+- Minor sidebar style fixes
+- Removed some duplication in HTML code
+- Update logo
+
 ## [0.9.1](https://github.com/IamMaxim/docgen-rs/compare/docgen-render-v0.9.0...docgen-render-v0.9.1) - 2026-09-05
 
 ### Added
