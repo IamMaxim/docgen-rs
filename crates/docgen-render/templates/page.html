@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "partials/tree.html" import render_tree with context %}
+{% block body_class %} docgen-shell{% endblock %}
 {% block extra_head %}
   {% if has_components_css %}<link rel="stylesheet" href="{{ base | safe }}/components.css" />{% endif %}
   {% if has_math %}<link rel="stylesheet" href="{{ base | safe }}/vendor/katex/katex.min.css" />{% endif %}
@@ -12,7 +13,7 @@
     <nav class="docgen-sidebar" id="docgen-sidebar" :class="{ 'is-open': navOpen }">
       {{ render_tree(tree, 0, "", true) }}
     </nav>
-    <div class="docgen-rail-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="-1"></div>
+    <div class="docgen-rail-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-valuemin="180" aria-valuemax="560" aria-valuenow="264" tabindex="-1"></div>
     <main class="docgen-content" id="docgen-main" tabindex="-1">
       {% if home %}
       <section class="docgen-home">

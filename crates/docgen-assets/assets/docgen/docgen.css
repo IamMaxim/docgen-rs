@@ -1,10 +1,10 @@
 /* docgen-rs theme — hand-authored, no bundler.
  *
  * Layout: sticky topbar + left sidebar doc tree + centered readable content +
- * a 3-section right rail. Dark is the DEFAULT theme (bare :root);
- * :root[data-theme='light'] overrides to the warm-paper light palette. A
- * pre-paint inline script in <head> sets data-theme before first paint (no
- * flash); the docgenThemeToggle island persists the choice to localStorage.
+ * a 3-section right rail. Dark is the DEFAULT theme (bare :root); light is
+ * re-derived from the same Radix Sand/Amber scale, not inverted. A pre-paint
+ * inline script in <head> sets data-theme before first paint (no flash); the
+ * docgenThemeToggle island persists the choice to localStorage.
  *
  * Code blocks are highlighted at build time by syntect's class-based output
  * (ClassStyle::Spaced). The token COLORS live in the separate code.css
@@ -13,82 +13,151 @@
  */
 
 /* ============================ design tokens ============================ */
+/* The palette is pitcock's real design system, not the v12 mockup's sampled
+   values: the neutral scale is Radix Sand, the accent is Radix Amber. Dark is
+   not an inversion of light — the two themes are re-derived from the same
+   scale (dark ground is a hand value below Sand 1, and the pane is Sand 1). */
 :root {
-	--bg: #0d0c0a;
-	--bg-elev: #131210;
-	--bg-soft: #ffffff08;
-	--surface: #15140f;
-	--surface-hi: #1c1b16;
-	--border: #232220;
-	--border-strong: #2d2b27;
-	--hairline: #1d1c19;
-	--text: #ecebe5;
-	--text-dim: #a8a59a;
-	--text-mute: #6f6d64;
-	--text-error: #ff8a8a;
-	--accent: oklch(0.78 0.13 75);
-	--accent-soft: oklch(0.78 0.13 75 / 0.14);
-	--accent-line: oklch(0.78 0.13 75 / 0.4);
-	--warn: oklch(0.82 0.13 55);
-	--warn-soft: oklch(0.82 0.13 55 / 0.12);
-	--info: oklch(0.78 0.09 220);
-	--info-soft: oklch(0.78 0.09 220 / 0.12);
-	--talk: oklch(0.78 0.1 320);
-	--talk-soft: oklch(0.78 0.1 320 / 0.12);
-	--code-bg: #1a1814;
-	--code-border: #262320;
+	color-scheme: dark;
+
+	/* ground → pane → island (→ raised for floating surfaces) */
+	--bg: #080807;
+	--bg-elev: #111110; /* the reading pane */
+	--raised: #222221; /* menus, dialogs, popovers */
+	--surface: #191918; /* a card on the pane */
+	--surface-hi: #fefef31b; /* selected row: Sand alpha 4 */
+	--border: #31312e; /* Sand 5 */
+	--border-strong: #3b3a37; /* Sand 6 */
+	--hairline: #2a2a28; /* Sand 4 */
+	--bg-soft: #f6f6f513; /* hover wash: Sand alpha 3 */
+	--text: #eeeeec; /* Sand 12 */
+	--text-dim: #c0bfb9; /* secondary copy, tree leaves */
+	--text-mute: #a6a59e; /* metadata, quiet labels */
+	--text-faint: #6f6d66; /* placeholders, disabled, separators */
+	--text-error: #ff9592;
+	--warn: #ffa057;
+	--warn-soft: #331e0b;
+	--info: #70b8ff;
+	--info-soft: #0d2847;
+	--talk: #e796f3;
+	--talk-soft: #351a35;
+	--code-bg: #080807;
+	--code-border: #2a2a28;
+
+	/* Amber is the brand/reading signal, never the primary action. Filled
+	   primaries are ink, exactly as in pitcock. */
+	--accent: #ffca16; /* accent as text: Amber 11 */
+	--accent-on-ground: #ffca16;
+	--accent-fill: #ffb224; /* accent as fill/icon: Amber 9 */
+	--accent-soft: #ffb22421;
+	--accent-line: #ffca1652;
+	--on-accent: #21201c;
+	--focus-ring: var(--accent);
+	--ink: #eeeeec;
+	--on-ink: #151517;
+
+	/* interaction washes */
+	--soft: #f6f6f513;
+	--soft-2: #fefef31b;
+	--soft-3: #fbfbeb23;
+	--press: #fbfbeb23; /* pressed control: one step stronger than hover */
+	--selected: #fefef31b;
+	--thumb: #3b3a37; /* the switch's raised segment */
+	--pane-ring: transparent;
+	--scrim: rgba(0, 0, 0, 0.5);
+	--sh-card: 0 0 #0000;
+	--sh-lift: 0 6px 16px rgba(0, 0, 0, 0.4);
+	--sh-pop: 0 16px 40px rgba(0, 0, 0, 0.55);
+	--ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+	--spring-soft: cubic-bezier(0.34, 1.3, 0.64, 1);
+
 	--font-sans: 'Geist Variable', 'Geist', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-	--font-mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', 'JetBrains Mono', monospace;
+	--font-mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, 'SFMono-Regular', 'JetBrains Mono', monospace;
 	--font-serif: 'Times New Roman', serif;
-	--r-xs: 3px;
-	--r-sm: 5px;
+	--r-xs: 4px;
+	--r-sm: 6px;
 	--r-md: 8px;
 	--r-lg: 12px;
+	--r-xl: 16px;
 	--left-rail-width: 264px;
 	--right-rail-width: 238px;
-	--topbar-height: 52px;
+	--topbar-height: 48px;
 	font-family: var(--font-sans);
 	background: var(--bg);
 	color: var(--text);
 
 	/* private diff tokens (not part of the canonical palette block) */
-	--diff-added: oklch(0.76 0.12 145);
-	--diff-added-bg: oklch(0.76 0.12 145 / 0.09);
-	--diff-removed: var(--text-error);
-	--diff-removed-bg: oklch(0.67 0.16 25 / 0.1);
-	--diff-modified: oklch(0.82 0.13 55);
-	--diff-renamed: oklch(0.74 0.12 300);
+	--diff-added: #71d083;
+	--diff-added-bg: #70fe8c1b;
+	--diff-removed: #ff9592;
+	--diff-removed-bg: #ff173f2d;
+	--diff-modified: #ffca16;
+	--diff-modified-bg: #ffca1622;
+	--diff-renamed: #70b8ff;
+	--diff-renamed-bg: #0077ff3a;
 }
 
 :root[data-theme='light'] {
-	--bg: #faf8f3;
+	color-scheme: light;
+
+	--bg: #f1f0ef; /* Sand 3 */
 	--bg-elev: #ffffff;
-	--bg-soft: #00000005;
-	--surface: #f4f1ea;
-	--surface-hi: #ece8de;
-	--border: #e2ddd0;
-	--border-strong: #d5cfbf;
-	--hairline: #e8e3d6;
-	--text: #181712;
-	--text-dim: #5f5d54;
-	--text-mute: #918e83;
-	--text-error: #dc2626;
-	--accent: oklch(0.55 0.14 60);
-	--accent-soft: oklch(0.55 0.14 60 / 0.1);
-	--accent-line: oklch(0.55 0.14 60 / 0.3);
-	--warn-soft: oklch(0.82 0.13 55 / 0.1);
-	--info-soft: oklch(0.78 0.09 220 / 0.1);
-	--talk-soft: oklch(0.78 0.1 320 / 0.1);
-	--code-bg: #efebdf;
-	--code-border: #ddd7c5;
+	--raised: #ffffff;
+	--surface: #f9f9f8; /* Sand 2 */
+	--surface-hi: #1f150019; /* Sand alpha 4 */
+	--border: #dad9d6; /* Sand 6 */
+	--border-strong: #cfceca; /* Sand 7 */
+	--hairline: #e9e8e6; /* Sand 4 */
+	--bg-soft: #20100010; /* Sand alpha 3 */
+	--text: #21201c; /* Sand 12 */
+	--text-dim: #555550;
+	--text-mute: #686862;
+	--text-faint: #8d8d86; /* Sand 9 */
+	--text-error: #ce2c31;
+	--warn: #cc4e00;
+	--warn-soft: #ffefd6;
+	--info: #0d74ce;
+	--info-soft: #e6f4fe;
+	--talk: #953ea3;
+	--talk-soft: #fbebfb;
+	--code-bg: #f9f9f8;
+	--code-border: #e9e8e6;
+
+	/* Amber 8 is the light fill (Amber 9 on white is a highlighter); Amber 11
+	   is the text-safe step. The brand mark keeps the fill. */
+	--accent: #ab6400;
+	/* Amber 11 is 4.61:1 on the white pane but 4.05:1 on the Sand ground; the
+	   rail's active link sits on the ground, so it takes a half-step darker. */
+	--accent-on-ground: #9a5b00;
+	--accent-fill: #e2a336;
+	--accent-soft: #e2a33626;
+	--accent-line: #ab640047;
+	--on-accent: #21201c;
+	--focus-ring: var(--accent);
+	--ink: #21201c;
+	--on-ink: #ffffff;
+
+	--soft: #20100010;
+	--soft-2: #1f150019;
+	--soft-3: #1f180021;
+	--press: #1f180021;
+	--selected: #1f150019;
+	--thumb: #ffffff;
+	--pane-ring: transparent;
+	--scrim: rgba(33, 32, 28, 0.18);
+	--sh-card: 0 1px 2px rgba(33, 32, 28, 0.06);
+	--sh-lift: 0 4px 12px rgba(33, 32, 28, 0.09);
+	--sh-pop: 0 16px 40px rgba(33, 32, 28, 0.16);
 
 	/* private diff tokens — light */
-	--diff-added: #1a7f37;
-	--diff-added-bg: #e6ffec;
-	--diff-removed: #cf222e;
-	--diff-removed-bg: #ffebe9;
-	--diff-modified: #9a6700;
-	--diff-renamed: #8250df;
+	--diff-added: #2a7e3b;
+	--diff-added-bg: #e9f6e9;
+	--diff-removed: #ce2c31;
+	--diff-removed-bg: #feebec;
+	--diff-modified: #ab6400;
+	--diff-modified-bg: #fff7c2;
+	--diff-renamed: #0d74ce;
+	--diff-renamed-bg: #e6f4fe;
 }
 
 /* ============================== reset / base ============================== */
@@ -136,6 +205,19 @@ body {
 	-webkit-font-smoothing: antialiased;
 	text-rendering: optimizeLegibility;
 }
+
+/* Fixed app shell (pitcock ShellFrame). Layout pages (page/graph/history carry
+   .docgen-shell) pin the shell to the viewport: the frame — topbar, ground
+   gutters, the pane's rounded shoulders — never moves, and the pane scrolls
+   its own content instead of the document. Pages that are their own workspace
+   (diff, editor, preview) keep ordinary document scrolling. */
+.docgen-shell {
+	height: 100vh;
+	height: 100dvh;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
 button,
 input {
 	font-family: inherit;
@@ -148,22 +230,22 @@ a {
 	text-decoration: none;
 }
 :focus-visible {
-	outline: 1px solid var(--accent);
+	outline: 2px solid var(--focus-ring);
 	outline-offset: 2px;
 }
 ::selection {
 	background: var(--accent-soft);
+	color: var(--text);
 }
 kbd,
 .docgen-kbd {
 	font-family: var(--font-mono);
 	font-size: 10.5px;
-	color: var(--text-dim);
-	background: var(--bg-elev);
-	border: 1px solid var(--border);
-	border-bottom-width: 2px;
+	color: var(--text-mute);
+	background: var(--soft);
+	box-shadow: inset 0 0 0 1px var(--hairline);
 	padding: 1px 5px 0;
-	border-radius: 4px;
+	border-radius: var(--r-xs);
 	line-height: 1.5;
 }
 
@@ -178,10 +260,10 @@ kbd,
 ::-webkit-scrollbar-thumb {
 	border: 2px solid var(--bg);
 	border-radius: 999px;
-	background: var(--border);
+	background: var(--border-strong);
 }
 ::-webkit-scrollbar-thumb:hover {
-	background: var(--border-strong);
+	background: var(--text-faint);
 }
 
 /* ================================ topbar ================================ */
@@ -197,39 +279,44 @@ kbd,
 	display: grid;
 	grid-template-columns: var(--left-rail-width) minmax(0, 1fr);
 	height: var(--topbar-height);
-	border-bottom: 1px solid var(--border);
-	background: color-mix(in srgb, var(--bg) 92%, transparent);
-	backdrop-filter: blur(8px);
+	/* Opaque ground: the topbar, sidebar and rail read as one seamless ground
+	   canvas (pitcock shell). It must stay opaque because the page scrolls
+	   under this sticky bar. */
+	background: var(--bg);
 }
 .docgen-topbar__brand {
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	height: var(--topbar-height);
-	padding: 0 18px;
+	gap: 4px;
+	width: calc(100% - 12px);
+	height: 34px;
+	margin: 7px 8px;
+	padding: 0;
+	border-radius: var(--r-md);
 	color: var(--text);
 	text-decoration: none;
+	transition: background-color 0.12s var(--ease);
 }
 .docgen-topbar__brand:hover {
-	background: var(--bg-soft);
+	background: var(--soft);
 }
 .docgen-brand-mark {
 	flex-shrink: 0;
-	width: 22px;
-	height: 22px;
+	width: 32px;
+	height: 32px;
 }
 .docgen-brand-mark__orbit {
-	stroke: var(--accent-line);
-	opacity: 0.45;
+	stroke: var(--accent);
+	opacity: 0.5;
 }
 .docgen-brand-mark__ray {
-	stroke: var(--accent);
+	stroke: var(--accent-fill);
 }
 .docgen-brand-mark__node {
-	fill: var(--accent);
+	fill: var(--accent-fill);
 }
 .docgen-brand-mark__hub {
-	fill: var(--accent);
+	fill: var(--accent-fill);
 }
 .docgen-brand-mark__core {
 	fill: var(--bg);
@@ -237,43 +324,57 @@ kbd,
 .docgen-brand-name {
 	font-size: 14px;
 	font-weight: 500;
+	letter-spacing: -0.01em;
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+/* The search trigger is absolutely centered on the VIEWPORT (the topbar is
+   its containing block): centering it over the pane+rail instead put the
+   optical center ~130px right of true center. left/right 0 + margin auto, no
+   transform, so the body-appended search palette keeps its viewport anchor.
+   Its old middle grid track stays as empty spacing under the actions. */
 .docgen-topbar__main {
-	display: flex;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(240px, 420px) minmax(0, 1fr);
 	align-items: center;
-	justify-content: space-between;
 	gap: 16px;
 	height: var(--topbar-height);
-	padding: 0 22px;
+	padding: 0 16px;
 	min-width: 0;
 }
 
-/* centered search trigger pill */
+/* search trigger — pitcock wb-search: one soft wash, no border, centered on
+   the viewport. The width floor keeps clear of the brand column and the
+   actions at the compact flip (1101px still clears both). */
 .docgen-search-trigger {
+	position: absolute;
+	left: 0;
+	right: 0;
+	margin-inline: auto;
+	width: min(420px, calc(100vw - 570px));
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	min-width: min(360px, 42vw);
-	height: 32px;
-	padding: 6px 10px;
-	border: 1px solid var(--border);
+	gap: 9px;
+	min-width: 0;
+	height: 30px;
+	padding: 0 10px;
+	border: 0;
 	border-radius: var(--r-md);
-	background: var(--surface);
+	background: var(--soft);
 	color: var(--text-dim);
 	font-size: 13px;
-	transition: border-color 0.12s, background 0.12s;
+	transition: background-color 0.12s var(--ease), color 0.12s var(--ease);
+	box-shadow: inset 0 0 0 1px var(--border);
 }
 .docgen-search-trigger:hover {
-	border-color: var(--border-strong);
-	background: var(--surface-hi);
+	background: var(--soft-2);
+	color: var(--text);
 }
 .docgen-search-trigger__icon {
-	width: 15px;
-	height: 15px;
+	width: 16px;
+	height: 16px;
 	flex-shrink: 0;
 }
 .docgen-search-trigger__label {
@@ -284,29 +385,42 @@ kbd,
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+.docgen-search-trigger .docgen-kbd {
+	color: var(--text-dim);
+}
 .docgen-topbar__actions {
+	grid-column: 3;
+	justify-self: end;
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	margin-left: auto;
 }
 
-/* segmented control strip (port of btn-strip.css) */
+/* The layout dock is pitcock's ButtonGroup `plain` (.seg): joined actions are
+   one hairline-outlined object with a rule between the buttons — never a soft
+   track, which is the state device's skin (the switch beside it). Items sit
+   flush at the 28px control height; outer corners follow the group's 8px, the
+   inner ones are square. Hover a3, a toggled control (aria-pressed) holds a4,
+   a press dips to a5 — and the state wash outlasts hover. */
 .docgen-btn-strip {
 	display: inline-flex;
-	align-items: stretch;
-	height: 32px;
-	border: 1px solid var(--border);
+	align-items: center;
+	gap: 0;
+	height: 28px;
+	padding: 0;
+	border: 0;
 	border-radius: var(--r-md);
-	background: var(--surface);
+	background: transparent;
+	box-shadow: inset 0 0 0 1px var(--border);
 }
 .docgen-btn-strip > * {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	min-width: 32px;
-	height: 100%;
-	padding: 0 10px;
+	width: 28px;
+	min-width: 28px;
+	height: 28px;
+	padding: 0;
 	border: 0;
 	border-radius: 0;
 	background: transparent;
@@ -315,99 +429,137 @@ kbd,
 	font: inherit;
 	font-size: 13px;
 	box-shadow: none;
-}
-.docgen-btn-strip > .icon-only {
-	padding: 0;
+	transition: background-color 0.12s var(--ease), color 0.12s var(--ease);
 }
 .docgen-btn-strip > *:first-child {
-	border-top-left-radius: var(--r-md);
-	border-bottom-left-radius: var(--r-md);
+	border-radius: var(--r-md) 0 0 var(--r-md);
 }
 .docgen-btn-strip > *:last-child {
-	border-top-right-radius: var(--r-md);
-	border-bottom-right-radius: var(--r-md);
+	border-radius: 0 var(--r-md) var(--r-md) 0;
+}
+/* the rule between two joined buttons (pitcock .seg) */
+.docgen-btn-strip > * + * {
+	box-shadow: inset 1px 0 0 var(--border);
 }
 .docgen-btn-strip > *:hover:not(:disabled):not([aria-disabled='true']) {
-	background: var(--bg-soft);
+	background: var(--soft);
 	color: var(--text);
 }
-.docgen-btn-strip > .is-active,
-.docgen-btn-strip > [aria-pressed='true'] {
-	background: var(--bg-soft);
+.docgen-btn-strip > .is-active:not(:disabled):not([aria-disabled='true']),
+.docgen-btn-strip > [aria-pressed='true']:not(:disabled):not([aria-disabled='true']) {
+	background: var(--selected);
 	color: var(--text);
 }
-.docgen-btn-strip > * + * {
-	border-left: 1px solid var(--border);
+.docgen-btn-strip > *:active:not(:disabled):not([aria-disabled='true']) {
+	background: var(--press);
+	color: var(--text);
 }
 .docgen-btn-strip > *:disabled,
 .docgen-btn-strip > *[aria-disabled='true'] {
-	opacity: 0.55;
+	opacity: 0.45;
 	cursor: default;
 }
 .docgen-btn-strip svg {
-	width: 15px;
-	height: 15px;
+	width: 14px;
+	height: 14px;
 }
 
-/* theme toggle segmented pill (port of ThemeToggle.svelte) */
+/* Theme switch — the one segmented device on the bar: a soft track with a
+   raised thumb carrying the chosen segment. Every container on the bar wears
+   the same Sand-6 hairline (dock, track, compact pills); what differs is the
+   contents — joined rules here, a lifted thumb there — so the edge reads as
+   one system and the contents carry the semantics. */
 .docgen-theme-toggle {
 	display: inline-flex;
 	align-items: center;
-	height: 32px;
+	height: 28px;
 	padding: 2px;
-	border: 1px solid var(--border);
+	border: 0;
 	border-radius: 999px;
-	background: var(--surface);
+	background: var(--soft);
+	box-shadow: inset 0 0 0 1px var(--border);
 }
 .docgen-theme-toggle__btn {
 	display: grid;
 	place-items: center;
-	width: 28px;
-	height: 26px;
+	width: 24px;
+	height: 24px;
 	padding: 0;
 	border: 0;
 	border-radius: 999px;
 	background: transparent;
 	color: var(--text-mute);
-	transition: color 0.12s;
+	transition: color 0.12s var(--ease), background-color 0.12s var(--ease), box-shadow 0.12s var(--ease);
 }
 .docgen-theme-toggle__btn:hover {
 	color: var(--text);
 }
 .docgen-theme-toggle__btn.is-active {
-	background: var(--bg-elev);
+	background: var(--thumb);
 	color: var(--text);
-	box-shadow: 0 0 0 1px var(--border);
+	box-shadow: inset 0 0 0 1px var(--border), var(--sh-card);
 }
 .docgen-theme-toggle__btn svg {
-	width: 15px;
-	height: 15px;
+	width: 14px;
+	height: 14px;
 }
 
-/* compact-only topbar icon buttons: nav hamburger (left), page-contents / rail
-   toggle and overflow (⋯) menu (right). All hidden on desktop; the compact
-   media query below reveals them. They share the same square icon-button chrome. */
-.docgen-sidebar-toggle,
+/* compact-only topbar controls: the nav hamburger (lead pill) and the trailing
+   pair (page contents / ⋯ overflow) riding one capsule — pitcock's phone Topbar
+   pattern: clusters rest in pills, not loose on the ground. Hidden on desktop;
+   the compact media query reveals them at the coarse floor. */
+.docgen-sidebar-toggle {
+	display: none;
+	flex-shrink: 0;
+	width: 34px;
+	height: 34px;
+	border: 0;
+	border-radius: 999px;
+	background: var(--soft);
+	box-shadow: inset 0 0 0 1px var(--border);
+	color: var(--text-dim);
+	transition: background-color 0.12s var(--ease), color 0.12s var(--ease);
+}
+.docgen-sidebar-toggle:hover {
+	background: var(--soft-2);
+	color: var(--text);
+}
+.docgen-sidebar-toggle[aria-expanded='true'] {
+	background: var(--soft-3);
+	color: var(--text);
+}
+.docgen-sidebar-toggle:active {
+	background: var(--press);
+	color: var(--text);
+}
 .docgen-rail-toggle,
 .docgen-overflow-toggle {
 	display: none;
 	flex-shrink: 0;
-	width: 34px;
-	height: 32px;
-	border: 1px solid var(--border);
-	border-radius: var(--r-sm);
-	background: var(--surface);
-	color: var(--text);
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
+	color: var(--text-dim);
+	transition: background-color 0.12s var(--ease), color 0.12s var(--ease);
 }
-.docgen-sidebar-toggle:hover,
 .docgen-rail-toggle:hover,
 .docgen-overflow-toggle:hover {
-	border-color: var(--border-strong);
+	background: var(--soft-2);
+	color: var(--text);
 }
-.docgen-overflow-toggle[aria-expanded='true'],
-.docgen-rail-toggle[aria-expanded='true'] {
-	background: var(--bg-soft);
-	border-color: var(--border-strong);
+.docgen-rail-toggle[aria-expanded='true'],
+.docgen-overflow-toggle[aria-expanded='true'] {
+	background: var(--soft-3);
+	color: var(--text);
+}
+.docgen-rail-toggle:active,
+.docgen-overflow-toggle:active {
+	background: var(--press);
+	color: var(--text);
+}
+.docgen-topbar__trail {
+	display: none;
+	flex-shrink: 0;
 }
 .docgen-sidebar-backdrop,
 .docgen-rail-backdrop {
@@ -417,8 +569,13 @@ kbd,
 /* ================================ layout ================================ */
 .docgen-layout {
 	display: grid;
+	/* Fill the shell below the topbar: the single row is pinned to the layout's
+   height and the columns stretch into it (default `stretch`), each scrolling
+   its own content — the frame never grows with the page. */
+	flex: 1;
+	min-height: 0;
+	grid-template-rows: minmax(0, 1fr);
 	grid-template-columns: var(--left-rail-width) 5px minmax(0, 1fr) var(--right-rail-width);
-	align-items: start;
 	/* No max-width / auto-margins: the sidebar and right rail are nailed to the
 	   viewport edges on wide screens. The readable measure is constrained by
 	   `.docgen-doc-content` (max-width) inside the content column instead, so only
@@ -426,12 +583,10 @@ kbd,
 }
 
 /* draggable sidebar resize handle (port of starter +layout .rail-resizer);
-   occupies the 5px grid track between sidebar and content. layout.js drives it. */
+   occupies the 5px grid track between sidebar and content. layout.js drives it.
+   Pitcock gutter model: the guide is invisible at rest, appears on hover. */
 .docgen-rail-resizer {
-	position: sticky;
-	top: var(--topbar-height);
-  margin-left: -3px;
-	height: calc(100vh - var(--topbar-height));
+	margin-left: -3px;
 	width: 5px;
 	cursor: col-resize;
 	background: transparent;
@@ -446,21 +601,43 @@ kbd,
 	top: 0;
 	bottom: 0;
 	width: 1px;
-	background: var(--border);
-	transition: background 0.12s, width 0.12s, left 0.12s;
+	background: transparent;
+	transition: background 0.15s var(--ease), width 0.15s var(--ease), left 0.15s var(--ease);
 }
 .docgen-rail-resizer:hover::before,
 .docgen-rail-resizer.is-dragging::before {
-	background: var(--accent);
+	background: var(--soft-3);
 	width: 2px;
 	left: 1.5px;
 }
+.docgen-rail-resizer:hover::before {
+	background: var(--soft-2);
+}
+/* The reading pane (pitcock PaneFrame): surface on ground, docked below the
+   topbar with an 8px gutter of ground on top/right, rounded shoulders always
+   on show and the foot flush with the viewport edge. It is the scroller, so
+   short content still fills to the bottom. Its edge is the surface's own
+   contrast, not an outer ring — pitcock panes carry no ring at rest. The left
+   edge sits on the grid track, so the resizer is its gutter. */
 .docgen-content {
 	min-width: 0;
-	padding: 40px 48px 96px;
+	min-height: 0;
+	/* The pane is the scroller, not the document — so short pages still fill to
+   the foot. In-pane anchors land clear of the top edge (the html
+   scroll-padding only serves pages that still scroll the document, like the
+   diff view). */
+	overflow-y: auto;
+	scroll-padding-top: 24px;
+	padding: 32px 48px 80px;
+	background: var(--bg-elev);
+	border-radius: var(--r-lg) var(--r-lg) 0 0;
+}
+.docgen-content::-webkit-scrollbar-thumb {
+	/* the thumb's inset border must match the surface it rides on */
+	border-color: var(--bg-elev);
 }
 .docgen-doc-content {
-	max-width: 760px;
+	max-width: 720px;
 	margin: 0 auto;
 	color: var(--text);
 	font-size: 15px;
@@ -486,28 +663,28 @@ kbd,
 
 /* =============================== sidebar =============================== */
 .docgen-sidebar {
-	position: sticky;
-	top: var(--topbar-height);
-	align-self: start;
-	height: calc(100vh - var(--topbar-height));
+	/* Stretches to the shell row and scrolls itself; the compact flip re-pins it
+   as an off-canvas drawer. */
+	min-height: 0;
 	overflow-y: auto;
-	padding: 12px 8px;
+	padding: 4px;
 }
 .docgen-sidebar__graph {
 	display: inline-flex;
 	align-items: center;
 	gap: 8px;
-	margin: 0 0 12px 8px;
-	padding: 4px 10px;
-	border: 1px solid var(--border);
+	margin: 0 0 10px 0;
+	padding: 5px 8px;
+	border: 0;
 	border-radius: var(--r-sm);
+	background: var(--soft);
 	color: var(--text-dim);
 	font-size: 13px;
-	transition: color 0.12s, border-color 0.12s;
+	transition: background-color 0.12s var(--ease), color 0.12s var(--ease);
 }
 .docgen-sidebar__graph:hover {
 	color: var(--text);
-	border-color: var(--border-strong);
+	background: var(--soft-2);
 }
 
 /* doc tree (port of DocTree.svelte) */
@@ -518,7 +695,7 @@ kbd,
 	display: flex;
 	flex-direction: column;
 	gap: 1px;
-	font-weight: 400;
+	font-weight: 450;
 }
 .docgen-tree .docgen-tree {
 	padding-left: 12px;
@@ -540,29 +717,33 @@ kbd,
 	align-items: center;
 	gap: var(--tree-gap);
 	width: 100%;
-	min-height: 28px;
+	min-height: 26px;
 	padding: 0 8px;
-	border: 1px solid transparent;
-	border-radius: var(--r-sm);
+	border: 0;
+	border-radius: var(--r-md);
 	color: var(--text-dim);
-	font-size: 13.5px;
+	font-size: 13px;
 	cursor: pointer;
 	list-style: none;
 	user-select: none;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	transition: background-color 0.15s var(--ease), color 0.15s var(--ease);
 }
 .docgen-tree__summary::-webkit-details-marker {
 	display: none;
 }
 .docgen-tree__summary:hover {
-	background: var(--surface);
+	background: var(--soft);
 	color: var(--text);
 }
 /* folder-note link: the folder label navigates to its `index.md`. Fills the
    summary so the click target matches a plain folder; the chevron still toggles. */
 .docgen-tree__folder-link {
+	display: flex;
+	align-items: center;
+	align-self: stretch;
 	flex: 1;
 	min-width: 0;
 	color: inherit;
@@ -571,12 +752,13 @@ kbd,
 	white-space: nowrap;
 }
 .docgen-tree__summary.is-active {
-	background: var(--surface-hi);
+	background: var(--selected);
 	color: var(--text);
 }
 .docgen-tree__chev {
 	flex: none;
-	transition: transform 0.15s ease;
+	color: var(--text-mute);
+	transition: transform 0.18s var(--ease);
 	opacity: 0.7;
 }
 .docgen-tree__details[open] > .docgen-tree__summary .docgen-tree__chev {
@@ -590,16 +772,16 @@ kbd,
 	align-items: center;
 	gap: var(--tree-gap);
 	width: 100%;
-	min-height: 28px;
+	min-height: 26px;
 	padding: 0 8px;
-	border: 1px solid transparent;
-	border-radius: var(--r-sm);
+	border: 0;
+	border-radius: var(--r-md);
 	color: var(--text-dim);
-	font-size: 13.5px;
+	font-size: 13px;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	transition: background 0.1s, color 0.1s;
+	transition: background-color 0.15s var(--ease), color 0.15s var(--ease);
 }
 /* the leaf row's empty chevron slot: keeps leaf labels aligned with folder labels */
 .docgen-tree__link::before {
@@ -609,75 +791,77 @@ kbd,
 	flex: none;
 }
 .docgen-tree__link:hover {
-	background: var(--surface);
+	background: var(--soft);
 	color: var(--text);
 }
 .docgen-tree__item.is-active .docgen-tree__link {
-	background: var(--surface-hi);
+	background: var(--selected);
 	color: var(--text);
+	font-weight: 500;
 }
 
 /* =============================== right rail =============================== */
+/* On the ground canvas, like the sidebar — no divider, spacing does the work.
+   Labels are sentence-case: the rail is a quiet index, not a section banner. */
 .docgen-rail {
-	position: sticky;
-	top: calc(var(--topbar-height) + 32px);
-	align-self: start;
+	min-height: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 26px;
-	max-height: calc(100vh - var(--topbar-height) - 48px);
+	gap: 24px;
 	overflow-y: auto;
-	padding-left: 16px;
-	padding-right: 16px;
-	border-left: 1px solid var(--hairline);
+	padding: 16px 8px 16px 16px;
 	font-size: 12.5px;
 }
 .docgen-rail:empty {
 	padding: 0;
-	border: 0;
 }
 .docgen-rail__section {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
+	gap: 8px;
 	min-width: 0;
 }
 .docgen-rail__section h2 {
 	margin: 0;
 	color: var(--text-mute);
-	font-family: var(--font-mono);
-	font-size: 10.5px;
+	font-family: var(--font-sans);
+	font-size: 11.5px;
 	font-weight: 500;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
+	letter-spacing: 0;
+	text-transform: none;
 }
 
 /* 1 — On this page (TOC scrollspy) */
 .docgen-rail__toc {
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
+	gap: 1px;
 }
 .docgen-rail__toc-link {
 	display: block;
-	width: 100%;
-	padding: 4px 0;
+	width: calc(100% + 16px);
+	margin: 0 -8px;
+	padding: 4px 8px;
 	border: 0;
+	border-radius: var(--r-sm);
 	background: transparent;
 	color: var(--text-mute);
 	font: inherit;
 	line-height: 1.4;
 	text-align: left;
 	cursor: pointer;
+	transition: background-color 0.12s var(--ease), color 0.12s var(--ease);
 }
 .docgen-rail__toc-link:hover {
+	background: var(--soft);
 	color: var(--text-dim);
 }
 .docgen-rail__toc-link.is-active {
-	color: var(--accent);
+	color: var(--accent-on-ground);
+	font-weight: 500;
 }
 .docgen-rail__toc-link.is-depth-3 {
-	padding-left: 12px;
+	padding-left: 20px;
 	font-size: 12px;
 }
 
@@ -685,33 +869,43 @@ kbd,
 .docgen-rail__info {
 	display: flex;
 	flex-direction: column;
-	gap: 7px;
+	gap: 6px;
 }
 .docgen-rail__info-row {
 	display: grid;
-	grid-template-columns: 58px minmax(0, 1fr);
+	grid-template-columns: 52px minmax(0, 1fr);
 	gap: 8px;
 	align-items: baseline;
 	color: var(--text-mute);
+	font-size: 12px;
+}
+.docgen-rail__info-row > span {
+	min-width: 0;
+	font-size: 11.5px;
 }
 .docgen-rail__info-row a,
-.docgen-rail__info-row strong,
-.docgen-rail__info-row span {
+.docgen-rail__info-row strong {
 	min-width: 0;
 	overflow: hidden;
 	color: var(--text-dim);
 	font-family: var(--font-mono);
-	font-size: 10.5px;
+	font-size: 11.5px;
 	font-weight: 400;
+	font-variant-numeric: tabular-nums;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+.docgen-rail__info-row a {
+	display: inline-flex;
+	align-items: center;
+	min-height: 24px;
+}
 
-/* 3 — Referenced by (backlink cards) */
+/* 3 — Referenced by (a wash row, not a card-in-a-card) */
 .docgen-rail__backlinks {
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
+	gap: 4px;
 	margin: 0;
 	padding: 0;
 	list-style: none;
@@ -720,20 +914,21 @@ kbd,
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
-	padding: 6px 8px;
-	border: 1px solid var(--border);
+	padding: 7px 9px;
+	border: 0;
 	border-radius: var(--r-sm);
+	background: var(--soft);
 	color: var(--text-dim);
 	text-decoration: none;
-	transition: border-color 0.12s, color 0.12s;
+	transition: background-color 0.12s var(--ease), color 0.12s var(--ease);
 }
 .docgen-rail__backlink:hover {
-	border-color: var(--accent-line);
+	background: var(--soft-2);
 	color: var(--text);
 }
 .docgen-rail__backlink small {
 	color: var(--text-mute);
-	font-size: 11px;
+	font-size: 11.5px;
 	line-height: 1.35;
 }
 
@@ -741,7 +936,7 @@ kbd,
 /* Rendered on every non-home page from the frontmatter `title`/`description`.
    The body's own first `<h1>` is hidden (below) so the title shows once, here. */
 .docgen-doc-header {
-	max-width: 760px;
+	max-width: 720px;
 	margin: 0 auto 32px;
 }
 .docgen-app.is-full-width .docgen-doc-header {
@@ -754,6 +949,7 @@ kbd,
 	font-weight: 500;
 	letter-spacing: -0.025em;
 	line-height: 1.1;
+	text-wrap: balance;
 }
 .docgen-doc-lede {
 	max-width: 60ch;
@@ -798,6 +994,7 @@ kbd,
 }
 .docgen-doc-content p {
 	margin: 0 0 14px;
+	text-wrap: pretty;
 }
 .docgen-doc-content img {
 	max-width: 100%;
@@ -860,13 +1057,13 @@ kbd,
 	z-index: 60;
 	max-width: 320px;
 	padding: 10px 12px;
-	border: 1px solid var(--border-strong);
+	border: 1px solid var(--border);
 	border-radius: var(--r-md);
-	background: var(--bg-elev);
+	background: var(--raised);
 	color: var(--text-dim);
 	font-size: 12.5px;
 	line-height: 1.5;
-	box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+	box-shadow: var(--sh-pop);
 	pointer-events: none;
 	opacity: 0;
 	transform: translateY(-2px);
@@ -911,6 +1108,7 @@ kbd,
 	border: 1px solid var(--code-border);
 	border-radius: var(--r-md);
 	background: var(--code-bg);
+	font-family: var(--font-mono);
 }
 .docgen-doc-content pre code {
 	display: block;
@@ -1071,64 +1269,71 @@ kbd,
 	z-index: 100;
 	display: grid;
 	place-items: start center;
-	padding-top: 12vh;
+	padding: max(96px, 12vh) 16px 16px;
 }
 .docgen-search-backdrop {
 	position: absolute;
 	inset: 0;
 	border: 0;
-	background: color-mix(in srgb, var(--bg) 70%, transparent);
-	backdrop-filter: blur(6px);
+	background: var(--scrim);
+	backdrop-filter: blur(8px) saturate(1.2);
 }
 .docgen-search-box {
 	position: relative;
 	z-index: 1;
-	width: min(720px, 92vw);
-	max-height: 74vh;
+	width: min(640px, 100%);
+	max-height: min(72vh, 640px);
 	display: flex;
 	flex-direction: column;
-	border: 1px solid var(--border-strong);
+	border: 1px solid var(--border);
 	border-radius: var(--r-lg);
-	background: var(--bg-elev);
-	box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--hairline);
+	background: var(--raised);
+	box-shadow: var(--sh-pop);
 	overflow: hidden;
 }
 .docgen-search-input {
 	width: 100%;
-	padding: 14px 18px;
+	padding: 16px 18px;
 	border: 0;
-	border-bottom: 1px solid var(--border);
+	border-bottom: 1px solid var(--hairline);
 	background: transparent;
 	color: var(--text);
 	font: inherit;
-	font-size: 15px;
+	font-size: 16px;
 }
 .docgen-search-input::placeholder {
 	color: var(--text-mute);
 }
 .docgen-search-input:focus-visible {
-	outline: none;
-	border-bottom-color: var(--accent);
-	box-shadow: inset 0 -2px 0 var(--accent);
+	outline: 0;
+	border-bottom-color: var(--border-strong);
+}
+.docgen-search-box:focus-within {
+	border-color: var(--accent-line);
 }
 .docgen-search-results {
 	list-style: none;
 	margin: 0;
-	padding: 8px 8px 12px;
+	padding: 6px;
 	overflow-y: auto;
 }
 .docgen-search-group {
-	padding: 12px 12px 4px;
+	padding: 10px 10px 4px;
 	color: var(--text-mute);
-	font-family: var(--font-mono);
-	font-size: 10px;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
+	font-family: var(--font-sans);
+	font-size: 11.5px;
+	font-weight: 500;
+	letter-spacing: 0;
+	text-transform: none;
 }
 .docgen-search-empty {
-	padding: 36px 18px;
+	padding: 40px 18px;
 	text-align: center;
 	color: var(--text-mute);
+}
+.docgen-search-result {
+	border-radius: var(--r-sm);
+	overflow: hidden;
 }
 .docgen-search-result a,
 .docgen-search-result button {
@@ -1146,7 +1351,7 @@ kbd,
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 1px;
+	gap: 2px;
 }
 .docgen-search-result__title {
 	color: var(--text);
@@ -1172,13 +1377,13 @@ kbd,
 	white-space: nowrap;
 }
 .docgen-search-result mark {
-	padding: 0 1px;
-	border-radius: 2px;
+	padding: 0 2px;
+	border-radius: var(--r-xs);
 	background: var(--accent-soft);
-	color: var(--accent);
+	color: var(--accent-on-ground);
 }
 .docgen-search-result.is-selected {
-	background: var(--surface-hi);
+	background: var(--selected);
 }
 .docgen-search-result.is-selected a,
 .docgen-search-result.is-selected button {
@@ -1552,6 +1757,13 @@ kbd,
 	margin: 0 0 10px;
 	font-size: 13px;
 }
+/* The search label carries a visually-hidden 1×1 span. Without a positioned
+   ancestor that absolute box takes its static position at the END of the
+   document and inflates the shell's scrollable overflow (which lets
+   scrollIntoView drag the whole frame). The label is its containing block. */
+.docgen-base-search-label {
+	position: relative;
+}
 /* Shared field/input look. */
 .docgen-base-controls input[type='search'],
 .docgen-base-controls input[type='date'],
@@ -1795,72 +2007,79 @@ kbd,
 	display: grid;
 	/* `minmax(0, …)` so a long title/subtitle can't force the track wider than
 	   the content column (see `.docgen-home`). */
-	grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-	gap: 36px;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 32px;
 	align-items: end;
-	padding-bottom: 26px;
+	padding-bottom: 22px;
 	border-bottom: 1px solid var(--hairline);
 }
 .docgen-home__title {
-	margin: 0 0 6px;
+	margin: 0 0 8px;
 	color: var(--text);
-	font-size: 42px;
-	font-weight: 400;
+	font-size: 40px;
+	font-weight: 500;
 	letter-spacing: -0.03em;
 	line-height: 1.05;
+	text-wrap: balance;
 }
 .docgen-home__sub {
-	max-width: 52ch;
+	max-width: 54ch;
 	margin: 0;
 	color: var(--text-dim);
-	font-size: 15.5px;
+	font-size: 16px;
 }
+/* The stats are a quiet metadata line, not a dashboard: small tabular numbers
+   and sentence-case labels. */
 .docgen-home__stats {
-	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 20px;
+	display: flex;
+	align-items: flex-end;
+	gap: 24px;
 }
 .docgen-home__stat {
 	min-width: 0;
-	padding-left: 14px;
-	border-left: 1px solid var(--hairline);
+	text-align: right;
 }
 .docgen-home__stat-num {
 	overflow: hidden;
 	color: var(--text);
-	font-size: 24px;
-	line-height: 1;
+	font-size: 15px;
+	font-weight: 500;
+	line-height: 1.2;
+	font-variant-numeric: tabular-nums;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 .docgen-home__stat-lbl,
 .docgen-home__col-title {
 	color: var(--text-mute);
-	font-family: var(--font-mono);
-	font-size: 10.5px;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
+	font-family: var(--font-sans);
+	font-size: 11.5px;
+	font-weight: 500;
+	letter-spacing: 0;
+	text-transform: none;
 }
 .docgen-home__stat-lbl {
-	margin-top: 5px;
+	margin-top: 2px;
 }
 .docgen-home__search {
 	display: flex;
 	align-items: center;
 	gap: 12px;
 	width: 100%;
-	height: 48px;
+	height: 46px;
 	padding: 0 14px;
-	border: 1px solid var(--border);
+	border: 0;
 	border-radius: var(--r-md);
-	background: var(--surface);
-	color: var(--text-dim);
+	background: var(--soft);
+	color: var(--text-mute);
 	font: inherit;
+	font-size: 15px;
 	text-align: left;
 	cursor: pointer;
+	transition: background-color 0.12s var(--ease), color 0.12s var(--ease);
 }
 .docgen-home__search:hover {
-	border-color: var(--accent-line, var(--border-strong));
+	background: var(--soft-2);
 	color: var(--text);
 }
 .docgen-home__search-ph {
@@ -1872,9 +2091,9 @@ kbd,
 }
 .docgen-home__search-hint {
 	color: var(--text-mute);
-	font-family: var(--font-mono);
-	font-size: 11px;
-	text-transform: uppercase;
+	font-family: var(--font-sans);
+	font-size: 11.5px;
+	font-weight: 500;
 }
 .docgen-home__grid {
 	display: grid;
@@ -1885,68 +2104,75 @@ kbd,
 .docgen-home__col-title {
 	display: flex;
 	justify-content: space-between;
-	margin: 0 0 12px 2px;
+	margin: 0 10px 8px;
+}
+.docgen-home__col-title span:last-child {
+	color: var(--text-mute);
+	font-variant-numeric: tabular-nums;
 }
 .docgen-home__cards {
 	display: grid;
-	gap: 12px;
+	gap: 2px;
 }
 .docgen-home__card {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	padding: 18px 20px;
-	border: 1px solid var(--border);
-	border-radius: var(--r-md);
-	background: var(--bg-elev);
+	padding: 12px 10px;
+	border: 0;
+	border-radius: var(--r-sm);
+	background: transparent;
 	color: inherit;
 	text-decoration: none;
+	transition: background-color 0.12s var(--ease);
 }
 .docgen-home__card:hover {
-	border-color: var(--border-strong);
-	background: var(--surface-hi);
+	background: var(--soft);
 }
 .docgen-home__card-title {
 	color: var(--text);
+	font-size: 14px;
 	font-weight: 500;
 }
 .docgen-home__card-meta {
 	color: var(--text-mute);
-	font-family: var(--font-mono);
-	font-size: 10.5px;
-	text-transform: uppercase;
+	font-family: var(--font-sans);
+	font-size: 12px;
 }
 .docgen-home__card-meta b {
 	color: var(--text-dim);
-	font-family: var(--font-sans);
-	font-size: 14px;
+	font-size: 13px;
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
 }
 .docgen-home__recent {
 	margin: 0;
-	padding: 16px 18px 14px;
+	padding: 0;
 	list-style: none;
-	border: 1px solid var(--border);
-	border-radius: var(--r-md);
-	background: var(--bg-elev);
+	border: 0;
+	border-radius: 0;
+	background: transparent;
 }
 .docgen-home__recent li {
 	display: flex;
 	align-items: baseline;
 	gap: 10px;
-	padding: 6px 0;
-	border-bottom: 1px dashed var(--hairline);
+	padding: 7px 10px;
+	border: 0;
+	border-radius: var(--r-sm);
 	font-size: 13px;
+	transition: background-color 0.12s var(--ease);
 }
-.docgen-home__recent li:last-child {
-	border-bottom: 0;
+.docgen-home__recent li:hover {
+	background: var(--soft);
 }
 .docgen-home__recent-when {
-	width: 96px;
+	width: 86px;
 	flex-shrink: 0;
 	overflow: hidden;
 	color: var(--text-mute);
-	font-family: var(--font-mono);
-	font-size: 10.5px;
+	font-family: var(--font-sans);
+	font-size: 11.5px;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -1967,11 +2193,17 @@ kbd,
 	.docgen-home__grid {
 		grid-template-columns: 1fr;
 	}
+	.docgen-home__stats {
+		justify-content: flex-start;
+	}
+	.docgen-home__stat {
+		text-align: left;
+	}
 }
 
 /* home-page graph embed (the original surfaces the doc graph on the home page) */
 .docgen-home-graph {
-	max-width: 760px;
+	max-width: 720px;
 	margin: 48px auto 0;
 	padding-top: 32px;
 	border-top: 1px solid var(--hairline);
@@ -2033,10 +2265,10 @@ kbd,
 	z-index: 3;
 	width: min(280px, calc(100% - 24px));
 	padding: 11px 13px;
-	border: 1px solid var(--border-strong);
-	border-radius: var(--r-sm);
-	background: color-mix(in srgb, var(--bg-elev) 94%, transparent);
-	box-shadow: 0 18px 48px #00000055;
+	border: 1px solid var(--border);
+	border-radius: var(--r-md);
+	background: var(--raised);
+	box-shadow: var(--sh-pop);
 	pointer-events: none;
 }
 .docgen-graph__tip[hidden] {
@@ -2071,26 +2303,53 @@ kbd,
 	.docgen-topbar {
 		grid-template-columns: auto minmax(0, 1fr);
 	}
+	.docgen-topbar__brand {
+		width: auto;
+		height: 40px;
+		margin: 4px 4px 4px 8px;
+		padding: 0 8px;
+	}
 	.docgen-topbar__main {
+		display: flex;
 		gap: 8px;
 		padding: 0 10px;
 	}
 	.docgen-search-trigger {
-		min-width: 0;
+		position: static;
 		flex: 1;
+		width: auto;
+		max-width: none;
+		height: 40px;
 	}
-	.docgen-sidebar-toggle,
+	.docgen-sidebar-toggle {
+		display: inline-grid;
+		place-items: center;
+		width: 40px;
+		height: 40px;
+	}
 	.docgen-rail-toggle,
 	.docgen-overflow-toggle {
 		display: inline-grid;
 		place-items: center;
+		width: 36px;
+		height: 36px;
+	}
+	.docgen-topbar__trail {
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		height: 40px;
+		padding: 2px;
+		border-radius: 999px;
+		background: var(--soft);
+		box-shadow: inset 0 0 0 1px var(--border-strong);
 	}
 	/* the layout button strip + theme toggle relocate into a dropdown panel
 	   under the ⋯ button (no markup duplication — just position + visibility). */
 	.docgen-topbar__actions {
 		position: absolute;
 		top: calc(100% + 6px);
-		right: 8px;
+		right: 10px;
 		z-index: 45;
 		display: none;
 		flex-direction: column;
@@ -2103,10 +2362,10 @@ kbd,
 		gap: 10px;
 		width: max-content;
 		padding: 10px;
-		border: 1px solid var(--border-strong);
-		border-radius: var(--r-md);
-		background: var(--bg-elev);
-		box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
+		border: 1px solid var(--border);
+		border-radius: var(--r-lg);
+		background: var(--raised);
+		box-shadow: var(--sh-pop);
 	}
 	.docgen-topbar__actions.is-menu-open {
 		display: flex;
@@ -2127,6 +2386,7 @@ kbd,
 	}
 	.docgen-content {
 		padding: 32px 28px 80px;
+		margin: 8px 8px 0;
 	}
 
 	/* Both drawers anchor at the true viewport top (top:0) and take the full
@@ -2145,20 +2405,21 @@ kbd,
 		height: 100dvh;
 		z-index: 40;
 		background: var(--bg-elev);
-		transition: transform 0.2s ease;
+		transition: transform 0.2s var(--ease);
 	}
 
 	/* left drawer (doc tree) */
 	.docgen-sidebar {
 		left: 0;
 		width: min(86vw, 320px);
-		padding-top: calc(var(--topbar-height) + 16px);
-		border-right: 1px solid var(--border);
+		padding-top: calc(var(--topbar-height) + 12px);
+		padding-bottom: 16px;
+		box-shadow: none;
 		transform: translateX(-100%);
 	}
 	.docgen-sidebar.is-open {
 		transform: none;
-		box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+		box-shadow: var(--sh-pop);
 	}
 
 	/* right drawer (On this page / info / backlinks) */
@@ -2167,14 +2428,14 @@ kbd,
 		width: min(86vw, 340px);
 		max-height: none;
 		margin: 0;
-		padding: calc(var(--topbar-height) + 20px) 18px 20px;
-		border-left: 1px solid var(--border);
+		padding: calc(var(--topbar-height) + 16px) 18px 24px;
 		overflow-y: auto;
+		box-shadow: none;
 		transform: translateX(100%);
 	}
 	.docgen-rail.is-open {
 		transform: none;
-		box-shadow: -16px 0 48px rgba(0, 0, 0, 0.18);
+		box-shadow: var(--sh-pop);
 	}
 
 	/* one shared backdrop style for whichever drawer is open — full viewport,
@@ -2187,33 +2448,90 @@ kbd,
 		height: 100vh;
 		height: 100dvh;
 		z-index: 35;
-		background: rgba(0, 0, 0, 0.4);
+		background: var(--scrim);
+		-webkit-backdrop-filter: blur(4px);
+		backdrop-filter: blur(4px);
 	}
 
-	/* roomier touch targets in the tree */
+	/* roomier touch targets in the tree and the rail */
 	.docgen-tree__summary,
 	.docgen-tree__link {
-		min-height: 36px;
+		min-height: 40px;
+	}
+	.docgen-rail__toc-link {
+		display: flex;
+		align-items: center;
+		min-height: 40px;
+		padding-top: 6px;
+		padding-bottom: 6px;
+	}
+	.docgen-rail__backlink {
+		justify-content: center;
+		min-height: 40px;
 	}
 }
 
 @media (max-width: 600px) {
-	/* phone: reclaim the brand column for content, tighten padding + headings */
+	/* Phone: the pane is the screen. No floating card, no side gutters — just
+	   the topbar's ground above a surface that runs edge to edge. */
 	.docgen-topbar {
 		grid-template-columns: 1fr;
+	}
+	.docgen-topbar__main {
+		padding: 0 12px;
+	}
+	/* a keyboard chord is a keyboard's (pitcock SidebarSearch): no ⌘K under touch */
+	.docgen-search-trigger .docgen-kbd {
+		display: none;
+	}
+	/* the phone's controls: pitcock's 44px floor with a 20px glyph */
+	.docgen-sidebar-toggle {
+		width: 44px;
+		height: 44px;
+	}
+	.docgen-rail-toggle,
+	.docgen-overflow-toggle {
+		width: 40px;
+		height: 40px;
+	}
+	.docgen-topbar__trail {
+		height: 44px;
+	}
+	.docgen-sidebar-toggle svg,
+	.docgen-rail-toggle svg,
+	.docgen-overflow-toggle svg {
+		width: 20px;
+		height: 20px;
 	}
 	.docgen-topbar__brand {
 		display: none;
 	}
 	.docgen-content {
 		padding: 24px 16px 64px;
+		margin: 0;
+		border-radius: 0;
 	}
 	.docgen-doc-title,
 	.docgen-doc-content h1 {
 		font-size: 30px;
 	}
+	.docgen-doc-lede {
+		font-size: 16px;
+	}
 	.docgen-home__title {
-		font-size: 32px;
+		font-size: 34px;
+	}
+	.docgen-home__head {
+		gap: 20px;
+	}
+	.docgen-home__stats {
+		gap: 18px;
+	}
+	.docgen-rail {
+		width: min(88vw, 360px);
+	}
+	.docgen-sidebar {
+		width: min(88vw, 340px);
 	}
 }
 

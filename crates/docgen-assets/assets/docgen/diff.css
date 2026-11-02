@@ -23,10 +23,16 @@
 .docgen-diff-main {
 	width: 100%;
 	min-width: 0;
-	padding: 0;
+	padding: 8px 8px 0;
+	background: var(--bg);
 }
+/* The diff is a workspace pane too: the same ground gap and top-rounded
+	 surface as a document, so switching routes does not feel like changing apps. */
 .docgen-diff-main > #docgen-diff-root {
 	min-width: 0;
+	min-height: calc(100dvh - var(--topbar-height) - 8px);
+	background: var(--bg-elev);
+	border-radius: var(--r-lg) var(--r-lg) 0 0;
 }
 
 /* =============================== .diff-page =============================== */
@@ -38,10 +44,6 @@
 	min-width: 0;
 	color: var(--text);
 	font-size: 13px;
-	--diff-added: oklch(0.76 0.12 145);
-	--diff-added-bg: oklch(0.76 0.12 145 / 0.09);
-	--diff-removed: var(--text-error);
-	--diff-removed-bg: oklch(0.67 0.16 25 / 0.1);
 	--gutter-w: 22px;
 }
 
@@ -72,16 +74,16 @@
 	color: var(--diff-added);
 }
 .diff-page .pill--modified {
-	background: oklch(0.78 0.13 80 / 0.18);
-	color: oklch(0.78 0.13 80);
+	background: var(--diff-modified-bg);
+	color: var(--diff-modified);
 }
 .diff-page .pill--deleted {
 	background: var(--diff-removed-bg);
 	color: var(--diff-removed);
 }
 .diff-page .pill--renamed {
-	background: oklch(0.72 0.1 240 / 0.18);
-	color: oklch(0.72 0.1 240);
+	background: var(--diff-renamed-bg);
+	color: var(--diff-renamed);
 }
 
 /* ========================= warnings / empty-state ======================== */
@@ -159,8 +161,8 @@
 /* ============================== col-resizer ============================== */
 .diff-page .col-resizer {
 	position: sticky;
-	top: var(--topbar-height);
-	height: calc(100vh - var(--topbar-height));
+	top: calc(var(--topbar-height) + 8px);
+	height: calc(100dvh - var(--topbar-height) - 8px);
 	width: 5px;
 	cursor: col-resize;
 	background: transparent;
@@ -175,7 +177,7 @@
 	top: 0;
 	bottom: 0;
 	width: 1px;
-	background: var(--border);
+	background: transparent;
 	transition:
 		background 0.12s,
 		width 0.12s;
@@ -312,11 +314,11 @@
 	column-gap: 12px;
 	row-gap: 2px;
 	align-items: center;
-	padding: 6px 10px;
-	border: 1px solid var(--border);
-	border-top: none;
-	border-radius: var(--r-sm);
-	background: var(--surface);
+	padding: 10px 12px;
+	border: 0;
+	border-bottom: 1px solid var(--hairline);
+	border-radius: 0;
+	background: transparent;
 }
 .commit-header h1 {
 	margin: 0;
@@ -378,22 +380,22 @@
 /* Folded in from DiffTimelineRail.svelte <style>. */
 .timeline-rail {
 	position: sticky;
-	top: var(--topbar-height);
-	height: calc(100vh - var(--topbar-height));
-	max-height: calc(100vh - var(--topbar-height));
+	top: calc(var(--topbar-height) + 8px);
+	height: calc(100dvh - var(--topbar-height) - 8px);
+	max-height: calc(100dvh - var(--topbar-height) - 8px);
 	overflow-y: auto;
 	min-width: 0;
 	padding: 8px 8px 16px;
 }
 
 .timeline-rail h3 {
-	margin: 8px 4px 3px;
+	margin: 8px 6px 4px;
 	color: var(--text-mute);
-	font-family: var(--font-mono);
-	font-size: 9.5px;
+	font-family: var(--font-sans);
+	font-size: 11.5px;
 	font-weight: 500;
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
+	letter-spacing: 0;
+	text-transform: none;
 }
 .timeline-rail h3:first-child {
 	margin-top: 0;
@@ -409,23 +411,25 @@
 .timeline-rail button {
 	display: grid;
 	grid-template-columns: 8px minmax(0, 1fr) auto;
-	gap: 6px;
+	gap: 8px;
 	align-items: center;
 	width: 100%;
-	padding: 3px 6px;
+	min-height: 30px;
+	padding: 4px 8px;
 	border: 0;
-	border-radius: 3px;
+	border-radius: var(--r-sm);
 	background: transparent;
 	color: var(--text-dim);
 	text-align: left;
 	cursor: pointer;
+	transition: background-color 0.12s var(--ease), color 0.12s var(--ease);
 }
 .timeline-rail button:hover {
-	background: var(--bg-soft);
+	background: var(--soft);
 	color: var(--text);
 }
 .timeline-rail button.active {
-	background: var(--surface-hi);
+	background: var(--selected);
 	color: var(--text);
 }
 .timeline-rail button.active .dot,
@@ -495,9 +499,9 @@
 /* Folded in from DiffFileTree.svelte <style>. */
 .file-sidebar {
 	position: sticky;
-	top: var(--topbar-height);
-	height: calc(100vh - var(--topbar-height));
-	max-height: calc(100vh - var(--topbar-height));
+	top: calc(var(--topbar-height) + 8px);
+	height: calc(100dvh - var(--topbar-height) - 8px);
+	max-height: calc(100dvh - var(--topbar-height) - 8px);
 	overflow-y: auto;
 	min-width: 0;
 	padding: 8px 8px 16px;
@@ -513,11 +517,11 @@
 .file-sidebar h2 {
 	margin: 0;
 	color: var(--text-mute);
-	font-family: var(--font-mono);
-	font-size: 9.5px;
+	font-family: var(--font-sans);
+	font-size: 11.5px;
 	font-weight: 500;
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
+	letter-spacing: 0;
+	text-transform: none;
 }
 .sidebar-summary {
 	display: flex;
@@ -539,9 +543,10 @@
 	align-items: center;
 	width: 100%;
 	min-width: 0;
-	padding: 2px 0 2px calc(var(--depth, 0) * 12px);
+	min-height: 28px;
+	padding: 3px 6px 3px calc(var(--depth, 0) * 12px + 6px);
 	border: 0;
-	border-radius: 0;
+	border-radius: var(--r-sm);
 	background: transparent;
 	color: var(--text-dim);
 	font-size: 11.5px;
@@ -566,11 +571,11 @@
 	--depth-guide: block;
 }
 .tree-row:hover {
-	background: var(--bg-soft);
+	background: var(--soft);
 	color: var(--text);
 }
 .tree-row.active {
-	background: var(--surface-hi);
+	background: var(--selected);
 	color: var(--text);
 }
 .tree-row--group {
@@ -644,13 +649,13 @@
 	display: flex;
 	gap: 8px;
 	align-items: center;
-	padding: 5px 10px;
-	border: 1px solid var(--border);
+	padding: 7px 10px;
+	border: 1px solid var(--hairline);
 	border-radius: var(--r-sm);
-	background: var(--surface);
+	background: var(--bg-elev);
 	min-width: 0;
 	position: sticky;
-	top: calc(var(--topbar-height) + 8px);
+	top: calc(var(--topbar-height) + 16px);
 	z-index: 2;
 }
 .file-header .path {
@@ -721,11 +726,11 @@
 }
 .diff-run--added .diff-gutter {
 	color: var(--diff-added);
-	background: oklch(0.76 0.12 145 / 0.2);
+	background: color-mix(in srgb, var(--diff-added) 16%, transparent);
 }
 .diff-run--removed .diff-gutter {
 	color: var(--diff-removed);
-	background: oklch(0.67 0.16 25 / 0.22);
+	background: color-mix(in srgb, var(--diff-removed) 16%, transparent);
 }
 .diff-body {
 	min-width: 0;

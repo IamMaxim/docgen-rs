@@ -6,6 +6,8 @@
   <title>{% block title %}{% if site_title %}{{ title }} — {{ site_title }}{% else %}{{ title }}{% endif %}{% endblock %}</title>
   {#- blocking on purpose: sets the theme before first paint (see theme-preflight.js) #}
   {% block theme_preflight %}<script src="{{ base | safe }}/theme-preflight.js"></script>{% endblock %}
+  <link rel="preload" href="{{ base | safe }}/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="{{ base | safe }}/fonts.css" />
   <link rel="stylesheet" href="{{ base | safe }}/docgen.css" />
   <link rel="stylesheet" href="{{ base | safe }}/code.css" />
   {% block extra_head %}{% endblock %}

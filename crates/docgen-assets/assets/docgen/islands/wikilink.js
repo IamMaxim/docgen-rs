@@ -23,6 +23,8 @@
     var tip = document.createElement('div');
     tip.className = 'docgen-wikilink-tooltip';
     tip.setAttribute('role', 'tooltip');
+    // Empty until a link is hovered; keep it out of the a11y tree at rest.
+    tip.setAttribute('aria-hidden', 'true');
     var titleEl = document.createElement('div');
     titleEl.className = 'docgen-wikilink-tooltip__title';
     var pathEl = document.createElement('div');
@@ -52,6 +54,7 @@
       current = link;
       titleEl.textContent = link.getAttribute('data-wikilink-title') || '';
       pathEl.textContent = link.getAttribute('data-wikilink-path') || '';
+      tip.removeAttribute('aria-hidden');
       tip.classList.add('is-visible');
       // Measure after content is set, then place.
       requestAnimationFrame(function () {
@@ -62,6 +65,7 @@
     function hide() {
       current = null;
       tip.classList.remove('is-visible');
+      tip.setAttribute('aria-hidden', 'true');
     }
 
     document.addEventListener('mouseover', function (e) {

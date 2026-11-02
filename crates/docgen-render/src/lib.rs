@@ -1583,6 +1583,7 @@ mod tests {
         let html = page("x", &[]);
         for cls in [
             "docgen-app",
+            "docgen-shell",
             "docgen-topbar",
             "docgen-layout",
             "docgen-sidebar",

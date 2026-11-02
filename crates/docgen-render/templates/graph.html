@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "partials/tree.html" import render_tree with context %}
+{% block body_class %} docgen-shell{% endblock %}
 {% block title %}{% if site_title %}Graph — {{ site_title }}{% else %}Graph{% endif %}{% endblock %}
 {% block topbar %}{% from "partials/topbar.html" import topbar with context %}{{ topbar({'nav_toggle_in_actions': true, 'fullwidth': true, 'rail_toggle': true}) }}{% endblock %}
 {% block content %}
@@ -8,7 +9,7 @@
     <nav class="docgen-sidebar" id="docgen-sidebar" :class="{ 'is-open': navOpen }">
       {{ render_tree(tree, 0, "", false) }}
     </nav>
-    <div class="docgen-rail-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="-1"></div>
+    <div class="docgen-rail-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-valuemin="180" aria-valuemax="560" aria-valuenow="264" tabindex="-1"></div>
     <main class="docgen-content docgen-graph-page" id="docgen-main" tabindex="-1">
       <article class="docgen-doc-content">
         <h1>Doc graph</h1>

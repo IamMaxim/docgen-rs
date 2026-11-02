@@ -118,14 +118,14 @@
 :root[data-theme='light'] .docgen-doc-content pre.docgen-code .variable.parameter,
 :root[data-theme='light'] .docgen-doc-content pre.docgen-code .meta.property,
 :root[data-theme='light'] .docgen-doc-content pre.docgen-code .support.variable {
-	color: #36acaa;
+	color: #15726e;
 }
 
 :root[data-theme='light'] .docgen-doc-content pre.docgen-code .entity.name.type,
 :root[data-theme='light'] .docgen-doc-content pre.docgen-code .entity.name.class,
 :root[data-theme='light'] .docgen-doc-content pre.docgen-code .support.type,
 :root[data-theme='light'] .docgen-doc-content pre.docgen-code .support.class {
-	color: #2b91af;
+	color: #1f6f8b;
 }
 
 :root[data-theme='light'] .docgen-doc-content pre.docgen-code .entity.name.tag,
@@ -135,7 +135,7 @@
 
 :root[data-theme='light'] .docgen-doc-content pre.docgen-code .entity.other.attribute-name,
 :root[data-theme='light'] .docgen-doc-content pre.docgen-code .string.regexp {
-	color: #ff0000;
+	color: #c40000;
 }
 
 :root[data-theme='light'] .docgen-doc-content pre.docgen-code .punctuation,
