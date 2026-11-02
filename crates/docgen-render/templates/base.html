@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en" data-docgen-base="{{ base | safe }}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}{% if site_title %}{{ title }} — {{ site_title }}{% else %}{{ title }}{% endif %}{% endblock %}</title>
+  {#- blocking on purpose: sets the theme before first paint (see theme-preflight.js) #}
+  {% block theme_preflight %}<script src="{{ base | safe }}/theme-preflight.js"></script>{% endblock %}
+  <link rel="preload" href="{{ base | safe }}/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="{{ base | safe }}/fonts.css" />
+  <link rel="stylesheet" href="{{ base | safe }}/docgen.css" />
+  <link rel="stylesheet" href="{{ base | safe }}/code.css" />
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="docgen-app{% block body_class %}{% endblock %}" x-data="{ navOpen: false, railOpen: false, menuOpen: false }" @keydown.escape.window="navOpen=false; railOpen=false; menuOpen=false">
+  <a class="docgen-skip-link" href="#docgen-main">Skip to content</a>
+  {% block topbar %}{% include "partials/topbar.html" %}{% endblock %}
+  {% include "partials/topbar-preflight.html" %}
+  {% block content %}{% endblock %}
+  {% block scripts %}
+  <!-- island infra: bootstrap reads the base off <html> and defines the registry; islands self-register; Alpine starts last -->
+  <script src="{{ base | safe }}/bootstrap.js"></script>
+  <script src="{{ base | safe }}/islands/theme-toggle.js"></script>
+  {% if search_enabled %}<script src="{{ base | safe }}/search.js" defer></script>{% endif %}
+  {% block islands %}{% endblock %}
+  <script src="{{ base | safe }}/vendor/alpine/alpine.min.js" defer></script>
+  {% endblock %}
+</body>
+</html>

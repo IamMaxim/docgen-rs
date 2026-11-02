@@ -406,79 +406,13 @@ async fn serve_editor_page(
         })
         .unwrap_or_else(|| slug.rsplit('/').next().unwrap_or(slug).to_string());
 
-    let html = editor_page_html(slug, &doc_path, &title);
+    let html = docgen_render::render_editor_page(slug, &doc_path, &title)
+        .map_err(|e| tracing::error!("editor template render failed: {e}"))
+        .unwrap_or_else(|_| "<!DOCTYPE html><title>editor error</title>".to_string());
     ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], html).into_response()
 }
 
-/// The site topbar for the editor page: brand + diff link + working theme toggle,
-/// matching the published `page.html` topbar so the editor lives under the same
-/// chrome. The theme toggle is the real `docgenThemeToggle` Alpine island (loaded
-/// below); the `.doc-editor` shell already reserves `calc(100vh - --topbar-height)`
-/// for exactly this header. Kept as a const so `format!` doesn't choke on the
-/// Alpine `{ ... }` class bindings.
-const EDITOR_TOPBAR: &str = r#"<header class="docgen-topbar">
-  <a class="docgen-topbar__brand" href="/">
-    <span class="docgen-brand-mark" aria-hidden="true"></span>
-    <span class="docgen-brand-name">Docs</span>
-  </a>
-  <div class="docgen-topbar__main">
-    <div class="docgen-topbar__actions">
-      <div class="docgen-btn-strip" role="group" aria-label="Layout">
-        <a class="docgen-ctl--diff icon-only" href="/diff" aria-label="Show documentation diff" title="Show documentation diff">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4v16M18 4v16"/><path d="M9 8h6M9 16h6M12 5v6M12 13v6"/></svg>
-        </a>
-      </div>
-      <div class="docgen-theme-toggle" x-data="docgenThemeToggle" role="tablist" aria-label="Theme">
-        <button type="button" class="docgen-theme-toggle__btn" :class="{ 'is-active': theme==='dark' }" :aria-pressed="theme==='dark'" @click="set('dark')" aria-label="Dark">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
-        </button>
-        <button type="button" class="docgen-theme-toggle__btn" :class="{ 'is-active': theme==='light' }" :aria-pressed="theme==='light'" @click="set('light')" aria-label="Light">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-        </button>
-      </div>
-    </div>
-  </div>
-</header>"#;
-
 /// Build the editor page shell. Dev-only; never written by `docgen build`.
-fn editor_page_html(slug: &str, doc_path: &str, title: &str) -> String {
-    let esc = |s: &str| {
-        s.replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('"', "&quot;")
-    };
-    let view_path = format!("/{slug}");
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Editing: {title} — docgen</title>
-<script>(function(){{try{{var s=localStorage.getItem('doc-theme');var t=s||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}}catch(e){{}}}})();</script>
-<link rel="stylesheet" href="/docgen.css" />
-<link rel="stylesheet" href="/code.css" />
-<link rel="stylesheet" href="/__docgen/editor.css" />
-</head>
-<body class="docgen-app">
-{topbar}
-<div id="docgen-editor-app" data-doc-path="{doc_path}" data-view-path="{view_path}" data-title="{title}" data-base=""></div>
-<script>window.DOCGEN_BASE = "";</script>
-<script src="/bootstrap.js"></script>
-<script src="/islands/theme-toggle.js"></script>
-<script src="/__docgen/editor-cm6.js"></script>
-<script src="/vendor/alpine/alpine.min.js" defer></script>
-</body>
-</html>
-"#,
-        title = esc(title),
-        doc_path = esc(doc_path),
-        view_path = esc(&view_path),
-        topbar = EDITOR_TOPBAR,
-    )
-}
-
 async fn put_source(
     State(state): State<AppState>,
     Json(req): Json<SaveRequest>,

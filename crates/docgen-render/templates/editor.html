@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{#- Dev-only editor shell, served by `docgen dev` and never written by
+    `docgen build`. Same published chrome (base.html topbar) around the
+    CodeMirror app mount. #}
+{% block title %}Editing: {{ title }} — docgen{% endblock %}
+{% block theme_preflight %}<script>(function(){try{var s=localStorage.getItem('doc-theme');var t=s||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="/__docgen/editor.css" />{% endblock %}
+{% block topbar %}{% from "partials/topbar.html" import topbar with context %}{{ topbar({'diff_always': true}) }}{% endblock %}
+{% block content %}
+<div id="docgen-editor-app" data-doc-path="{{ doc_path }}" data-view-path="/{{ slug }}" data-title="{{ title }}" data-base=""></div>
+{% endblock %}
+{% block scripts %}
+<script>window.DOCGEN_BASE = "";</script>
+<script src="/bootstrap.js"></script>
+<script src="/islands/theme-toggle.js"></script>
+<script src="/__docgen/editor-cm6.js"></script>
+<script src="/vendor/alpine/alpine.min.js" defer></script>
+{% endblock %}

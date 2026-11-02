@@ -92,6 +92,15 @@ fn same(path: &'static str, kind: AssetKind) -> Asset {
 
 /// Assets emitted on every build: Alpine, bootstrap, shared css, search client.
 pub fn core_assets() -> Vec<Asset> {
+    macro_rules! font {
+        ($name:literal) => {
+            embed(
+                concat!("docgen/fonts/", $name, ".woff2"),
+                concat!("fonts/", $name, ".woff2"),
+                AssetKind::Font,
+            )
+        };
+    }
     vec![
         same("vendor/alpine/alpine.min.js", AssetKind::Js),
         embed(
@@ -99,7 +108,42 @@ pub fn core_assets() -> Vec<Asset> {
             "theme-preflight.js",
             AssetKind::Js,
         ),
+        // Blocking restore of the sidebar tree state, loaded right after the
+        // sidebar markup (partials/sidebar-preflight.html) — see the file.
+        embed(
+            "docgen/sidebar-preflight.js",
+            "sidebar-preflight.js",
+            AssetKind::Js,
+        ),
+        // Blocking restore of the topbar layout prefs, loaded right after the
+        // topbar markup (partials/topbar-preflight.html) — see the file.
+        embed(
+            "docgen/topbar-preflight.js",
+            "topbar-preflight.js",
+            AssetKind::Js,
+        ),
         embed("docgen/bootstrap.js", "bootstrap.js", AssetKind::Js),
+        // Self-hosted type: the faces are declared in fonts.css, which the
+        // templates link before docgen.css; the files themselves sit under
+        // dist/fonts/ next to it. OFL.txt travels with them (SIL OFL 1.1).
+        embed("docgen/fonts.css", "fonts.css", AssetKind::Css),
+        font!("geist-latin-wght-normal"),
+        font!("geist-latin-ext-wght-normal"),
+        font!("geist-cyrillic-wght-normal"),
+        font!("geist-cyrillic-ext-wght-normal"),
+        font!("geist-vietnamese-wght-normal"),
+        font!("geist-latin-wght-italic"),
+        font!("geist-latin-ext-wght-italic"),
+        font!("geist-cyrillic-wght-italic"),
+        font!("geist-cyrillic-ext-wght-italic"),
+        font!("geist-vietnamese-wght-italic"),
+        font!("geist-mono-latin-wght-normal"),
+        font!("geist-mono-latin-ext-wght-normal"),
+        font!("geist-mono-cyrillic-wght-normal"),
+        font!("geist-mono-cyrillic-ext-wght-normal"),
+        font!("geist-mono-vietnamese-wght-normal"),
+        font!("geist-mono-symbols2-wght-normal"),
+        embed("docgen/fonts/OFL.txt", "fonts/OFL.txt", AssetKind::Other),
         embed("docgen/docgen.css", "docgen.css", AssetKind::Css),
         embed("docgen/code.css", "code.css", AssetKind::Css),
         embed("docgen/search.js", "search.js", AssetKind::Js),
@@ -451,6 +495,41 @@ mod tests {
                 .unwrap()
                 .kind,
             AssetKind::Css
+        );
+    }
+
+    /// The type stack names Geist, so Geist has to be in the bundle — otherwise
+    /// every page silently falls back to system-ui (SF on macOS). Pin both the
+    /// files and the declaration that points at them.
+    #[test]
+    fn core_assets_ship_the_self_hosted_type() {
+        let assets = core_assets();
+        let fonts: Vec<_> = assets
+            .iter()
+            .filter(|a| a.kind == AssetKind::Font)
+            .collect();
+        assert_eq!(fonts.len(), 16, "one file per shipped Geist subset");
+        for font in fonts {
+            assert!(font.path.starts_with("fonts/"), "{}", font.path);
+            assert!(
+                font.bytes.starts_with(b"wOF2"),
+                "{} is not a woff2",
+                font.path
+            );
+        }
+        let css = assets
+            .iter()
+            .find(|a| a.path == "fonts.css")
+            .expect("fonts.css is a core asset")
+            .bytes;
+        let css = std::str::from_utf8(css).unwrap();
+        assert!(css.contains("font-family: 'Geist Variable'"));
+        assert!(css.contains("font-family: 'Geist Mono Variable'"));
+        assert!(css.contains("url('fonts/geist-latin-wght-normal.woff2')"));
+        assert!(css.contains("font-variant-ligatures: none"));
+        assert!(
+            assets.iter().any(|a| a.path == "fonts/OFL.txt"),
+            "the OFL must travel with the fonts"
         );
     }
 
@@ -948,6 +1027,8 @@ mod tests {
         assert!(tmp.join("vendor/alpine/alpine.min.js").is_file());
         assert!(tmp.join("bootstrap.js").is_file());
         assert!(tmp.join("docgen.css").is_file());
+        assert!(tmp.join("fonts.css").is_file());
+        assert!(tmp.join("fonts/geist-latin-wght-normal.woff2").is_file());
         assert!(tmp.join("search.js").is_file());
         let _ = std::fs::remove_dir_all(&tmp);
     }
@@ -981,7 +1062,9 @@ mod tests {
         let base = assets_for(&EmitOptions::default());
         assert!(base.iter().any(|a| a.path == "vendor/katex/katex.min.css"));
         assert_eq!(
-            base.iter().filter(|a| a.kind == AssetKind::Font).count(),
+            base.iter()
+                .filter(|a| a.kind == AssetKind::Font && a.path.starts_with("vendor/katex/fonts/"))
+                .count(),
             16
         );
     }

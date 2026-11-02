@@ -1,7 +1,11 @@
 // docgen theme-toggle island. A segmented light/dark control that flips the
 // `data-theme` attribute on <html> and persists to localStorage. The pre-paint
 // inline script in <head> already set the attribute before first paint, so this
-// island only mirrors that state and reacts to clicks. No ESM / no bundler.
+// island only mirrors that state and reacts to clicks. The raised segment is
+// also derived in CSS from html[data-theme] (docgen.css, theme switch block),
+// so the switch renders its stored side before Alpine even boots; this
+// island's :class binding can only ever agree with the attribute. No ESM / no
+// bundler.
 window.docgen.island('docgenThemeToggle', function (Alpine) {
   Alpine.data('docgenThemeToggle', function () {
     return {

@@ -1,0 +1,11 @@
+{#- Pre-paint topbar control restore — the controls sibling of
+    theme-preflight.js. A BLOCKING external script right after the topbar
+    markup: <body> (the .docgen-app element) and every dock button exist by
+    then and nothing below has painted, so the stored layout classes and
+    pressed states are on the first painted frame instead of landing at
+    DOM-ready from islands/layout.js — that gap reflowed the page and popped
+    the pressed styles in on every navigation. External file, not inline, to
+    keep the CSP pin asserted by docgen-render's
+    no_template_emits_inline_scripts test. Keys live in islands/layout.js and
+    topbar-preflight.js. -#}
+<script src="{{ base | safe }}/topbar-preflight.js"></script>
