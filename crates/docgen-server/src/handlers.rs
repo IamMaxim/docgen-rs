@@ -413,7 +413,6 @@ async fn serve_editor_page(
 }
 
 /// Build the editor page shell. Dev-only; never written by `docgen build`.
-
 async fn put_source(
     State(state): State<AppState>,
     Json(req): Json<SaveRequest>,
