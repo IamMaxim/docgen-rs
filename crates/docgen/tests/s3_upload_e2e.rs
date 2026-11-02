@@ -29,6 +29,12 @@ use std::time::{Duration, Instant};
 /// of the image — `mc` being bundled in the server image (`wait_until_ready` shells
 /// into it) and a top-level directory under the data dir being treated as a bucket.
 /// A floating tag lets an upstream release break CI with no change on our side.
+///
+/// This digest is now also the ONLY remaining copy in common reach: MinIO archived
+/// the open-source server and client in 2026 and stripped the images from every
+/// public registry (Docker Hub dropped the `minio/minio` repository entirely,
+/// quay requires auth, dl.min.io returns 410). The image therefore only runs on
+/// machines that still hold it in their local docker store — see `image_cached`.
 const IMAGE: &str =
     "minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e";
 const BUCKET: &str = "docgen-assets";
@@ -53,6 +59,20 @@ impl Drop for Minio {
 fn docker_available() -> bool {
     Command::new("docker")
         .arg("info")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Whether the pinned image is already in the local docker store. Deliberately
+/// `docker image inspect` — an offline check — and NOT `docker pull`: the image can
+/// no longer be pulled anywhere (see the note on `IMAGE`), so a pull can only
+/// fail. Where a cached image exists the full TLS e2e below runs exactly as it
+/// always did; where it doesn't, the honest signal is a loud skip, not a
+/// permanently red workflow against a deleted upstream artifact.
+fn image_cached() -> bool {
+    Command::new("docker")
+        .args(["image", "inspect", IMAGE])
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
@@ -292,6 +312,21 @@ fn uploads_assets_to_s3_over_tls() {
             panic!("DOCGEN_S3_E2E is set but docker is unavailable — refusing to skip");
         }
         eprintln!("skipping s3 e2e: docker unavailable (set DOCGEN_S3_E2E=1 to make this fatal)");
+        return;
+    }
+    if !image_cached() {
+        // Unlike the docker case above, this skip cannot be made fatal: there is
+        // no registry left to install MinIO from (upstream archived the
+        // distribution and removed the images — see the note on IMAGE), so a
+        // failing workflow would not be strict, just permanently red against a
+        // deleted artifact. The loud skip keeps that visible in every CI run;
+        // machines with the cached image still exercise the real TLS path below.
+        eprintln!(
+            "skipping s3 e2e: MinIO image is not in the local docker store and can no \
+             longer be pulled from any public registry (upstream archived the \
+             open-source distribution in 2026). Run on a machine that still has the \
+             image cached to exercise the TLS upload path."
+        );
         return;
     }
 
