@@ -6,6 +6,21 @@ use serde::Serialize;
 /// The built-in page template, embedded at compile time.
 pub const DEFAULT_PAGE_TEMPLATE: &str = include_str!("../templates/page.html");
 
+/// The shared document shell every built-in template extends via
+/// `{% extends "base.html" %}`. Always registered in the environment, so a site
+/// overriding `page.html` (or shipping a copy of an older standalone template)
+/// keeps working unchanged.
+pub const DEFAULT_BASE_TEMPLATE: &str = include_str!("../templates/base.html");
+
+/// Shared topbar chrome partial, selected per page through the `chrome` flags dict.
+const DEFAULT_TOPBAR_PARTIAL: &str = include_str!("../templates/partials/topbar.html");
+
+/// Shared sidebar-tree partial.
+const DEFAULT_TREE_PARTIAL: &str = include_str!("../templates/partials/tree.html");
+
+/// The dev editor's page shell template (chrome around the CodeMirror mount).
+const DEFAULT_EDITOR_TEMPLATE: &str = include_str!("../templates/editor.html");
+
 /// The vendored search client script, emitted to `dist/search.js`.
 ///
 /// Deprecated: assets now flow through the `docgen-assets` crate. Kept for one
@@ -248,6 +263,50 @@ pub struct Renderer {
     env: Environment<'static>,
 }
 
+/// Register every built-in template (shell, partials, page shells) into `env`.
+/// The page template is passed in so a site can override it while still
+/// extending the same `base.html` shell. Names end in `.html` so minijinja's
+/// default auto-escape callback enables HTML escaping for `{{ title }}`,
+/// `{{ node.name }}`, `{{ node.title }}`. `{{ body | safe }}` remains raw, as
+/// intended for already-rendered markdown.
+fn register_builtin_templates(
+    env: &mut Environment<'static>,
+    page_template: &str,
+) -> Result<(), minijinja::Error> {
+    env.add_template_owned("base.html", DEFAULT_BASE_TEMPLATE.to_string())?;
+    env.add_template_owned("partials/topbar.html", DEFAULT_TOPBAR_PARTIAL.to_string())?;
+    env.add_template_owned("partials/tree.html", DEFAULT_TREE_PARTIAL.to_string())?;
+    env.add_template_owned("page.html", page_template.to_string())?;
+    env.add_template_owned("history.html", DEFAULT_HISTORY_TEMPLATE.to_string())?;
+    env.add_template_owned("graph.html", DEFAULT_GRAPH_TEMPLATE.to_string())?;
+    env.add_template_owned("diff.html", DEFAULT_DIFF_TEMPLATE.to_string())?;
+    env.add_template_owned("preview.html", DEFAULT_PREVIEW_TEMPLATE.to_string())?;
+    env.add_template_owned("editor.html", DEFAULT_EDITOR_TEMPLATE.to_string())?;
+    Ok(())
+}
+
+/// Render the dev editor page shell (chrome + CodeMirror mount) for one doc.
+/// Dev-only; never written by `docgen build`.
+pub fn render_editor_page(
+    slug: &str,
+    doc_path: &str,
+    title: &str,
+) -> Result<String, minijinja::Error> {
+    let mut env = Environment::new();
+    register_builtin_templates(&mut env, DEFAULT_PAGE_TEMPLATE)?;
+    let tmpl = env.get_template("editor.html")?;
+    tmpl.render(context! {
+        base => "",
+        // Empty so the topbar brand falls back to its "Docs" default.
+        site_title => "",
+        title => title,
+        slug => slug,
+        doc_path => doc_path,
+        search_enabled => false,
+        has_diff => false,
+    })
+}
+
 /// Make a JSON payload safe to inline inside `<script type="application/json">`.
 ///
 /// Escapes EVERY `<`, not just `</`. A lone `</script>` guard is not enough: per
@@ -268,14 +327,7 @@ impl Renderer {
     /// Build a renderer from a page-template source string.
     pub fn new(page_template: &str) -> Result<Self, minijinja::Error> {
         let mut env = Environment::new();
-        // Register under a `.html` name so minijinja's default auto-escape callback
-        // enables HTML escaping for `{{ title }}`, `{{ node.name }}`, `{{ node.title }}`.
-        // `{{ body | safe }}` remains raw, as intended for already-rendered markdown.
-        env.add_template_owned("page.html", page_template.to_string())?;
-        env.add_template_owned("history.html", DEFAULT_HISTORY_TEMPLATE.to_string())?;
-        env.add_template_owned("graph.html", DEFAULT_GRAPH_TEMPLATE.to_string())?;
-        env.add_template_owned("diff.html", DEFAULT_DIFF_TEMPLATE.to_string())?;
-        env.add_template_owned("preview.html", DEFAULT_PREVIEW_TEMPLATE.to_string())?;
+        register_builtin_templates(&mut env, page_template)?;
         Ok(Self { env })
     }
 

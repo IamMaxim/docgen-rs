@@ -1,13 +1,6 @@
-<!DOCTYPE html>
-<html lang="en" data-docgen-base="{{ base | safe }}">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{ title }} — preview</title>
-  {#- blocking on purpose: sets the theme before first paint (see theme-preflight.js) #}
-  <script src="{{ base | safe }}/theme-preflight.js"></script>
-  <link rel="stylesheet" href="{{ base | safe }}/docgen.css" />
-  <link rel="stylesheet" href="{{ base | safe }}/code.css" />
+{% extends "base.html" %}
+{% block title %}{{ title }} — preview{% endblock %}
+{% block extra_head %}
   {% if has_components_css %}<link rel="stylesheet" href="{{ base | safe }}/components.css" />{% endif %}
   {% if has_math %}<link rel="stylesheet" href="{{ base | safe }}/vendor/katex/katex.min.css" />{% endif %}
   <style>
@@ -18,17 +11,18 @@
     html, body { margin: 0; background: var(--bg); }
     body.docgen-preview-body { padding: 32px 40px 80px; }
   </style>
-</head>
-<body class="docgen-app docgen-preview-body">
+{% endblock %}
+{% block body_class %} docgen-preview-body{% endblock %}
+{% block topbar %}{% endblock %}
+{% block content %}
   <article class="docgen-doc-content">
     {{ body | safe }}
   </article>
+{% endblock %}
+{% block islands %}
   <!-- island infra: same stack a published page runs, so mermaid diagrams,
        custom components, and wikilink tooltips hydrate identically here. -->
-  <script src="{{ base | safe }}/bootstrap.js"></script>
   <script src="{{ base | safe }}/islands/wikilink.js"></script>
   {% if has_mermaid %}<script src="{{ base | safe }}/islands/mermaid.js"></script>{% endif %}
   {% if has_component_island %}<script src="{{ base | safe }}/components.js"></script>{% endif %}
-  <script src="{{ base | safe }}/vendor/alpine/alpine.min.js" defer></script>
-</body>
-</html>
+{% endblock %}
