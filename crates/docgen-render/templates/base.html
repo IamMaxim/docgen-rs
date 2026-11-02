@@ -15,6 +15,7 @@
 <body class="docgen-app{% block body_class %}{% endblock %}" x-data="{ navOpen: false, railOpen: false, menuOpen: false }" @keydown.escape.window="navOpen=false; railOpen=false; menuOpen=false">
   <a class="docgen-skip-link" href="#docgen-main">Skip to content</a>
   {% block topbar %}{% include "partials/topbar.html" %}{% endblock %}
+  {% include "partials/topbar-preflight.html" %}
   {% block content %}{% endblock %}
   {% block scripts %}
   <!-- island infra: bootstrap reads the base off <html> and defines the registry; islands self-register; Alpine starts last -->

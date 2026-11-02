@@ -24,6 +24,12 @@ const DEFAULT_TREE_PARTIAL: &str = include_str!("../templates/partials/tree.html
 const DEFAULT_SIDEBAR_PREFLIGHT_PARTIAL: &str =
     include_str!("../templates/partials/sidebar-preflight.html");
 
+/// Pre-paint topbar control restore, inlined right after the topbar markup so
+/// the stored layout classes and pressed states are on the first painted frame
+/// (see the partial for the full rationale; keys must match the layout island).
+const DEFAULT_TOPBAR_PREFLIGHT_PARTIAL: &str =
+    include_str!("../templates/partials/topbar-preflight.html");
+
 /// The dev editor's page shell template (chrome around the CodeMirror mount).
 const DEFAULT_EDITOR_TEMPLATE: &str = include_str!("../templates/editor.html");
 
@@ -285,6 +291,10 @@ fn register_builtin_templates(
     env.add_template_owned(
         "partials/sidebar-preflight.html",
         DEFAULT_SIDEBAR_PREFLIGHT_PARTIAL.to_string(),
+    )?;
+    env.add_template_owned(
+        "partials/topbar-preflight.html",
+        DEFAULT_TOPBAR_PREFLIGHT_PARTIAL.to_string(),
     )?;
     env.add_template_owned("page.html", page_template.to_string())?;
     env.add_template_owned("history.html", DEFAULT_HISTORY_TEMPLATE.to_string())?;

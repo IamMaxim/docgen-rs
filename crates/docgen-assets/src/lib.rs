@@ -115,6 +115,13 @@ pub fn core_assets() -> Vec<Asset> {
             "sidebar-preflight.js",
             AssetKind::Js,
         ),
+        // Blocking restore of the topbar layout prefs, loaded right after the
+        // topbar markup (partials/topbar-preflight.html) — see the file.
+        embed(
+            "docgen/topbar-preflight.js",
+            "topbar-preflight.js",
+            AssetKind::Js,
+        ),
         embed("docgen/bootstrap.js", "bootstrap.js", AssetKind::Js),
         // Self-hosted type: the faces are declared in fonts.css, which the
         // templates link before docgen.css; the files themselves sit under

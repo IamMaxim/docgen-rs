@@ -499,6 +499,18 @@ kbd,
 	color: var(--text);
 	box-shadow: inset 0 0 0 1px var(--border), var(--sh-card);
 }
+/* Pre-Alpine selection: the head preflight sets html[data-theme] before first
+   paint, so the raised segment is derived here in CSS alone — the switch shows
+   its stored state on the first frame instead of waiting for Alpine to add
+   .is-active at parse end. The :class binding and the attribute can only ever
+   agree (the island mirrors data-theme), so the two sources cannot diverge;
+   keying on the stable aria-labels keeps the mapping explicit. */
+html[data-theme='dark'] .docgen-theme-toggle__btn[aria-label='Dark'],
+html[data-theme='light'] .docgen-theme-toggle__btn[aria-label='Light'] {
+	background: var(--thumb);
+	color: var(--text);
+	box-shadow: inset 0 0 0 1px var(--border), var(--sh-card);
+}
 .docgen-theme-toggle__btn svg {
 	width: 14px;
 	height: 14px;
